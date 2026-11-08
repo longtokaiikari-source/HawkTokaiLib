@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" width="150" alt="HawkTokaiLib logo">
+
 # HawkTokaiLib UI
 
 **A Roblox UI library with eased motion and a live theme engine.**
@@ -130,7 +132,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | --- | --- | --- | --- |
 | `Name` | string | `"HawkTokaiLib"` | Title in the sidebar header. Also names the ScreenGui. |
 | `LoadingSubtitle` | string | — | Small line under the title. |
-| `Icon` | string \| number \| table | OuroFlow mark (theme tinted) | Lucide name, asset id, or `{ Image, RectOffset, RectSize, Tint }`. See [Icons](#icons). |
+| `Icon` | string \| number \| table | HawkTokaiLib mark (full colour) | Lucide name, asset id, or `{ Image, RectOffset, RectSize, Tint }`. See [Icons](#icons). |
 | `ToggleUIKeybind` | string \| KeyCode | `"RightControl"` | Hides and shows the window. `"RightShift"`, `"LeftAlt"`, `"Insert"`, `"F1"`, or an `Enum.KeyCode`. |
 | `Size` | UDim2 | `760 × 520` | Starting size. |
 | `MinSize` | Vector2 | `480 × 360` | Smallest size the resize grip allows. |
@@ -235,9 +237,63 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 
 ---
 
+## Key System
+
+> A key gate that blocks the script until the player enters a valid key. Call it before `Library.Window`. A key saved by an earlier run is checked first, so the gate only shows when it is needed.
+
+```lua
+local key = Library:RequireKey({
+    Title = "Key required",
+    Desc = "Copy the key from the page and paste it below.",
+    Keys = { "HAWK-1234" },                 -- or Validate = function(key) return true end
+    Link = "https://example.com/get-key",   -- the Get key button copies this
+    Save = true,                            -- remember the accepted key
+})
+
+local Window = Library.Window({ Name = "My Hub" })
+```
+
+### Junkie Development
+
+`Junkie` loads the Junkie SDK and sets its settings with the names from the Junkie docs. Keys are checked by the function you pass as `Validate`, which gets the key and the SDK.
+
+```lua
+local key = Library:RequireKey({
+    Title = "Key required",
+    Junkie = {
+        Service = "your_service_name",
+        Identifier = "your_junkie_user_id",
+        Provider = "your_provider_name",
+        ScriptId = "your_script_public_token",
+    },
+    Validate = function(key, Junkie)
+        return Junkie.check_key(key)  -- replace check_key with the key-check function from the Junkie docs
+    end,
+})
+```
+
+`Sdk` defaults to `https://jnkie.com/sdk/library.lua`. Do not use a `luascripts/public` link there: that is your protected script, and loading it would run the script before the key check. The gate refuses such links. The executor console prints the SDK's fields as `[HawkTokaiLib]` lines, which helps you find the right function name.
+
+### Properties
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Title` | string | `"Key required"` | Heading of the gate. |
+| `Desc` | string | `"Enter your key to continue."` | Text under the heading. |
+| `Keys` | table \| string | — | Accepted keys, matched exactly after trimming spaces. |
+| `Validate` | function | — | `function(key, Junkie)` returns `true` for a valid key. With `Junkie`, the SDK is the second argument. |
+| `Link` | string | — | Adds a Get key button that copies this link. |
+| `Junkie` | table | — | `Service`, `Identifier`, `Provider`, `ScriptId`, and an optional `Sdk` URL. Loads the SDK and sets its settings. |
+| `Save` | boolean | `true` | Remember an accepted key in `File`. |
+| `File` | string | `"HawkTokaiLibUI/key.txt"` | Where the key is saved. |
+
+It returns the accepted key. The call yields until a key is accepted, so nothing after it runs before then.
+
+---
+
 ## Home
 
-> A built-in first tab: the player card with privacy switches, live stats, the current game with server actions, an executor check, and your community links.
+> A built-in first tab: the player card with privacy switches, live stats, a world clock you can set to any GMT offset, the current game with server actions, an executor check, and your community links.
 
 ```lua
 Home = {
@@ -307,6 +363,8 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 | `StatColors` | boolean | `true` | Tint `FPS`, `Ping` and `Memory` green, amber or red by how healthy they are (FPS 50+ / 30+, ping under 90 / 180 ms, memory under 1.5 / 3 GB). |
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |
+| `Clock` | boolean \| table | `true` | World clock card under the stats. `false` hides it. A table can set `Offset`. The GMT offset is picked on the card and saved in `configsettings.txt` beside the configs, so it comes back next time. |
+| `Clock.Offset` | number | `7` | Starting GMT offset in hours, for example `5.5` for GMT+05:30. A saved choice wins over it. |
 | `SupportedExecutors` | table | — | Names checked against the executor. Without it, the card checks for the file, clipboard and request functions. |
 | `Discord` / `Website` | string | — | Link cards with a copy button. |
 | `DiscordTitle` / `WebsiteTitle` | string | `"Join the community"` / `"Supported games"` | Card titles. |
@@ -681,6 +739,37 @@ Paragraph:Set("Updated body")
 | Member | Description |
 | --- | --- |
 | `Set(text)` | Replace the body. |
+
+---
+
+## Code
+
+> A monospace box with a copy button. Lua is coloured; any other language shows plain.
+
+```lua
+Tab:CreateCode({
+    Name = "Script",
+    Code = [[print("hello")]],
+    Language = "lua",   -- "lua" colours the code; anything else is plain text
+    Height = 150,       -- the box scrolls both ways past this height
+})
+```
+
+### Properties
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Name` | string | `"Code"` | Heading above the box. |
+| `Code` | string | `""` | The source. Long lines scroll sideways. |
+| `Language` | string | `"lua"` | `"lua"` colours keywords, strings, numbers and comments. |
+| `Height` | number | `150` | Box height in pixels. |
+
+### Handle
+
+| Member | Description |
+| --- | --- |
+| `Set(text)` | Replace the code. |
+| `Get()` | Return the current code. |
 
 ---
 
@@ -1658,7 +1747,7 @@ HawkTokaiLib.Fonts.Regular = Font.new(Family, Enum.FontWeight.Regular)
 HawkTokaiLib.Fonts.Medium = Font.new(Family, Enum.FontWeight.Medium)
 HawkTokaiLib.Fonts.Bold = Font.new(Family, Enum.FontWeight.SemiBold)
 
-HawkTokaiLib.Assets.Logo = "rbxassetid://103859712365480"
+HawkTokaiLib.Assets.Logo = "rbxassetid://YOUR_ASSET_ID"
 HawkTokaiLib.Assets.Glow = "rbxassetid://8992230677"
 HawkTokaiLib.Assets.Shadow = "rbxassetid://6014261993"
 ```

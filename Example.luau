@@ -332,6 +332,13 @@ Elements:CreateParagraph({
     Content = "Longer text wraps across as many lines as it needs.",
 })
 
+Elements:CreateCode({
+    Name = "Code",
+    Code = [[local Players = game:GetService("Players")
+print("Hello", Players.LocalPlayer.Name) -- copy me]],
+    Language = "lua",
+})
+
 Elements:CreateSection("Media and tables")
 
 Elements:CreateImage({
