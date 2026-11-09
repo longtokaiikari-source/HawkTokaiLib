@@ -1,7 +1,19 @@
--- Example script. Loads HawkTokaiLib from this repo (Source.luau), then builds the demo.
+-- Protected script. Paste this into the Original Code of your script on Junkie. Loader.luau checks the key, then runs it.
 -- Push Source.luau to main first, or this loads an old copy (or a 404).
 -- To test a local copy instead: loadstring(readfile("HawkTokaiLib/Source.luau"))()
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
+
+-- Runtime variables exist only after Junkie authenticates this script. Outside
+-- Junkie (for example in a local test) they are nil and the license card is hidden.
+local keyInfo = nil
+if JD_REASON then
+    keyInfo = {
+        ExpiresAt = JD_EXPIRES_AT,
+        Tier = JD_TIER_NAME,
+        Premium = JD_IS_PREMIUM,
+        Keyless = JD_REASON == "KEYLESS",
+    }
+end
 
 --[[
     Example script
@@ -41,6 +53,7 @@ local Window = Library:CreateWindow({
     -- SidebarWidth = 188,    -- starting sidebar width; players can drag the divider
     -- Disclaimer = { Title = "Terms", Text = "By continuing you accept the terms.", Id = "terms-v1" },
     Home = {
+        KeyInfo = keyInfo,
         Tier = "Free",
         Expiry = os.time() + 30 * 86400, -- a timestamp, a string, or a function returning either
         Discord = "discord.gg/example",

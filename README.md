@@ -255,24 +255,25 @@ local Window = Library.Window({ Name = "My Hub" })
 
 ### Junkie Development
 
-`Junkie` loads the Junkie SDK and sets its settings with the names from the Junkie docs. Keys are checked by the function you pass as `Validate`, which gets the key and the SDK.
+`Junkie` uses the Junkie SDK at `https://jnkie.com/sdk/library.lua`. The gate checks keys with `check_key`, and the Get key button asks `get_key_link` for a link. The SDK does not use a REST API key, so leave that key out.
 
 ```lua
-local key = Library:RequireKey({
+local key, info = Library:RequireKey({
     Title = "Key required",
     Junkie = {
-        Service = "your_service_name",
+        Service = "your_service_name_or_id",
         Identifier = "your_junkie_user_id",
-        Provider = "your_provider_name",
-        ScriptId = "your_script_public_token",
+        Provider = "your_provider_name_or_id",
+        ScriptId = "your_script_public_token",  -- optional, only for load_script
     },
-    Validate = function(key, Junkie)
-        return Junkie.check_key(key)  -- replace check_key with the key-check function from the Junkie docs
-    end,
 })
+
+print(info.JD_TIER_NAME, info.is_premium)
 ```
 
-`Sdk` defaults to `https://jnkie.com/sdk/library.lua`. Do not use a `luascripts/public` link there: that is your protected script, and loading it would run the script before the key check. The gate refuses such links. The executor console prints the SDK's fields as `[HawkTokaiLib]` lines, which helps you find the right function name.
+`Identifier` is the owner's Junkie user ID, not a Roblox or Discord ID. `ScriptId` is the public token in the script's public download URL. Set `Provider` if you want the Get key button. To use your own check instead of `check_key`, pass `Validate = function(key, Junkie) ... end`.
+
+`check_key` is not a read-only lookup. It can bind a key to a device and start a first-use timer. The gate calls it once for a saved key on each run, and once per Verify click, so do not call it in a loop.
 
 ### Properties
 
@@ -283,11 +284,39 @@ local key = Library:RequireKey({
 | `Keys` | table \| string | — | Accepted keys, matched exactly after trimming spaces. |
 | `Validate` | function | — | `function(key, Junkie)` returns `true` for a valid key. With `Junkie`, the SDK is the second argument. |
 | `Link` | string | — | Adds a Get key button that copies this link. |
-| `Junkie` | table | — | `Service`, `Identifier`, `Provider`, `ScriptId`, and an optional `Sdk` URL. Loads the SDK and sets its settings. |
+| `Junkie` | table | — | `Service` and `Identifier` are required. `Provider` is needed for Get key. `ScriptId` and `Sdk` are optional. |
 | `Save` | boolean | `true` | Remember an accepted key in `File`. |
 | `File` | string | `"HawkTokaiLibUI/key.txt"` | Where the key is saved. |
 
-It returns the accepted key. The call yields until a key is accepted, so nothing after it runs before then.
+It returns the accepted key and, with Junkie, the `check_key` result: `valid`, `is_premium`, `JD_TIER`, `JD_TIER_NAME` and `message`. The call yields until a key is accepted, so nothing after it runs before then.
+
+`Loader.luau` checks the key and runs the protected script. `Example.luau` is that script: paste it into the Original Code of your script on Junkie.
+
+To check the Junkie setup step by step, run `JunkieTest.lua`. It prints each step to the console and explains each Junkie error. The gate also shows the matching message when a key is rejected.
+
+Saved keys: `Save` writes the key as plain text to `File`, and each run checks it again. If Junkie rejects it for a reason the key itself causes (expired, invalidated, already used, or bound to another device), the gate deletes the file and shows why. Network errors keep the file. The gate runs on the player's computer, so it cannot show the time left on a key. Read `JD_EXPIRES_AT` inside the protected script for that, and use `load_script` for real protection (see the external loader guide in the Junkie docs).
+
+---
+
+### Protected script
+
+`RunProtected` checks the key, then `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the license card with the time left.
+
+```lua
+-- Loader.luau, run in the executor
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
+Library:RunProtected({
+    Title = "Key required",
+    Junkie = {
+        Service = "your_service_name_or_id",
+        Identifier = "your_junkie_user_id",
+        Provider = "your_provider_name_or_id",
+        ScriptId = "your_script_public_token",
+    },
+})
+```
+
+Runtime variables exist only inside the protected script, not in the loader or in a chunk loaded with `loadstring`. That is why the library receives them through `KeyInfo`.
 
 ---
 
@@ -364,6 +393,7 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |
 | `Clock` | boolean \| table | `true` | World clock card under the stats. `false` hides it. A table can set `Offset`. The GMT offset is picked on the card and saved in `configsettings.txt` beside the configs, so it comes back next time. |
+| `KeyInfo` | table | — | License card on the Home tab: `ExpiresAt` (Unix seconds), `Tier`, `Premium`, `Keyless`. The protected script passes Junkie's runtime variables here. |
 | `Clock.Offset` | number | `7` | Starting GMT offset in hours, for example `5.5` for GMT+05:30. A saved choice wins over it. |
 | `SupportedExecutors` | table | — | Names checked against the executor. Without it, the card checks for the file, clipboard and request functions. |
 | `Discord` / `Website` | string | — | Link cards with a copy button. |
