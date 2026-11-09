@@ -45,7 +45,7 @@ local Window = Library:CreateWindow({
     Name = "Example",
     LoadingSubtitle = "Loading",
     ToggleUIKeybind = "RightControl", -- a KeyCode name or Enum.KeyCode
-    ConfigurationSaving = { Enabled = true, FolderName = "Example" },
+    ConfigurationSaving = { Enabled = true },
     ToggleButton = { Platform = "Mobile", Icon = "layout-grid" }, -- "Both" also shows it on PC
     Backdrop = { Weather = "None", Tint = 0.45 }, -- "Snow", "Rain", "Hell Fire", "Sakura", "Fireflies", "Matrix" or "None"
     -- UIScale = 1,           -- 0.6 to 1.5, on top of the automatic fit
@@ -55,7 +55,6 @@ local Window = Library:CreateWindow({
     Home = {
         KeyInfo = keyInfo,
         Tier = "Free",
-        Expiry = os.time() + 30 * 86400, -- a timestamp, a string, or a function returning either
         Discord = "discord.gg/example",
         Website = "example.com",
         Stats = { "Players", "Execs", "Session", "FPS", "Ping" },

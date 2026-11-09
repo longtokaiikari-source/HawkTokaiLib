@@ -300,7 +300,7 @@ Saved keys: `Save` writes the key as plain text to `File`, and each run checks i
 
 ### Protected script
 
-`RunProtected` checks the key, then `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the license card with the time left.
+`RunProtected` checks the key, then `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card.
 
 ```lua
 -- Loader.luau, run in the executor
@@ -393,7 +393,7 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |
 | `Clock` | boolean \| table | `true` | World clock card under the stats. `false` hides it. A table can set `Offset`. The GMT offset is picked on the card and saved in `configsettings.txt` beside the configs, so it comes back next time. |
-| `KeyInfo` | table | — | License card on the Home tab: `ExpiresAt` (Unix seconds), `Tier`, `Premium`, `Keyless`. The protected script passes Junkie's runtime variables here. |
+| `KeyInfo` | table | — | Shows the time left in the profile card, where `Expiry` would go. Pass `ExpiresAt` (Unix seconds), `Tier`, `Premium` and `Keyless`. The protected script passes Junkie's runtime variables here. |
 | `Clock.Offset` | number | `7` | Starting GMT offset in hours, for example `5.5` for GMT+05:30. A saved choice wins over it. |
 | `SupportedExecutors` | table | — | Names checked against the executor. Without it, the card checks for the file, clipboard and request functions. |
 | `Discord` / `Website` | string | — | Link cards with a copy button. |
@@ -1568,7 +1568,7 @@ Requires `writefile` / `readfile`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `FolderName` | string | `"HawkTokaiLibUI"` | Folder in the executor workspace. Can be nested, like `"MyHub/Game"`; missing folders are made. |
+| `FolderName` | string | `"HawkTokaiLibUI"` | Folder in the executor workspace, holding the configs, the saved key and the library's own files. Can be nested, like `"MyHub/Game"`; missing folders are made. |
 | `FileName` | string | none | Optional config used when `SaveConfig` / `LoadConfig` get no name. With none set, there is no default config: only configs you create exist. |
 
 `CreateConfigManager` takes `Name`, `Icon`, `Side` and `Placeholder`. Called on a groupbox it adds its rows there instead of making its own.

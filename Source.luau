@@ -261,7 +261,7 @@ function Library:LoadFont(opts)
         warn("[HawkTokaiLib] no font weights for " .. name)
         return false
     end
-    local folder = opts.Folder or "HawkTokaiLibFonts"
+    local folder = opts.Folder or "HawkTokaiLibUI"
     pcall(function()
         if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(folder) then
             makefolder(folder)
@@ -406,7 +406,7 @@ pcall(function()
     if type(writefile) ~= "function" or typeof(getcustomasset) ~= "function" then
         return
     end
-    local folder = "HawkTokaiLibAssets"
+    local folder = "HawkTokaiLibUI"
     if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(folder) then
         makefolder(folder)
     end
@@ -4663,34 +4663,81 @@ function Library:RequireKey(opts)
     local backdrop = create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.45,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = gui,
+    })
+    local glow = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(560, 560),
+        BackgroundTransparency = 1,
+        Image = Assets.Glow,
+        ImageColor3 = Theme.Accent,
+        ImageTransparency = 1,
+        Parent = backdrop,
     })
     local panel = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(360, 0),
+        Size = UDim2.fromOffset(380, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = backdrop,
     })
-    corner(panel, UDim.new(0, 10))
-    stroke(panel)
-    padding(panel, 18, 18, 16, 16)
-    create("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 10),
+    corner(panel, UDim.new(0, 14))
+    stroke(panel, Theme.Accent, 0.55)
+    padding(panel, 22, 22, 20, 18)
+    local scale = create("UIScale", {
+        Scale = 0.92,
         Parent = panel,
     })
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 12),
+        Parent = panel,
+    })
+
+    local header = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        Parent = panel,
+    })
+    local badge = create("Frame", {
+        Size = UDim2.fromOffset(42, 42),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.8,
+        BorderSizePixel = 0,
+        Parent = header,
+    })
+    corner(badge, UDim.new(1, 0))
+    local badgeIcon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(20, 20),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Accent,
+        Parent = badge,
+    })
+    applyIcon(badgeIcon, "key")
     label({
-        Size = UDim2.new(1, 0, 0, 22),
+        Position = UDim2.fromOffset(54, 2),
+        Size = UDim2.new(1, -54, 0, 22),
         Text = opts.Title or "Key required",
         TextSize = 18,
         FontFace = Fonts.Bold,
-        LayoutOrder = 1,
-        Parent = panel,
+        Parent = header,
+    })
+    label({
+        Position = UDim2.fromOffset(54, 25),
+        Size = UDim2.new(1, -54, 0, 16),
+        Text = "Secured by Junkie",
+        TextSize = 11,
+        TextColor3 = Theme.Muted,
+        Parent = header,
     })
     label({
         Size = UDim2.new(1, 0, 0, 0),
@@ -4704,66 +4751,141 @@ function Library:RequireKey(opts)
         LayoutOrder = 2,
         Parent = panel,
     })
-    local box = create("TextBox", {
-        Size = UDim2.new(1, 0, 0, 36),
+    local field = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 44),
         BackgroundColor3 = Theme.Surface,
         BorderSizePixel = 0,
+        LayoutOrder = 3,
+        Parent = panel,
+    })
+    corner(field, UDim.new(0, 10))
+    local fieldStroke = create("UIStroke", {
+        Color = Theme.Stroke,
+        Thickness = 1,
+        Transparency = 0.2,
+        Parent = field,
+    })
+    local box = create("TextBox", {
+        Size = UDim2.new(1, -24, 1, 0),
+        Position = UDim2.fromOffset(12, 0),
+        BackgroundTransparency = 1,
         Text = "",
-        PlaceholderText = "Paste your key",
+        PlaceholderText = "Paste your key here",
         PlaceholderColor3 = Theme.Muted,
         TextColor3 = Theme.Text,
         TextSize = 14,
         FontFace = Fonts.Regular,
         ClearTextOnFocus = false,
         TextXAlignment = Enum.TextXAlignment.Left,
-        LayoutOrder = 3,
-        Parent = panel,
+        Parent = field,
     })
-    corner(box, UDim.new(0, 6))
-    stroke(box)
-    padding(box, 10, 10, 0, 0)
-    local status = label({
-        Size = UDim2.new(1, 0, 0, 16),
-        Text = junkieError or savedReason or "",
-        TextSize = 12,
-        TextColor3 = Theme.Error,
+    local statusRow = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 18),
+        BackgroundTransparency = 1,
         LayoutOrder = 4,
         Parent = panel,
     })
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 34),
+    local statusIcon = create("ImageLabel", {
+        Size = UDim2.fromOffset(14, 14),
+        Position = UDim2.fromOffset(0, 2),
+        BackgroundTransparency = 1,
+        ImageTransparency = 1,
+        Parent = statusRow,
+    })
+    local status = label({
+        Position = UDim2.fromOffset(20, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Text = "",
+        TextSize = 12,
+        TextColor3 = Theme.Error,
+        FontFace = Fonts.Medium,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = statusRow,
+    })
+    local buttons = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 42),
         BackgroundTransparency = 1,
         LayoutOrder = 5,
         Parent = panel,
     })
     create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = row,
+        Parent = buttons,
     })
     local function button(text, primary, order, width)
         local b = create("TextButton", {
             Size = width,
             BackgroundColor3 = primary and Theme.Accent or Theme.Surface,
+            BackgroundTransparency = 0,
             Text = text,
             TextSize = 14,
             TextColor3 = Theme.Text,
-            FontFace = Fonts.Medium,
+            FontFace = Fonts.Bold,
             AutoButtonColor = false,
             LayoutOrder = order,
-            Parent = row,
+            Parent = buttons,
         })
-        corner(b, UDim.new(0, 6))
+        corner(b, UDim.new(0, 10))
+        if not primary then
+            stroke(b)
+        end
+        b.MouseEnter:Connect(function()
+            tween(b, { BackgroundTransparency = 0.15 }, 0.12)
+        end)
+        b.MouseLeave:Connect(function()
+            tween(b, { BackgroundTransparency = 0 }, 0.12)
+        end)
         return b
     end
     local getKey
     if linkUrl or sdk then
-        getKey = button("Get key", false, 1, UDim2.new(0.5, -4, 1, 0))
+        getKey = button("Get key", false, 1, UDim2.new(0.5, -5, 1, 0))
     end
-    local verify = button("Verify", true, 2, getKey and UDim2.new(0.5, -4, 1, 0) or UDim2.new(1, 0, 1, 0))
+    local verify = button("Verify", true, 2, getKey and UDim2.new(0.5, -5, 1, 0) or UDim2.new(1, 0, 1, 0))
+    label({
+        Size = UDim2.new(1, 0, 0, 14),
+        Text = "Press Enter or Verify after you paste the key.",
+        TextSize = 10,
+        TextColor3 = Theme.Muted,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        LayoutOrder = 6,
+        Parent = panel,
+    })
 
     local busy, finished, attempts, fetchingLink = false, false, 0, false
+    local function setStatus(text, kind)
+        status.Text = text or ""
+        local colour, icon = Theme.Error, "triangle-alert"
+        if kind == "ok" then
+            colour, icon = Theme.Success, "check"
+        elseif kind == "busy" then
+            colour, icon = Theme.Muted, "loader"
+        elseif kind == "info" then
+            colour, icon = Theme.Muted, "info"
+        end
+        status.TextColor3 = colour
+        statusIcon.ImageColor3 = colour
+        statusIcon.ImageTransparency = (text or "") == "" and 1 or 0
+        applyIcon(statusIcon, icon)
+    end
+    local function spin()
+        statusIcon.Rotation = 0
+        task.spawn(function()
+            while busy do
+                statusIcon.Rotation = (statusIcon.Rotation + 12) % 360
+                task.wait(0.02)
+            end
+            statusIcon.Rotation = 0
+        end)
+    end
+    local function shake()
+        for _, dx in ipairs({ 10, -10, 6, -6, 0 }) do
+            tween(panel, { Position = UDim2.fromScale(0.5, 0.5) + UDim2.fromOffset(dx, 0) }, 0.04)
+            task.wait(0.04)
+        end
+    end
     local function accept(key)
         finished = true
         if saving then
@@ -4774,9 +4896,12 @@ function Library:RequireKey(opts)
                 writefile(path, key)
             end)
         end
-        status.TextColor3 = Theme.Success
-        status.Text = "Key accepted"
-        task.delay(0.4, function()
+        setStatus(keyInfo and keyInfo.is_premium == true and "Key accepted, Premium" or "Key accepted", "ok")
+        tween(verify, { BackgroundColor3 = Theme.Success }, 0.2)
+        task.delay(0.7, function()
+            tween(backdrop, { BackgroundTransparency = 1 }, 0.25)
+            tween(panel, { BackgroundTransparency = 1 }, 0.25)
+            task.wait(0.3)
             gui:Destroy()
             done:Fire(key, keyInfo)
         end)
@@ -4785,29 +4910,41 @@ function Library:RequireKey(opts)
         if finished or busy then
             return
         end
-        busy = true
-        local key = box.Text:match("^%s*(.-)%s*$")
         if junkieError then
-            status.TextColor3 = Theme.Error
-            status.Text = junkieError
-        else
-            lastError = nil
-            if isValid(key) then
-                accept(key)
-            else
-                attempts = attempts + 1
-                status.TextColor3 = Theme.Error
-                if lastError then
-                    status.Text = Library._junkieErrors[lastError] or ("Rejected: " .. tostring(lastError))
-                else
-                    status.Text = attempts >= 3 and "Still not valid. Check the key on the page." or "That key is not valid."
-                end
-            end
+            setStatus(junkieError, "error")
+            task.spawn(shake)
+            return
         end
+        local key = box.Text:match("^%s*(.-)%s*$")
+        if key == "" then
+            setStatus("Paste a key first.", "error")
+            task.spawn(shake)
+            return
+        end
+        busy = true
+        setStatus("Checking the key...", "busy")
+        spin()
+        lastError = nil
+        local valid = isValid(key)
         busy = false
+        if valid then
+            accept(key)
+        else
+            attempts = attempts + 1
+            if lastError then
+                setStatus(Library._junkieErrors[lastError] or ("Rejected: " .. tostring(lastError)), "error")
+            else
+                setStatus(attempts >= 3 and "Still not valid. Check the key on the page." or "That key is not valid.", "error")
+            end
+            task.spawn(shake)
+        end
     end
     verify.MouseButton1Click:Connect(check)
+    box.Focused:Connect(function()
+        tween(fieldStroke, { Color = Theme.Accent, Transparency = 0 }, 0.15)
+    end)
     box.FocusLost:Connect(function(enterPressed)
+        tween(fieldStroke, { Color = Theme.Stroke, Transparency = 0.2 }, 0.15)
         if enterPressed then
             check()
         end
@@ -4815,48 +4952,53 @@ function Library:RequireKey(opts)
     if getKey then
         getKey.MouseButton1Click:Connect(function()
             if linkUrl then
-                status.TextColor3 = Theme.Muted
                 if type(setclipboard) == "function" then
                     pcall(setclipboard, linkUrl)
-                    status.Text = "Link copied. Open it in your browser."
+                    setStatus("Link copied. Open it in your browser.", "info")
                 else
-                    status.Text = tostring(linkUrl)
+                    setStatus(tostring(linkUrl), "info")
                 end
                 return
             end
             if not sdk then
-                status.TextColor3 = Theme.Error
-                status.Text = junkieError or "No key link is set."
+                setStatus(junkieError or "No key link is set.", "error")
                 return
             end
             if fetchingLink then
                 return
             end
             fetchingLink = true
-            status.TextColor3 = Theme.Muted
-            status.Text = "Creating the key link..."
+            setStatus("Creating the key link...", "busy")
             local ok, link, err = pcall(sdk.get_key_link)
             fetchingLink = false
             if not ok then
-                status.TextColor3 = Theme.Error
-                status.Text = "The key link request failed. Try again."
+                setStatus("The key link request failed. Try again.", "error")
             elseif link then
-                status.TextColor3 = Theme.Muted
                 if type(setclipboard) == "function" then
                     pcall(setclipboard, link)
-                    status.Text = "Link copied. Open it in your browser."
+                    setStatus("Link copied. Open it in your browser.", "info")
                 else
-                    status.Text = link
+                    setStatus(link, "info")
                 end
             elseif err == "RATE_LIMITTED" then
-                status.TextColor3 = Theme.Error
-                status.Text = "Too many requests. Wait before trying again."
+                setStatus("Too many requests. Wait before trying again.", "error")
             else
-                status.TextColor3 = Theme.Error
-                status.Text = "Could not create a key link: " .. tostring(err)
+                setStatus("Could not create a key link: " .. tostring(err), "error")
             end
         end)
     end
+
+    if junkieError then
+        setStatus(junkieError, "error")
+    elseif savedReason then
+        setStatus(savedReason, "error")
+    else
+        setStatus("", "info")
+    end
+    tween(backdrop, { BackgroundTransparency = 0.4 }, 0.3)
+    tween(glow, { ImageTransparency = 0.55 }, 0.5)
+    tween(panel, { BackgroundTransparency = 0 }, 0.3)
+    tween(scale, { Scale = 1 }, 0.3)
 
     local key, info = done.Event:Wait()
     done:Destroy()
@@ -11276,19 +11418,36 @@ function Tab:Viewport(opts)
     local window = self.Window
     local media = parts.Media
     applyIcon(parts.Placeholder, "box")
+    -- A soft backdrop: a gradient, a glow behind the model, and a shadow under it.
+    create("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 146, 160)),
+        Parent = media,
+    })
+    create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromScale(1.4, 1.4),
+        BackgroundTransparency = 1,
+        Image = Assets.Glow,
+        ImageColor3 = Theme.Accent,
+        ImageTransparency = 0.8,
+        ZIndex = 1,
+        Parent = media,
+    })
 
     local viewport = create("ViewportFrame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         ImageTransparency = 1,
-        Ambient = opts.Ambient or Color3.fromRGB(165, 160, 175),
-        LightColor = opts.LightColor or Color3.fromRGB(255, 250, 245),
+        Ambient = opts.Ambient or Color3.fromRGB(128, 124, 140),
+        LightColor = opts.LightColor or Color3.fromRGB(255, 242, 232),
         LightDirection = Vector3.new(-0.6, -1, -0.8),
         ZIndex = 2,
         Parent = media,
     })
     local camera = Instance.new("Camera")
-    camera.FieldOfView = math.clamp(tonumber(opts.FieldOfView) or 35, 10, 90)
+    camera.FieldOfView = math.clamp(tonumber(opts.FieldOfView) or 32, 10, 90)
     camera.Parent = viewport
     viewport.CurrentCamera = camera
     local world = Instance.new("WorldModel")
@@ -11300,9 +11459,10 @@ function Tab:Viewport(opts)
         SpinSpeed = tonumber(opts.SpinSpeed) or 25,
     }
     local angle = math.rad(tonumber(opts.Angle) or 0)
-    local pitch = math.rad(tonumber(opts.Pitch) or 10)
-    local distanceScale = tonumber(opts.Distance) or 1
+    local pitch = math.rad(tonumber(opts.Pitch) or 12)
+    local distanceScale = tonumber(opts.Distance) or 1.08
     local center, distance, basis = nil, 10, CFrame.new()
+    local shadowPart
     local source = nil
     local generation = 0
     local dragging, lastX, resumeAt = false, 0, 0
@@ -11331,6 +11491,23 @@ function Tab:Viewport(opts)
             return false
         end
         center = cf.Position
+        if shadowPart then
+            shadowPart:Destroy()
+        end
+        local diameter = math.max(size.X, size.Z) * 1.15
+        shadowPart = Instance.new("Part")
+        shadowPart.Shape = Enum.PartType.Cylinder
+        shadowPart.Anchored = true
+        shadowPart.CanCollide = false
+        shadowPart.CanQuery = false
+        shadowPart.CanTouch = false
+        shadowPart.CastShadow = false
+        shadowPart.Material = Enum.Material.SmoothPlastic
+        shadowPart.Color = Color3.new(0, 0, 0)
+        shadowPart.Transparency = 0.6
+        shadowPart.Size = Vector3.new(0.05, diameter, diameter)
+        shadowPart.CFrame = CFrame.new(center.X, cf.Position.Y - size.Y / 2 - 0.02, center.Z) * CFrame.Angles(0, 0, math.rad(90))
+        shadowPart.Parent = world
         local radius = math.max(size.Magnitude / 2, 0.5)
         distance = radius / math.tan(math.rad(camera.FieldOfView / 2)) * distanceScale
         place()
@@ -11405,6 +11582,10 @@ function Tab:Viewport(opts)
             handle.Model = nil
         end
         center = nil
+        if shadowPart then
+            shadowPart:Destroy()
+            shadowPart = nil
+        end
         if value == nil then
             tween(viewport, { ImageTransparency = 1 }, 0.2)
             tween(parts.Placeholder, { ImageTransparency = 0.3 }, 0.2)
@@ -13684,6 +13865,14 @@ function Window:_homeProfile(list, opts, order)
 
     return function()
         local value = opts.Expiry
+        if value == nil and type(opts.KeyInfo) == "table" then
+            -- The license from the key check (Junkie's JD_EXPIRES_AT), shown where Expiry goes.
+            if opts.KeyInfo.Keyless == true then
+                value = "Keyless"
+            elseif opts.KeyInfo.ExpiresAt ~= nil then
+                value = tonumber(opts.KeyInfo.ExpiresAt)
+            end
+        end
         if type(value) == "function" then
             local ok, result = pcall(value)
             value = ok and result or nil
@@ -15122,70 +15311,6 @@ function Window:_homeClock(parent, opts, order)
     return card
 end
 
--- License card on the Home tab. The protected script passes the values Junkie
--- injects (JD_EXPIRES_AT, JD_TIER_NAME, JD_IS_PREMIUM, JD_REASON) through Home.KeyInfo.
-function Window:_homeKey(parent, opts, order)
-    local info = type(opts.KeyInfo) == "table" and opts.KeyInfo or nil
-    if not info then
-        return nil
-    end
-    local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "License", 0)
-    local headline = label({
-        Size = UDim2.new(1, 0, 0, 28),
-        Text = "--",
-        TextSize = 22,
-        FontFace = Fonts.Bold,
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    local detail = label({
-        Size = UDim2.new(1, 0, 0, 18),
-        Text = "",
-        TextSize = 12,
-        TextColor3 = Theme.Muted,
-        LayoutOrder = 2,
-        Parent = card,
-    })
-    local function refresh()
-        local tier = info.Tier and tostring(info.Tier) or "Unknown tier"
-        local access = info.Premium == true and "Premium" or "Standard"
-        local expires = tonumber(info.ExpiresAt)
-        if info.Keyless == true then
-            headline.Text = "Keyless access"
-            detail.Text = tier .. "  |  " .. access
-        elseif info.ExpiresAt == nil then
-            headline.Text = "No expiry"
-            detail.Text = tier .. "  |  " .. access
-        elseif not expires then
-            headline.Text = "Unknown expiry"
-            detail.Text = tier .. "  |  " .. access
-        else
-            local remaining = math.floor(expires - os.time())
-            if remaining <= 0 then
-                headline.Text = "Expired"
-            else
-                headline.Text = string.format("%dd %02dh %02dm %02ds left",
-                    math.floor(remaining / 86400),
-                    math.floor(remaining % 86400 / 3600),
-                    math.floor(remaining % 3600 / 60),
-                    math.floor(remaining % 60))
-            end
-            detail.Text = tier .. "  |  " .. access .. "  |  until " .. os.date("%d %b %Y %H:%M", math.floor(expires))
-        end
-    end
-    refresh()
-    local last = -1
-    table.insert(self._frameSteps, function()
-        local now = os.time()
-        if now ~= last then
-            last = now
-            refresh()
-        end
-    end)
-    return card
-end
-
 function Window:_buildHome(opts)
     self._hideName = opts.HideName == true
     self._hideAvatar = opts.HideAvatar == true
@@ -15210,7 +15335,6 @@ function Window:_buildHome(opts)
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
     local refreshStats, resetStats = self:_homeStats(list, opts, 2, tab)
-    self:_homeKey(list, opts, 0)
     self:_homeClock(list, opts, 3)
 
     -- Server and links side by side, stacked when narrow.
