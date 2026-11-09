@@ -211,8 +211,10 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetDim(bool)` | Turn the tint on or off. The weather keeps running. |
 | `SetWeatherDensity(n)` / `SetWeatherSpeed(n)` | Particle count and speed multipliers. |
 | `SetKeybind(keyCode)` | Change the hide key. Updates the chip on the home tab. |
-| `SetWatermark(text)` / `SetWatermark({ Text, FPS, Ping, Time, Corner })` | A small corner readout. A string sets its text; a table also switches on live FPS, ping and clock readouts. `Corner` is `"TopRight"` (default), `"TopLeft"`, `"BottomRight"` or `"BottomLeft"`. Nothing shows until you call it. |
+| `SetWatermark(text)` / `SetWatermark({ Text, FPS, Ping, Time, Corner })` | A small corner readout. A string sets its text; a table also switches on live FPS, ping and clock readouts. The clock uses the GMT offset chosen on the Home clock. `Corner` is `"TopRight"` (default), `"TopLeft"`, `"BottomRight"` or `"BottomLeft"`. Nothing shows until you call it. |
 | `SetWatermarkVisible(visible)` | Show or hide the readout without losing its text or settings. |
+| `SetWatermarkEnabled(enabled)` / `IsWatermarkEnabled()` | The player's choice in Settings. Saved beside the configs, and a choice of off always wins over `SetWatermarkVisible`. |
+| `SetKeybindListEnabled(enabled)` / `IsKeybindListEnabled()` | The same for the keybind list. |
 | `BindToggle(toggle, key, mode?)` | Bind a key to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
 | `SetKeybindListVisible(visible)` | Show or hide an overlay that lists every key bound with `BindToggle`, with its mode and whether the toggle is on. |
 | `SetKeepOnScreen(enabled)` | Turn the viewport clamp on or off. |

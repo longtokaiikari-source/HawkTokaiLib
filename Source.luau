@@ -13865,8 +13865,9 @@ function Window:_homeProfile(list, opts, order)
 
     return function()
         local value = opts.Expiry
-        if value == nil and type(opts.KeyInfo) == "table" then
-            -- The license from the key check (Junkie's JD_EXPIRES_AT), shown where Expiry goes.
+        if type(opts.KeyInfo) == "table" then
+            -- The license from the key check (Junkie's JD_EXPIRES_AT) wins over Expiry.
+            value = nil
             if opts.KeyInfo.Keyless == true then
                 value = "Keyless"
             elseif opts.KeyInfo.ExpiresAt ~= nil then
@@ -15176,6 +15177,7 @@ function Window:_homeClock(parent, opts, order)
         return string.format("GMT%s%02d:%02d", sign, math.floor(total / 60), total % 60)
     end
     local offset = tonumber(self:_readConfigSettings().ClockOffset) or tonumber(config.Offset) or 7
+    self._clockOffset = offset
 
     local card = self:_homeCard(parent, order)
     self:_homeCaption(card, "World clock", 0)
@@ -15229,27 +15231,44 @@ function Window:_homeClock(parent, opts, order)
         Parent = card,
     })
 
-    local picker = create("ScrollingFrame", {
-        Size = UDim2.new(1, 0, 0, 180),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollBarThickness = 3,
-        Visible = false,
-        LayoutOrder = 3,
-        Parent = card,
-    })
-    create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = picker })
-
     local function refresh(now)
         local shifted = now + math.floor(offset * 3600 + 0.5)
         timeText.Text = os.date("!%H:%M:%S", shifted)
         dateText.Text = os.date("!%A, %d %B %Y", shifted)
     end
 
+    -- The zone list opens as a popup over the window, like the dropdowns do.
+    local popupWidth, rowHeight = 236, 28
+    local popupHeight = math.min(#Library.TimeZones * rowHeight + 12, 252)
+    local popup = create("Frame", {
+        Size = UDim2.fromOffset(popupWidth, popupHeight),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 60,
+        Parent = self:_popupHost(card),
+    })
+    corner(popup, UDim.new(0, 10))
+    stroke(popup)
+    local zoneList = create("ScrollingFrame", {
+        Size = UDim2.new(1, -8, 1, -8),
+        Position = UDim2.fromOffset(4, 4),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 3,
+        ZIndex = 61,
+        Parent = popup,
+    })
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = zoneList,
+    })
+
     local choices = {}
     local function paint()
+        chipText.Text = gmtText(offset)
         for _, choice in ipairs(choices) do
             local active = choice.Hours == offset
             choice.Code.TextColor3 = active and Theme.Accent or Theme.Text
@@ -15257,47 +15276,108 @@ function Window:_homeClock(parent, opts, order)
         end
     end
 
+    local open = false
+    local stopFollowing
+    local setOpen
+    local function closePicker()
+        setOpen(false)
+    end
+    local function place()
+        local host = self:_popupHost(card)
+        local scale = self.Scale and self.Scale.Scale or 1
+        local hostSize = host.AbsoluteSize / scale
+        local chipPos = (chip.AbsolutePosition - host.AbsolutePosition) / scale
+        local chipSize = chip.AbsoluteSize / scale
+        local x = math.clamp(chipPos.X + chipSize.X - popupWidth, 6, math.max(6, hostSize.X - popupWidth - 6))
+        local y = chipPos.Y + chipSize.Y + 6
+        if y + popupHeight > hostSize.Y - 6 then
+            y = chipPos.Y - popupHeight - 6
+        end
+        popup.Position = UDim2.fromOffset(x, math.max(6, y))
+    end
+    setOpen = function(state)
+        if state == open then
+            return
+        end
+        open = state
+        applyIcon(chipArrow, state and "chevron-up" or "chevron-down")
+        if state then
+            if self._closePopup and self._closePopup ~= closePicker then
+                self._closePopup()
+            end
+            self._closePopup = closePicker
+            popup.Parent = self:_popupHost(card)
+            place()
+            popup.Visible = true
+            stopFollowing = self:_listen("Render", place)
+        else
+            if self._closePopup == closePicker then
+                self._closePopup = nil
+            end
+            popup.Visible = false
+            if stopFollowing then
+                stopFollowing()
+                stopFollowing = nil
+            end
+        end
+    end
+
     for index, zone in ipairs(Library.TimeZones) do
         local hours = zone[1]
         local button = create("TextButton", {
-            Size = UDim2.new(1, -6, 0, 26),
+            Size = UDim2.new(1, -8, 0, rowHeight - 2),
             BackgroundTransparency = 1,
             Text = "",
             AutoButtonColor = false,
             LayoutOrder = index,
-            Parent = picker,
+            ZIndex = 62,
+            Parent = zoneList,
         })
         local code = label({
-            Size = UDim2.new(0, 92, 1, 0),
+            Size = UDim2.new(0, 96, 1, 0),
             Position = UDim2.fromOffset(8, 0),
             Text = gmtText(hours),
             TextSize = 12,
+            ZIndex = 63,
             Parent = button,
         })
         local city = label({
-            Size = UDim2.new(1, -110, 1, 0),
-            Position = UDim2.fromOffset(100, 0),
+            Size = UDim2.new(1, -112, 1, 0),
+            Position = UDim2.fromOffset(104, 0),
             Text = zone[2],
             TextSize = 12,
             TextColor3 = Theme.Muted,
+            ZIndex = 63,
             Parent = button,
         })
         choices[#choices + 1] = { Hours = hours, Code = code, City = city }
         button.MouseButton1Click:Connect(function()
             offset = hours
-            chipText.Text = gmtText(hours)
+            self._clockOffset = hours
             self:_writeConfigSettings({ ClockOffset = hours })
-            picker.Visible = false
+            setOpen(false)
             paint()
             refresh(os.time())
         end)
     end
 
     chip.MouseButton1Click:Connect(function()
-        picker.Visible = not picker.Visible
+        setOpen(not open)
         paint()
     end)
-
+    self:_listen("Began", function(input)
+        if not open then
+            return
+        end
+        local kind = input.UserInputType
+        if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+            return
+        end
+        local point = Vector2.new(input.Position.X, input.Position.Y)
+        if not pointInside(point, popup) and not pointInside(point, chip) then
+            setOpen(false)
+        end
+    end)
     paint()
     refresh(os.time())
     local lastSecond = -1
@@ -20445,7 +20525,7 @@ function Window:SetWatermark(opts)
             BackgroundColor3 = Theme.Background,
             BackgroundTransparency = 0.05,
             BorderSizePixel = 0,
-            Visible = true,
+            Visible = self:_overlayPref("ShowWatermark") ~= false,
             ZIndex = 40,
             Parent = self.Gui,
         })
@@ -20472,6 +20552,7 @@ function Window:SetWatermark(opts)
             Frames = 0,
             Span = 0,
             Elapsed = 0,
+            TimeOffset = self._clockOffset or tonumber(self:_readConfigSettings().ClockOffset) or 7,
             Stats = game:GetService("Stats"),
         }
         self._watermark = wm
@@ -20513,7 +20594,41 @@ function Window:SetWatermark(opts)
     return self
 end
 
+-- Overlay preferences saved beside the configs. nil means the player has not chosen yet.
+function Window:_overlayPref(key)
+    local value = self:_readConfigSettings()[key]
+    if type(value) == "boolean" then
+        return value
+    end
+    return nil
+end
+
+-- The choice made in Settings. Scripts can still show or hide an overlay with
+-- the Set...Visible functions, but an off choice always wins.
+function Window:SetWatermarkEnabled(enabled)
+    self:_writeConfigSettings({ ShowWatermark = enabled == true })
+    self:SetWatermarkVisible(enabled == true)
+    return self
+end
+
+function Window:IsWatermarkEnabled()
+    return self:_overlayPref("ShowWatermark") ~= false
+end
+
+function Window:SetKeybindListEnabled(enabled)
+    self:_writeConfigSettings({ ShowKeybindList = enabled == true })
+    self:SetKeybindListVisible(enabled == true)
+    return self
+end
+
+function Window:IsKeybindListEnabled()
+    return self:_overlayPref("ShowKeybindList") ~= false
+end
+
 function Window:SetWatermarkVisible(visible)
+    if visible and self:_overlayPref("ShowWatermark") == false then
+        visible = false
+    end
     if self._watermark then
         self._watermark.Frame.Visible = visible and true or false
     end
@@ -20539,7 +20654,8 @@ function Window:_refreshWatermark()
         table.insert(parts, (ok and type(ms) == "number") and (ms .. " ms") or "-- ms")
     end
     if wm.Time then
-        table.insert(parts, os.date("%H:%M:%S"))
+        local offset = self._clockOffset or wm.TimeOffset or 7
+        table.insert(parts, os.date("!%H:%M:%S", os.time() + math.floor(offset * 3600 + 0.5)))
     end
     wm.Readout.Text = table.concat(parts, "  |  ")
 end
@@ -20614,6 +20730,9 @@ end
 
 -- Window:SetKeybindListVisible(true) shows an overlay listing every key bound with BindToggle.
 function Window:SetKeybindListVisible(visible)
+    if visible and self:_overlayPref("ShowKeybindList") == false then
+        visible = false
+    end
     local list = self._keybindList
     if not list then
         if not visible then
