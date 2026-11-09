@@ -602,22 +602,6 @@ Interface:CreateButton({
 })
 
 Settings:CreateConfigManager({ Name = "Configs", Side = "Left" }) -- builds its own groupbox
-Settings:CreateToggle({
-    Name = "Watermark",
-    Desc = "The corner readout with FPS, ping and time",
-    CurrentValue = Window:IsWatermarkEnabled(),
-    Callback = function(Value)
-        Window:SetWatermarkEnabled(Value)
-    end,
-})
-Settings:CreateToggle({
-    Name = "Keybind list",
-    Desc = "The list of keys bound to toggles",
-    CurrentValue = Window:IsKeybindListEnabled(),
-    Callback = function(Value)
-        Window:SetKeybindListEnabled(Value)
-    end,
-})
 Settings:CreateThemeManager({ Name = "Themes", Side = "Right" })
 
 Window:LoadAutoload() -- loads the config marked as autoload, if any

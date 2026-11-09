@@ -4653,6 +4653,7 @@ function Library:RequireKey(opts)
     end
 
     local done = Instance.new("BindableEvent")
+    local tweenService = game:GetService("TweenService")
     local gui = create("ScreenGui", {
         Name = "HawkTokaiLibKeySystem",
         ResetOnSpawn = false,
@@ -4670,7 +4671,7 @@ function Library:RequireKey(opts)
     local glow = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(560, 560),
+        Size = UDim2.fromOffset(620, 620),
         BackgroundTransparency = 1,
         Image = Assets.Glow,
         ImageColor3 = Theme.Accent,
@@ -4680,62 +4681,68 @@ function Library:RequireKey(opts)
     local panel = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(380, 0),
+        Size = UDim2.fromOffset(392, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Theme.Background,
+        BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = backdrop,
     })
-    corner(panel, UDim.new(0, 14))
+    corner(panel, UDim.new(0, 16))
+    create("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(Theme.Surface2, Theme.Background),
+        Parent = panel,
+    })
     stroke(panel, Theme.Accent, 0.55)
-    padding(panel, 22, 22, 20, 18)
+    padding(panel, 22, 22, 22, 20)
     local scale = create("UIScale", {
         Scale = 0.92,
         Parent = panel,
     })
     create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 12),
+        Padding = UDim.new(0, 14),
         Parent = panel,
     })
 
+    -- Header: the brand mark, a title and a subtitle.
     local header = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 52),
         BackgroundTransparency = 1,
         LayoutOrder = 1,
         Parent = panel,
     })
     local badge = create("Frame", {
-        Size = UDim2.fromOffset(42, 42),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.8,
+        Size = UDim2.fromOffset(52, 52),
+        BackgroundColor3 = Theme.Surface,
         BorderSizePixel = 0,
         Parent = header,
     })
     corner(badge, UDim.new(1, 0))
+    stroke(badge, Theme.Accent, 0.45)
     local badgeIcon = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(20, 20),
+        Size = UDim2.fromOffset(32, 32),
         BackgroundTransparency = 1,
-        ImageColor3 = Theme.Accent,
+        ScaleType = Enum.ScaleType.Fit,
         Parent = badge,
     })
-    applyIcon(badgeIcon, "key")
+    applyIcon(badgeIcon, Assets.Logo, true)
     label({
-        Position = UDim2.fromOffset(54, 2),
-        Size = UDim2.new(1, -54, 0, 22),
+        Position = UDim2.fromOffset(64, 6),
+        Size = UDim2.new(1, -64, 0, 24),
         Text = opts.Title or "Key required",
-        TextSize = 18,
+        TextSize = 19,
         FontFace = Fonts.Bold,
         Parent = header,
     })
     label({
-        Position = UDim2.fromOffset(54, 25),
-        Size = UDim2.new(1, -54, 0, 16),
-        Text = "Secured by Junkie",
-        TextSize = 11,
+        Position = UDim2.fromOffset(64, 30),
+        Size = UDim2.new(1, -64, 0, 16),
+        Text = "Secured with Junkie",
+        TextSize = 12,
         TextColor3 = Theme.Muted,
         Parent = header,
     })
@@ -4751,26 +4758,37 @@ function Library:RequireKey(opts)
         LayoutOrder = 2,
         Parent = panel,
     })
+
+    -- The key field: a key icon, the text box, and a clear button that shows once there is text.
     local field = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 46),
         BackgroundColor3 = Theme.Surface,
         BorderSizePixel = 0,
         LayoutOrder = 3,
         Parent = panel,
     })
-    corner(field, UDim.new(0, 10))
+    corner(field, UDim.new(0, 12))
     local fieldStroke = create("UIStroke", {
         Color = Theme.Stroke,
         Thickness = 1,
         Transparency = 0.2,
         Parent = field,
     })
+    local keyIcon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 14, 0.5, 0),
+        Size = UDim2.fromOffset(16, 16),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Muted,
+        Parent = field,
+    })
+    applyIcon(keyIcon, "key")
     local box = create("TextBox", {
-        Size = UDim2.new(1, -24, 1, 0),
-        Position = UDim2.fromOffset(12, 0),
+        Position = UDim2.fromOffset(40, 0),
+        Size = UDim2.new(1, -78, 1, 0),
         BackgroundTransparency = 1,
         Text = "",
-        PlaceholderText = "Paste your key here",
+        PlaceholderText = "Paste your key",
         PlaceholderColor3 = Theme.Muted,
         TextColor3 = Theme.Text,
         TextSize = 14,
@@ -4779,6 +4797,27 @@ function Library:RequireKey(opts)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = field,
     })
+    local clear = create("TextButton", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -10, 0.5, 0),
+        Size = UDim2.fromOffset(24, 24),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = field,
+    })
+    local clearIcon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(14, 14),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Muted,
+        Parent = clear,
+    })
+    applyIcon(clearIcon, "x")
+
+    -- Status line, then a thin bar that sweeps while the key is being checked.
     local statusRow = create("Frame", {
         Size = UDim2.new(1, 0, 0, 18),
         BackgroundTransparency = 1,
@@ -4802,10 +4841,28 @@ function Library:RequireKey(opts)
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = statusRow,
     })
-    local buttons = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 42),
-        BackgroundTransparency = 1,
+    local track = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 3),
+        BackgroundColor3 = Theme.Surface3,
+        BorderSizePixel = 0,
+        Visible = false,
         LayoutOrder = 5,
+        Parent = panel,
+    })
+    corner(track, UDim.new(1, 0))
+    local bar = create("Frame", {
+        Size = UDim2.new(0.34, 0, 1, 0),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Parent = track,
+    })
+    corner(bar, UDim.new(1, 0))
+
+    -- The two buttons, with a small press effect.
+    local buttons = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundTransparency = 1,
+        LayoutOrder = 6,
         Parent = panel,
     })
     create("UIListLayout", {
@@ -4818,7 +4875,6 @@ function Library:RequireKey(opts)
         local b = create("TextButton", {
             Size = width,
             BackgroundColor3 = primary and Theme.Accent or Theme.Surface,
-            BackgroundTransparency = 0,
             Text = text,
             TextSize = 14,
             TextColor3 = Theme.Text,
@@ -4827,15 +4883,26 @@ function Library:RequireKey(opts)
             LayoutOrder = order,
             Parent = buttons,
         })
-        corner(b, UDim.new(0, 10))
+        corner(b, UDim.new(0, 12))
         if not primary then
             stroke(b)
         end
+        local press = create("UIScale", {
+            Scale = 1,
+            Parent = b,
+        })
         b.MouseEnter:Connect(function()
-            tween(b, { BackgroundTransparency = 0.15 }, 0.12)
+            tween(b, { BackgroundTransparency = 0.12 }, 0.12)
         end)
         b.MouseLeave:Connect(function()
             tween(b, { BackgroundTransparency = 0 }, 0.12)
+            tween(press, { Scale = 1 }, 0.14)
+        end)
+        b.MouseButton1Down:Connect(function()
+            tween(press, { Scale = 0.96 }, 0.08)
+        end)
+        b.MouseButton1Up:Connect(function()
+            tween(press, { Scale = 1 }, 0.16, Enum.EasingStyle.Back)
         end)
         return b
     end
@@ -4850,11 +4917,28 @@ function Library:RequireKey(opts)
         TextSize = 10,
         TextColor3 = Theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Center,
-        LayoutOrder = 6,
+        LayoutOrder = 7,
         Parent = panel,
     })
 
+    -- Behaviour.
     local busy, finished, attempts, fetchingLink = false, false, 0, false
+    local sweep
+    local function startSweep()
+        track.Visible = true
+        bar.Position = UDim2.fromScale(0, 0)
+        sweep = tweenService:Create(bar, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Position = UDim2.fromScale(0.66, 0),
+        })
+        sweep:Play()
+    end
+    local function stopSweep()
+        if sweep then
+            sweep:Cancel()
+            sweep = nil
+        end
+        track.Visible = false
+    end
     local function setStatus(text, kind)
         status.Text = text or ""
         local colour, icon = Theme.Error, "triangle-alert"
@@ -4896,9 +4980,12 @@ function Library:RequireKey(opts)
                 writefile(path, key)
             end)
         end
-        setStatus(keyInfo and keyInfo.is_premium == true and "Key accepted, Premium" or "Key accepted", "ok")
+        stopSweep()
+        local tier = keyInfo and (keyInfo.JD_TIER_NAME or (keyInfo.is_premium == true and "Premium" or "Standard")) or nil
+        setStatus(tier and ("Key accepted  |  " .. tostring(tier)) or "Key accepted", "ok")
+        tween(badgeIcon, { Size = UDim2.fromOffset(38, 38) }, 0.4, Enum.EasingStyle.Back)
         tween(verify, { BackgroundColor3 = Theme.Success }, 0.2)
-        task.delay(0.7, function()
+        task.delay(0.8, function()
             tween(backdrop, { BackgroundTransparency = 1 }, 0.25)
             tween(panel, { BackgroundTransparency = 1 }, 0.25)
             task.wait(0.3)
@@ -4924,12 +5011,14 @@ function Library:RequireKey(opts)
         busy = true
         setStatus("Checking the key...", "busy")
         spin()
+        startSweep()
         lastError = nil
         local valid = isValid(key)
         busy = false
         if valid then
             accept(key)
         else
+            stopSweep()
             attempts = attempts + 1
             if lastError then
                 setStatus(Library._junkieErrors[lastError] or ("Rejected: " .. tostring(lastError)), "error")
@@ -4939,12 +5028,22 @@ function Library:RequireKey(opts)
             task.spawn(shake)
         end
     end
+
     verify.MouseButton1Click:Connect(check)
+    clear.MouseButton1Click:Connect(function()
+        box.Text = ""
+        box:CaptureFocus()
+    end)
+    box:GetPropertyChangedSignal("Text"):Connect(function()
+        clear.Visible = box.Text ~= ""
+    end)
     box.Focused:Connect(function()
         tween(fieldStroke, { Color = Theme.Accent, Transparency = 0 }, 0.15)
+        tween(keyIcon, { ImageColor3 = Theme.Accent }, 0.15)
     end)
     box.FocusLost:Connect(function(enterPressed)
         tween(fieldStroke, { Color = Theme.Stroke, Transparency = 0.2 }, 0.15)
+        tween(keyIcon, { ImageColor3 = Theme.Muted }, 0.15)
         if enterPressed then
             check()
         end
@@ -4995,10 +5094,12 @@ function Library:RequireKey(opts)
     else
         setStatus("", "info")
     end
-    tween(backdrop, { BackgroundTransparency = 0.4 }, 0.3)
-    tween(glow, { ImageTransparency = 0.55 }, 0.5)
+    tween(backdrop, { BackgroundTransparency = 0.35 }, 0.3)
     tween(panel, { BackgroundTransparency = 0 }, 0.3)
-    tween(scale, { Scale = 1 }, 0.3)
+    tween(scale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
+    tweenService:Create(glow, TweenInfo.new(2.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        ImageTransparency = 0.72,
+    }):Play()
 
     local key, info = done.Event:Wait()
     done:Destroy()
@@ -9694,9 +9795,40 @@ local function managerHost(tab, opts, name, icon)
     return host
 end
 
+-- The two switches for the overlays, in their own group on the Configs tab.
+function Tab:_overlayToggles()
+    local window = self.Window
+    local box = self:Groupbox({ Name = "Overlays", Icon = "layout-grid", Side = "Right" })
+    local function toggle(options)
+        if type(box.Toggle) == "function" then
+            return box:Toggle(options)
+        end
+        if type(box.CreateToggle) == "function" then
+            return box:CreateToggle(options)
+        end
+    end
+    toggle({
+        Name = "Watermark",
+        Desc = "Corner readout with FPS, ping and time. Drag it to move.",
+        CurrentValue = window:IsWatermarkEnabled(),
+        Callback = function(value)
+            window:SetWatermarkEnabled(value)
+        end,
+    })
+    toggle({
+        Name = "Keybind list",
+        Desc = "Keys bound to toggles. Drag it to move.",
+        CurrentValue = window:IsKeybindListEnabled(),
+        Callback = function(value)
+            window:SetKeybindListEnabled(value)
+        end,
+    })
+end
+
 function Tab:ConfigManager(opts)
     opts = normalize(opts, { Title = "Name" })
     local host = managerHost(self, opts, "Configs", "folder")
+    self:_overlayToggles()
     local window = self.Window
     local manager = {}
     local list, status, modeList
@@ -20510,6 +20642,48 @@ end
 
 -- Window:SetWatermark("text") sets the text. A table can also switch readouts on:
 --   Window:SetWatermark({ Text = "My Hub", FPS = true, Ping = true, Time = true, Corner = "TopLeft" })
+-- Lets the player drag a floating overlay, like the island. The place is saved beside
+-- the configs under `key`, and the overlay is kept inside the screen.
+function Window:_dragOverlay(frame, key)
+    local held = false
+    local grab = Vector2.new(0, 0)
+    frame.InputBegan:Connect(function(input)
+        if not isPress(input) then
+            return
+        end
+        held = true
+        local origin = frame.Parent.AbsolutePosition
+        local top = frame.AbsolutePosition
+        grab = pointerPosition() - top
+        frame.AnchorPoint = Vector2.new(0, 0)
+        frame.Position = UDim2.fromOffset(top.X - origin.X, top.Y - origin.Y)
+    end)
+    self:_listen("Changed", function()
+        if not held then
+            return
+        end
+        local origin = frame.Parent.AbsolutePosition
+        local bounds = frame.Parent.AbsoluteSize
+        local target = pointerPosition() - grab - origin
+        local x = math.clamp(target.X, 0, math.max(0, bounds.X - frame.AbsoluteSize.X))
+        local y = math.clamp(target.Y, 0, math.max(0, bounds.Y - frame.AbsoluteSize.Y))
+        frame.Position = UDim2.fromOffset(x, y)
+    end)
+    self:_listen("Ended", function()
+        if not held then
+            return
+        end
+        held = false
+        local origin = frame.Parent.AbsolutePosition
+        self:_writeConfigSettings({
+            [key] = {
+                X = math.floor(frame.AbsolutePosition.X - origin.X),
+                Y = math.floor(frame.AbsolutePosition.Y - origin.Y),
+            },
+        })
+    end)
+end
+
 function Window:SetWatermark(opts)
     if type(opts) == "string" then
         opts = { Text = opts }
@@ -20532,6 +20706,7 @@ function Window:SetWatermark(opts)
         corner(frame, UDim.new(0, 6))
         stroke(frame)
         padding(frame, 10, 10)
+        self:_dragOverlay(frame, "WatermarkPosition")
         wm = {
             Frame = frame,
             Readout = label({
@@ -20586,10 +20761,16 @@ function Window:SetWatermark(opts)
     if opts.Corner ~= nil then
         wm.Corner = tostring(opts.Corner)
     end
-    local right = wm.Corner ~= "TopLeft" and wm.Corner ~= "BottomLeft"
-    local bottom = wm.Corner == "BottomLeft" or wm.Corner == "BottomRight"
-    wm.Frame.AnchorPoint = Vector2.new(right and 1 or 0, bottom and 1 or 0)
-    wm.Frame.Position = UDim2.new(right and 1 or 0, right and -12 or 12, bottom and 1 or 0, bottom and -12 or 12)
+    local savedPlace = self:_readConfigSettings().WatermarkPosition
+    if type(savedPlace) == "table" and tonumber(savedPlace.X) and tonumber(savedPlace.Y) then
+        wm.Frame.AnchorPoint = Vector2.new(0, 0)
+        wm.Frame.Position = UDim2.fromOffset(savedPlace.X, savedPlace.Y)
+    else
+        local right = wm.Corner ~= "TopLeft" and wm.Corner ~= "BottomLeft"
+        local bottom = wm.Corner == "BottomLeft" or wm.Corner == "BottomRight"
+        wm.Frame.AnchorPoint = Vector2.new(right and 1 or 0, bottom and 1 or 0)
+        wm.Frame.Position = UDim2.new(right and 1 or 0, right and -12 or 12, bottom and 1 or 0, bottom and -12 or 12)
+    end
     self:_refreshWatermark()
     return self
 end
@@ -20752,6 +20933,12 @@ function Window:SetKeybindListVisible(visible)
         corner(frame, UDim.new(0, 6))
         stroke(frame)
         padding(frame, 10, 10, 8, 8)
+        local keybindPlace = self:_readConfigSettings().KeybindPosition
+        if type(keybindPlace) == "table" and tonumber(keybindPlace.X) and tonumber(keybindPlace.Y) then
+            frame.AnchorPoint = Vector2.new(0, 0)
+            frame.Position = UDim2.fromOffset(keybindPlace.X, keybindPlace.Y)
+        end
+        self:_dragOverlay(frame, "KeybindPosition")
         create("UIListLayout", {
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 4),
