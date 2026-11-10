@@ -4528,6 +4528,228 @@ Library._junkieFatal = {
     HWID_BANNED = true,
 }
 
+-- A small hash of the Easter egg phrase, so the phrase itself is not written in the code.
+function Library._eggHash(text)
+    local h = 0
+    for i = 1, #text do
+        h = (h * 31 + string.byte(text, i)) % 1000000007
+    end
+    return h
+end
+
+-- The Easter egg video, downloaded once into the workspace folder and loaded from
+-- there with getcustomasset. The file name carries a hash of the URL, so a new URL
+-- downloads again. Errors go back to the caller, which warns and moves on.
+function Library._prepareEggVideo(url, folder)
+    if type(url) ~= "string" or url == "" then
+        error("EasterEgg.VideoUrl is empty")
+    end
+    if typeof(writefile) ~= "function" or typeof(isfile) ~= "function" or typeof(getcustomasset) ~= "function" then
+        error("this executor cannot save files or load custom assets")
+    end
+    local current
+    for part in string.gmatch(folder, "[^/]+") do
+        current = current and (current .. "/" .. part) or part
+        if typeof(makefolder) == "function" and typeof(isfolder) == "function" and not isfolder(current) then
+            pcall(makefolder, current)
+        end
+    end
+    local path = folder .. "/egg_" .. tostring(Library._eggHash(url)) .. ".mp4"
+    if not isfile(path) then
+        local body = game:HttpGet(url)
+        if type(body) ~= "string" or #body < 1024 then
+            error("the video download came back empty")
+        end
+        writefile(path, body)
+    end
+    return getcustomasset(path)
+end
+
+-- The Easter egg: a full-screen video that fades in and out with its sound, then
+-- kicks the player with a message. Nothing underneath can be clicked or pressed
+-- while it plays. The Escape key still opens the Roblox menu.
+function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
+    local function finishedWith()
+        if type(onFinish) == "function" then
+            pcall(onFinish)
+        end
+    end
+    if type(videoId) ~= "string" or videoId == "" or string.find(videoId, "YOUR_", 1, true) then
+        warn("[HawkTokaiLib] The Easter egg has no playable video.")
+        finishedWith()
+        return
+    end
+
+    local cas = game:GetService("ContextActionService")
+    local players = game:GetService("Players")
+    local gui = create("ScreenGui", {
+        Name = "HawkTokaiLibEgg",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 20000,
+        Parent = defaultParent(),
+    })
+    -- A full-screen button: it covers the screen and takes every click.
+    local cover = create("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        Modal = true,
+        Active = true,
+        Parent = gui,
+    })
+    local video = create("VideoFrame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Video = videoId,
+        Looped = false,
+        ZIndex = 2,
+        Parent = cover,
+    })
+    if not pcall(function()
+        video.Volume = volume or 10
+    end) then
+        pcall(function()
+            video.Volume = 1
+        end)
+    end
+    -- Black over the video: it fades away to show the video, and comes back at the end.
+    local shade = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 3,
+        Parent = cover,
+    })
+
+    -- Keys and mouse buttons are sunk, so the game does not react to them.
+    local inputs = { Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2 }
+    for _, key in ipairs(Enum.KeyCode:GetEnumItems()) do
+        if key ~= Enum.KeyCode.Unknown and key ~= Enum.KeyCode.Escape then
+            table.insert(inputs, key)
+        end
+    end
+    local sinkNames = {}
+    local function sink()
+        return Enum.ContextActionResult.Sink
+    end
+    for i = 1, #inputs, 20 do
+        local name = "HawkTokaiLibEggSink" .. i
+        local chunk = table.move(inputs, i, math.min(i + 19, #inputs), 1, {})
+        local ok = pcall(function()
+            cas:BindActionAtPriority(name, sink, false, Enum.ContextActionPriority.High.Value, table.unpack(chunk))
+        end)
+        if ok then
+            table.insert(sinkNames, name)
+        end
+    end
+
+    local finished = false
+    local function cleanup()
+        if finished then
+            return
+        end
+        finished = true
+        for _, name in ipairs(sinkNames) do
+            pcall(function()
+                cas:UnbindAction(name)
+            end)
+        end
+        pcall(function()
+            video:Pause()
+        end)
+        gui:Destroy()
+    end
+
+    task.spawn(function()
+        -- Wait for the video to load. Without it there is nothing to show, so stop quietly.
+        local waited = 0
+        while not video.IsLoaded and waited < 15 do
+            task.wait(0.1)
+            waited += 0.1
+        end
+        if not video.IsLoaded then
+            warn("[HawkTokaiLib] The Easter egg video did not load.")
+            cleanup()
+            finishedWith()
+            return
+        end
+        pcall(function()
+            video:Play()
+        end)
+        tween(shade, { BackgroundTransparency = 1 }, 1)
+
+        local ended = false
+        pcall(function()
+            video.Ended:Connect(function()
+                ended = true
+            end)
+        end)
+        local length = video.TimeLength
+        local fadingOut = false
+        local started = os.clock()
+        while not ended and not finished do
+            task.wait(0.05)
+            if video.TimeLength > 0 then
+                length = video.TimeLength
+            end
+            local position = video.TimePosition
+            if not fadingOut and length > 0 and position >= length - 1.2 then
+                fadingOut = true
+                tween(shade, { BackgroundTransparency = 0 }, 1)
+            end
+            if length > 0 and position >= length - 0.05 then
+                ended = true
+            end
+            if os.clock() - started > length + 15 then
+                ended = true
+            end
+        end
+        if not fadingOut then
+            tween(shade, { BackgroundTransparency = 0 }, 0.4)
+        end
+        task.wait(1.1)
+        local player = players.LocalPlayer
+        pcall(function()
+            player:Kick(kickMessage or "You found the egg.")
+        end)
+        cleanup()
+        finishedWith()
+    end)
+end
+
+-- The brand mark in a round badge: a surface disc with an accent ring and the icon
+-- centred inside. The key gate, the window header and the loader all draw it through
+-- here, so they match. Options: Icon (default the brand logo), Position, AnchorPoint.
+function Library._brandBadge(parent, diameter, options)
+    options = options or {}
+    local badge = create("Frame", {
+        AnchorPoint = options.AnchorPoint,
+        Position = options.Position,
+        Size = UDim2.fromOffset(diameter, diameter),
+        BackgroundColor3 = Theme.Surface,
+        BorderSizePixel = 0,
+        Parent = parent,
+    })
+    corner(badge, UDim.new(1, 0))
+    stroke(badge, Theme.Accent, 0.45)
+    local iconSize = math.floor(diameter * 0.615 + 0.5)
+    local icon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(iconSize, iconSize),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Accent,
+        ScaleType = Enum.ScaleType.Fit,
+        Parent = badge,
+    })
+    applyIcon(icon, options.Icon or Assets.Logo, true)
+    return badge, icon
+end
+
 -- Key gate. Blocks until a key is accepted, then returns the key and, with Junkie,
 -- the check_key result (valid, is_premium, JD_TIER, JD_TIER_NAME). Call it before
 -- Library.Window. A key saved by an earlier run is checked first, so the gate only
@@ -4713,23 +4935,7 @@ function Library:RequireKey(opts)
         LayoutOrder = 1,
         Parent = panel,
     })
-    local badge = create("Frame", {
-        Size = UDim2.fromOffset(52, 52),
-        BackgroundColor3 = Theme.Surface,
-        BorderSizePixel = 0,
-        Parent = header,
-    })
-    corner(badge, UDim.new(1, 0))
-    stroke(badge, Theme.Accent, 0.45)
-    local badgeIcon = create("ImageLabel", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(32, 32),
-        BackgroundTransparency = 1,
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = badge,
-    })
-    applyIcon(badgeIcon, Assets.Logo, true)
+    local _, badgeIcon = Library._brandBadge(header, 52, { Icon = Assets.Logo })
     label({
         Position = UDim2.fromOffset(64, 6),
         Size = UDim2.new(1, -64, 0, 24),
@@ -4911,15 +5117,40 @@ function Library:RequireKey(opts)
         getKey = button("Get key", false, 1, UDim2.new(0.5, -5, 1, 0))
     end
     local verify = button("Verify", true, 2, getKey and UDim2.new(0.5, -5, 1, 0) or UDim2.new(1, 0, 1, 0))
+    local footer = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 18),
+        BackgroundTransparency = 1,
+        LayoutOrder = 7,
+        Parent = panel,
+    })
     label({
-        Size = UDim2.new(1, 0, 0, 14),
+        Size = UDim2.new(1, -28, 1, 0),
         Text = "Press Enter or Verify after you paste the key.",
         TextSize = 10,
         TextColor3 = Theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Center,
-        LayoutOrder = 7,
-        Parent = panel,
+        Parent = footer,
     })
+    local eggButton = create("TextButton", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(18, 18),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = footer,
+    })
+    local eggIcon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(14, 14),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Accent,
+        ImageTransparency = 1,
+        Parent = eggButton,
+    })
+    applyIcon(eggIcon, "play")
 
     -- Behaviour.
     local busy, finished, attempts, fetchingLink = false, false, 0, false
@@ -5030,6 +5261,65 @@ function Library:RequireKey(opts)
     end
 
     verify.MouseButton1Click:Connect(check)
+    -- The Easter egg: typing the secret phrase reveals a small button in the footer.
+    -- The video is downloaded into the workspace folder while this box is open, so the
+    -- button plays it at once. Pressing the button before the download ends waits for it.
+    local egg = type(opts.EasterEgg) == "table" and tonumber(opts.EasterEgg.Hash) and opts.EasterEgg or nil
+    local eggRevealed, eggPlaying = false, false
+    local eggVideo = { asset = nil, downloading = false, error = nil }
+    if egg and type(egg.VideoUrl) == "string" and egg.VideoUrl ~= "" then
+        eggVideo.downloading = true
+        task.spawn(function()
+            local ok, result = pcall(Library._prepareEggVideo, egg.VideoUrl, folder)
+            eggVideo.downloading = false
+            if ok then
+                eggVideo.asset = result
+            else
+                eggVideo.error = tostring(result)
+                warn("[HawkTokaiLib] The Easter egg video is not ready: " .. eggVideo.error)
+            end
+        end)
+    end
+    box:GetPropertyChangedSignal("Text"):Connect(function()
+        if not egg or eggRevealed then
+            return
+        end
+        local typed = string.lower(box.Text:match("^%s*(.-)%s*$"))
+        if Library._eggHash(typed) == egg.Hash then
+            eggRevealed = true
+            eggButton.Visible = true
+            tween(eggIcon, { ImageTransparency = 0 }, 0.5)
+        end
+    end)
+    eggButton.MouseButton1Click:Connect(function()
+        if not egg or eggPlaying then
+            return
+        end
+        eggPlaying = true
+        box:ReleaseFocus()
+        task.spawn(function()
+            local waited = 0
+            while eggVideo.downloading and waited < 20 do
+                task.wait(0.2)
+                waited += 0.2
+            end
+            if not eggVideo.asset then
+                warn("[HawkTokaiLib] The Easter egg cannot play yet: " .. tostring(eggVideo.error or "the download is still running"))
+                eggPlaying = false
+                return
+            end
+            gui.Enabled = false
+            local ok, err = pcall(Library._playEasterEgg, eggVideo.asset, egg.Volume, function()
+                eggPlaying = false
+                gui.Enabled = true
+            end, egg.Kick)
+            if not ok then
+                eggPlaying = false
+                gui.Enabled = true
+                warn("[HawkTokaiLib] The Easter egg failed: " .. tostring(err))
+            end
+        end)
+    end)
     clear.MouseButton1Click:Connect(function()
         box.Text = ""
         box:CaptureFocus()
@@ -5109,8 +5399,1084 @@ end
 -- Key check, then the protected script. The gate checks the key with Junkie, then
 -- load_script downloads the script from Junkie's Original Code. That script runs
 -- only after its own authentication, and it can read the runtime variables.
+function Library._runUNC()
+local passes, fails, undefined = 0, 0, 0
+local running = 0
+local skipped = 0
+local characterReady = false
+local print = function(...) end
+local warn = function(...) end
+-- These tests read the player's Animate script, so they are skipped when it never loads.
+local CHARACTER_TESTS = { loadstring = true, getscriptbytecode = true, getscripthash = true, getsenv = true }
+
+local function getGlobal(path)
+	local value = getfenv(0)
+
+	while value ~= nil and path ~= "" do
+		local name, nextValue = string.match(path, "^([^.]+)%.?(.*)$")
+		value = value[name]
+		path = nextValue
+	end
+
+	return value
+end
+
+local function test(name, aliases, callback)
+	running += 1
+
+	task.spawn(function()
+		if CHARACTER_TESTS[name] and not characterReady then
+			skipped += 1
+			running -= 1
+			return
+		end
+		if not callback then
+			print("⏺️ " .. name)
+		elseif not getGlobal(name) then
+			fails += 1
+			warn("⛔ " .. name)
+		else
+			local success, message = pcall(callback)
+	
+			if success then
+				passes += 1
+				print("✅ " .. name .. (message and " • " .. message or ""))
+			else
+				fails += 1
+				warn("⛔ " .. name .. " failed: " .. message)
+			end
+		end
+	
+		local undefinedAliases = {}
+	
+		for _, alias in ipairs(aliases) do
+			if getGlobal(alias) == nil then
+				table.insert(undefinedAliases, alias)
+			end
+		end
+	
+		if #undefinedAliases > 0 then
+			undefined += 1
+			warn("⚠️ " .. table.concat(undefinedAliases, ", "))
+		end
+
+		running -= 1
+	end)
+end
+
+-- Character tests need the player's Animate script. Wait a little for it; if it never
+-- comes, those tests are skipped and left out of the score.
+do
+	local player = game:GetService("Players").LocalPlayer
+	local function hasAnimate()
+		return player ~= nil and player.Character ~= nil and player.Character:FindFirstChild("Animate") ~= nil
+	end
+	local waited = 0
+	while not hasAnimate() and waited < 8 do
+		task.wait(0.2)
+		waited += 0.2
+	end
+	characterReady = hasAnimate()
+end
+
+-- Header and summary
+
+print("\n")
+
+print("UNC Environment Check")
+print("✅ - Pass, ⛔ - Fail, ⏺️ - No test, ⚠️ - Missing aliases\n")
+
+
+-- Cache
+
+test("cache.invalidate", {}, function()
+	local container = Instance.new("Folder")
+	local part = Instance.new("Part", container)
+	cache.invalidate(container:FindFirstChild("Part"))
+	assert(part ~= container:FindFirstChild("Part"), "Reference `part` could not be invalidated")
+end)
+
+test("cache.iscached", {}, function()
+	local part = Instance.new("Part")
+	assert(cache.iscached(part), "Part should be cached")
+	cache.invalidate(part)
+	assert(not cache.iscached(part), "Part should not be cached")
+end)
+
+test("cache.replace", {}, function()
+	local part = Instance.new("Part")
+	local fire = Instance.new("Fire")
+	cache.replace(part, fire)
+	assert(part ~= fire, "Part was not replaced with Fire")
+end)
+
+test("cloneref", {}, function()
+	local part = Instance.new("Part")
+	local clone = cloneref(part)
+	assert(part ~= clone, "Clone should not be equal to original")
+	clone.Name = "Test"
+	assert(part.Name == "Test", "Clone should have updated the original")
+end)
+
+test("compareinstances", {}, function()
+	local part = Instance.new("Part")
+	local clone = cloneref(part)
+	assert(part ~= clone, "Clone should not be equal to original")
+	assert(compareinstances(part, clone), "Clone should be equal to original when using compareinstances()")
+end)
+
+-- Closures
+
+local function shallowEqual(t1, t2)
+	if t1 == t2 then
+		return true
+	end
+
+	local UNIQUE_TYPES = {
+		["function"] = true,
+		["table"] = true,
+		["userdata"] = true,
+		["thread"] = true,
+	}
+
+	for k, v in pairs(t1) do
+		if UNIQUE_TYPES[type(v)] then
+			if type(t2[k]) ~= type(v) then
+				return false
+			end
+		elseif t2[k] ~= v then
+			return false
+		end
+	end
+
+	for k, v in pairs(t2) do
+		if UNIQUE_TYPES[type(v)] then
+			if type(t2[k]) ~= type(v) then
+				return false
+			end
+		elseif t1[k] ~= v then
+			return false
+		end
+	end
+
+	return true
+end
+
+test("checkcaller", {}, function()
+	assert(checkcaller(), "Main scope should return true")
+end)
+
+test("clonefunction", {}, function()
+	local function test()
+		return "success"
+	end
+	local copy = clonefunction(test)
+	assert(test() == copy(), "The clone should return the same value as the original")
+	assert(test ~= copy, "The clone should not be equal to the original")
+end)
+
+test("getcallingscript", {})
+
+test("getscriptclosure", {"getscriptfunction"}, function()
+	local module = game:GetService("CoreGui").RobloxGui.Modules.Common.Constants
+	local constants = getrenv().require(module)
+	local generated = getscriptclosure(module)()
+	assert(constants ~= generated, "Generated module should not match the original")
+	assert(shallowEqual(constants, generated), "Generated constant table should be shallow equal to the original")
+end)
+
+test("hookfunction", {"replaceclosure"}, function()
+	local function test()
+		return true
+	end
+	local ref = hookfunction(test, function()
+		return false
+	end)
+	assert(test() == false, "Function should return false")
+	assert(ref() == true, "Original function should return true")
+	assert(test ~= ref, "Original function should not be same as the reference")
+end)
+
+test("iscclosure", {}, function()
+	assert(iscclosure(print) == true, "Function 'print' should be a C closure")
+	assert(iscclosure(function() end) == false, "Executor function should not be a C closure")
+end)
+
+test("islclosure", {}, function()
+	assert(islclosure(print) == false, "Function 'print' should not be a Lua closure")
+	assert(islclosure(function() end) == true, "Executor function should be a Lua closure")
+end)
+
+test("isexecutorclosure", {"checkclosure", "isourclosure"}, function()
+	assert(isexecutorclosure(isexecutorclosure) == true, "Did not return true for an executor global")
+	assert(isexecutorclosure(newcclosure(function() end)) == true, "Did not return true for an executor C closure")
+	assert(isexecutorclosure(function() end) == true, "Did not return true for an executor Luau closure")
+	assert(isexecutorclosure(print) == false, "Did not return false for a Roblox global")
+end)
+
+test("loadstring", {}, function()
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
+	local bytecode = getscriptbytecode(animate)
+	local func = loadstring(bytecode)
+	assert(type(func) ~= "function", "Luau bytecode should not be loadable!")
+	assert(assert(loadstring("return ... + 1"))(1) == 2, "Failed to do simple math")
+	assert(type(select(2, loadstring("f"))) == "string", "Loadstring did not return anything for a compiler error")
+end)
+
+test("newcclosure", {}, function()
+	local function test()
+		return true
+	end
+	local testC = newcclosure(test)
+	assert(test() == testC(), "New C closure should return the same value as the original")
+	assert(test ~= testC, "New C closure should not be same as the original")
+	assert(iscclosure(testC), "New C closure should be a C closure")
+end)
+
+-- Console
+
+test("rconsoleclear", {"consoleclear"})
+
+test("rconsolecreate", {"consolecreate"})
+
+test("rconsoledestroy", {"consoledestroy"})
+
+test("rconsoleinput", {"consoleinput"})
+
+test("rconsoleprint", {"consoleprint"})
+
+test("rconsolesettitle", {"rconsolename", "consolesettitle"})
+
+-- Crypt
+
+test("crypt.base64encode", {"crypt.base64.encode", "crypt.base64_encode", "base64.encode", "base64_encode"}, function()
+	assert(crypt.base64encode("test") == "dGVzdA==", "Base64 encoding failed")
+end)
+
+test("crypt.base64decode", {"crypt.base64.decode", "crypt.base64_decode", "base64.decode", "base64_decode"}, function()
+	assert(crypt.base64decode("dGVzdA==") == "test", "Base64 decoding failed")
+end)
+
+test("crypt.encrypt", {}, function()
+	local key = crypt.generatekey()
+	local encrypted, iv = crypt.encrypt("test", key, nil, "CBC")
+	assert(iv, "crypt.encrypt should return an IV")
+	local decrypted = crypt.decrypt(encrypted, key, iv, "CBC")
+	assert(decrypted == "test", "Failed to decrypt raw string from encrypted data")
+end)
+
+test("crypt.decrypt", {}, function()
+	local key, iv = crypt.generatekey(), crypt.generatekey()
+	local encrypted = crypt.encrypt("test", key, iv, "CBC")
+	local decrypted = crypt.decrypt(encrypted, key, iv, "CBC")
+	assert(decrypted == "test", "Failed to decrypt raw string from encrypted data")
+end)
+
+test("crypt.generatebytes", {}, function()
+	local size = math.random(10, 100)
+	local bytes = crypt.generatebytes(size)
+	assert(#crypt.base64decode(bytes) == size, "The decoded result should be " .. size .. " bytes long (got " .. #crypt.base64decode(bytes) .. " decoded, " .. #bytes .. " raw)")
+end)
+
+test("crypt.generatekey", {}, function()
+	local key = crypt.generatekey()
+	assert(#crypt.base64decode(key) == 32, "Generated key should be 32 bytes long when decoded")
+end)
+
+test("crypt.hash", {}, function()
+	local algorithms = {'sha1', 'sha384', 'sha512', 'md5', 'sha256', 'sha3-224', 'sha3-256', 'sha3-512'}
+	for _, algorithm in ipairs(algorithms) do
+		local hash = crypt.hash("test", algorithm)
+		assert(hash, "crypt.hash on algorithm '" .. algorithm .. "' should return a hash")
+	end
+end)
+
+--- Debug
+
+test("debug.getconstant", {}, function()
+	local function test()
+		print("Hello, world!")
+	end
+	assert(debug.getconstant(test, 1) == "print", "First constant must be print")
+	assert(debug.getconstant(test, 2) == nil, "Second constant must be nil")
+	assert(debug.getconstant(test, 3) == "Hello, world!", "Third constant must be 'Hello, world!'")
+end)
+
+test("debug.getconstants", {}, function()
+	local function test()
+		local num = 5000 .. 50000
+		print("Hello, world!", num, warn)
+	end
+	local constants = debug.getconstants(test)
+	assert(constants[1] == 50000, "First constant must be 50000")
+	assert(constants[2] == "print", "Second constant must be print")
+	assert(constants[3] == nil, "Third constant must be nil")
+	assert(constants[4] == "Hello, world!", "Fourth constant must be 'Hello, world!'")
+	assert(constants[5] == "warn", "Fifth constant must be warn")
+end)
+
+test("debug.getinfo", {}, function()
+	local types = {
+		source = "string",
+		short_src = "string",
+		func = "function",
+		what = "string",
+		currentline = "number",
+		name = "string",
+		nups = "number",
+		numparams = "number",
+		is_vararg = "number",
+	}
+	local function test(...)
+		print(...)
+	end
+	local info = debug.getinfo(test)
+	for k, v in pairs(types) do
+		assert(info[k] ~= nil, "Did not return a table with a '" .. k .. "' field")
+		assert(type(info[k]) == v, "Did not return a table with " .. k .. " as a " .. v .. " (got " .. type(info[k]) .. ")")
+	end
+end)
+
+test("debug.getproto", {}, function()
+	local function test()
+		local function proto()
+			return true
+		end
+	end
+	local proto = debug.getproto(test, 1, true)[1]
+	local realproto = debug.getproto(test, 1)
+	assert(proto, "Failed to get the inner function")
+	assert(proto() == true, "The inner function did not return anything")
+	if not realproto() then
+		return "Proto return values are disabled on this executor"
+	end
+end)
+
+test("debug.getprotos", {}, function()
+	local function test()
+		local function _1()
+			return true
+		end
+		local function _2()
+			return true
+		end
+		local function _3()
+			return true
+		end
+	end
+	for i in ipairs(debug.getprotos(test)) do
+		local proto = debug.getproto(test, i, true)[1]
+		local realproto = debug.getproto(test, i)
+		assert(proto(), "Failed to get inner function " .. i)
+		if not realproto() then
+			return "Proto return values are disabled on this executor"
+		end
+	end
+end)
+
+test("debug.getstack", {}, function()
+	local _ = "a" .. "b"
+	assert(debug.getstack(1, 1) == "ab", "The first item in the stack should be 'ab'")
+	assert(debug.getstack(1)[1] == "ab", "The first item in the stack table should be 'ab'")
+end)
+
+test("debug.getupvalue", {}, function()
+	local upvalue = function() end
+	local function test()
+		print(upvalue)
+	end
+	assert(debug.getupvalue(test, 1) == upvalue, "Unexpected value returned from debug.getupvalue")
+end)
+
+test("debug.getupvalues", {}, function()
+	local upvalue = function() end
+	local function test()
+		print(upvalue)
+	end
+	local upvalues = debug.getupvalues(test)
+	assert(upvalues[1] == upvalue, "Unexpected value returned from debug.getupvalues")
+end)
+
+test("debug.setconstant", {}, function()
+	local function test()
+		return "fail"
+	end
+	debug.setconstant(test, 1, "success")
+	assert(test() == "success", "debug.setconstant did not set the first constant")
+end)
+
+test("debug.setstack", {}, function()
+	local function test()
+		return "fail", debug.setstack(1, 1, "success")
+	end
+	assert(test() == "success", "debug.setstack did not set the first stack item")
+end)
+
+test("debug.setupvalue", {}, function()
+	local function upvalue()
+		return "fail"
+	end
+	local function test()
+		return upvalue()
+	end
+	debug.setupvalue(test, 1, function()
+		return "success"
+	end)
+	assert(test() == "success", "debug.setupvalue did not set the first upvalue")
+end)
+
+-- Filesystem
+
+if isfolder and makefolder and delfolder then
+	if isfolder(".tests") then
+		delfolder(".tests")
+	end
+	makefolder(".tests")
+end
+
+test("readfile", {}, function()
+	writefile(".tests/readfile.txt", "success")
+	assert(readfile(".tests/readfile.txt") == "success", "Did not return the contents of the file")
+end)
+
+test("listfiles", {}, function()
+	makefolder(".tests/listfiles")
+	writefile(".tests/listfiles/test_1.txt", "success")
+	writefile(".tests/listfiles/test_2.txt", "success")
+	local files = listfiles(".tests/listfiles")
+	assert(#files == 2, "Did not return the correct number of files")
+	assert(isfile(files[1]), "Did not return a file path")
+	assert(readfile(files[1]) == "success", "Did not return the correct files")
+	makefolder(".tests/listfiles_2")
+	makefolder(".tests/listfiles_2/test_1")
+	makefolder(".tests/listfiles_2/test_2")
+	local folders = listfiles(".tests/listfiles_2")
+	assert(#folders == 2, "Did not return the correct number of folders")
+	assert(isfolder(folders[1]), "Did not return a folder path")
+end)
+
+test("writefile", {}, function()
+	writefile(".tests/writefile.txt", "success")
+	assert(readfile(".tests/writefile.txt") == "success", "Did not write the file")
+	local requiresFileExt = pcall(function()
+		writefile(".tests/writefile", "success")
+		assert(isfile(".tests/writefile.txt"))
+	end)
+	if not requiresFileExt then
+		return "This executor requires a file extension in writefile"
+	end
+end)
+
+test("makefolder", {}, function()
+	makefolder(".tests/makefolder")
+	assert(isfolder(".tests/makefolder"), "Did not create the folder")
+end)
+
+test("appendfile", {}, function()
+	writefile(".tests/appendfile.txt", "su")
+	appendfile(".tests/appendfile.txt", "cce")
+	appendfile(".tests/appendfile.txt", "ss")
+	assert(readfile(".tests/appendfile.txt") == "success", "Did not append the file")
+end)
+
+test("isfile", {}, function()
+	writefile(".tests/isfile.txt", "success")
+	assert(isfile(".tests/isfile.txt") == true, "Did not return true for a file")
+	assert(isfile(".tests") == false, "Did not return false for a folder")
+	assert(isfile(".tests/doesnotexist.exe") == false, "Did not return false for a nonexistent path (got " .. tostring(isfile(".tests/doesnotexist.exe")) .. ")")
+end)
+
+test("isfolder", {}, function()
+	assert(isfolder(".tests") == true, "Did not return false for a folder")
+	assert(isfolder(".tests/doesnotexist.exe") == false, "Did not return false for a nonexistent path (got " .. tostring(isfolder(".tests/doesnotexist.exe")) .. ")")
+end)
+
+test("delfolder", {}, function()
+	makefolder(".tests/delfolder")
+	delfolder(".tests/delfolder")
+	assert(isfolder(".tests/delfolder") == false, "Failed to delete folder (isfolder = " .. tostring(isfolder(".tests/delfolder")) .. ")")
+end)
+
+test("delfile", {}, function()
+	writefile(".tests/delfile.txt", "Hello, world!")
+	delfile(".tests/delfile.txt")
+	assert(isfile(".tests/delfile.txt") == false, "Failed to delete file (isfile = " .. tostring(isfile(".tests/delfile.txt")) .. ")")
+end)
+
+test("loadfile", {}, function()
+	writefile(".tests/loadfile.txt", "return ... + 1")
+	assert(assert(loadfile(".tests/loadfile.txt"))(1) == 2, "Failed to load a file with arguments")
+	writefile(".tests/loadfile.txt", "f")
+	local callback, err = loadfile(".tests/loadfile.txt")
+	assert(err and not callback, "Did not return an error message for a compiler error")
+end)
+
+test("dofile", {})
+
+-- Input
+
+test("isrbxactive", {"isgameactive"}, function()
+	assert(type(isrbxactive()) == "boolean", "Did not return a boolean value")
+end)
+
+test("mouse1click", {})
+
+test("mouse1press", {})
+
+test("mouse1release", {})
+
+test("mouse2click", {})
+
+test("mouse2press", {})
+
+test("mouse2release", {})
+
+test("mousemoveabs", {})
+
+test("mousemoverel", {})
+
+test("mousescroll", {})
+
+-- Instances
+
+test("fireclickdetector", {}, function()
+	local detector = Instance.new("ClickDetector")
+	fireclickdetector(detector, 50, "MouseHoverEnter")
+end)
+
+test("getcallbackvalue", {}, function()
+	local bindable = Instance.new("BindableFunction")
+	local function test()
+	end
+	bindable.OnInvoke = test
+	assert(getcallbackvalue(bindable, "OnInvoke") == test, "Did not return the correct value")
+end)
+
+test("getconnections", {}, function()
+	local types = {
+		Enabled = "boolean",
+		ForeignState = "boolean",
+		LuaConnection = "boolean",
+		Function = "function",
+		Thread = "thread",
+		Fire = "function",
+		Defer = "function",
+		Disconnect = "function",
+		Disable = "function",
+		Enable = "function",
+	}
+	local bindable = Instance.new("BindableEvent")
+	bindable.Event:Connect(function() end)
+	local connection = getconnections(bindable.Event)[1]
+	for k, v in pairs(types) do
+		assert(connection[k] ~= nil, "Did not return a table with a '" .. k .. "' field")
+		assert(type(connection[k]) == v, "Did not return a table with " .. k .. " as a " .. v .. " (got " .. type(connection[k]) .. ")")
+	end
+end)
+
+test("getcustomasset", {}, function()
+	writefile(".tests/getcustomasset.txt", "success")
+	local contentId = getcustomasset(".tests/getcustomasset.txt")
+	assert(type(contentId) == "string", "Did not return a string")
+	assert(#contentId > 0, "Returned an empty string")
+	assert(string.match(contentId, "rbxasset://") == "rbxasset://", "Did not return an rbxasset url")
+end)
+
+test("gethiddenproperty", {}, function()
+	local fire = Instance.new("Fire")
+	local property, isHidden = gethiddenproperty(fire, "size_xml")
+	assert(property == 5, "Did not return the correct value")
+	assert(isHidden == true, "Did not return whether the property was hidden")
+end)
+
+test("sethiddenproperty", {}, function()
+	local fire = Instance.new("Fire")
+	local hidden = sethiddenproperty(fire, "size_xml", 10)
+	assert(hidden, "Did not return true for the hidden property")
+	assert(gethiddenproperty(fire, "size_xml") == 10, "Did not set the hidden property")
+end)
+
+test("gethui", {}, function()
+	assert(typeof(gethui()) == "Instance", "Did not return an Instance")
+end)
+
+test("getinstances", {}, function()
+	assert(getinstances()[1]:IsA("Instance"), "The first value is not an Instance")
+end)
+
+test("getnilinstances", {}, function()
+	assert(getnilinstances()[1]:IsA("Instance"), "The first value is not an Instance")
+	assert(getnilinstances()[1].Parent == nil, "The first value is not parented to nil")
+end)
+
+test("isscriptable", {}, function()
+	local fire = Instance.new("Fire")
+	assert(isscriptable(fire, "size_xml") == false, "Did not return false for a non-scriptable property (size_xml)")
+	assert(isscriptable(fire, "Size") == true, "Did not return true for a scriptable property (Size)")
+end)
+
+test("setscriptable", {}, function()
+	local fire = Instance.new("Fire")
+	local wasScriptable = setscriptable(fire, "size_xml", true)
+	assert(wasScriptable == false, "Did not return false for a non-scriptable property (size_xml)")
+	assert(isscriptable(fire, "size_xml") == true, "Did not set the scriptable property")
+	fire = Instance.new("Fire")
+	assert(isscriptable(fire, "size_xml") == false, "⚠️⚠️ setscriptable persists between unique instances ⚠️⚠️")
+end)
+
+test("setrbxclipboard", {})
+
+-- Metatable
+
+test("getrawmetatable", {}, function()
+	local metatable = { __metatable = "Locked!" }
+	local object = setmetatable({}, metatable)
+	assert(getrawmetatable(object) == metatable, "Did not return the metatable")
+end)
+
+test("hookmetamethod", {}, function()
+	local object = setmetatable({}, { __index = newcclosure(function() return false end), __metatable = "Locked!" })
+	local ref = hookmetamethod(object, "__index", function() return true end)
+	assert(object.test == true, "Failed to hook a metamethod and change the return value")
+	assert(ref() == false, "Did not return the original function")
+end)
+
+test("getnamecallmethod", {}, function()
+	local method
+	local ref
+	ref = hookmetamethod(game, "__namecall", function(...)
+		if not method then
+			method = getnamecallmethod()
+		end
+		return ref(...)
+	end)
+	game:GetService("Lighting")
+	assert(method == "GetService", "Did not get the correct method (GetService)")
+end)
+
+test("isreadonly", {}, function()
+	local object = {}
+	table.freeze(object)
+	assert(isreadonly(object), "Did not return true for a read-only table")
+end)
+
+test("setrawmetatable", {}, function()
+	local object = setmetatable({}, { __index = function() return false end, __metatable = "Locked!" })
+	local objectReturned = setrawmetatable(object, { __index = function() return true end })
+	assert(object, "Did not return the original object")
+	assert(object.test == true, "Failed to change the metatable")
+	if objectReturned then
+		return objectReturned == object and "Returned the original object" or "Did not return the original object"
+	end
+end)
+
+test("setreadonly", {}, function()
+	local object = { success = false }
+	table.freeze(object)
+	setreadonly(object, false)
+	object.success = true
+	assert(object.success, "Did not allow the table to be modified")
+end)
+
+-- Miscellaneous
+
+test("identifyexecutor", {"getexecutorname"}, function()
+	local name, version = identifyexecutor()
+	assert(type(name) == "string", "Did not return a string for the name")
+	return type(version) == "string" and "Returns version as a string" or "Does not return version"
+end)
+
+test("lz4compress", {}, function()
+	local raw = "Hello, world!"
+	local compressed = lz4compress(raw)
+	assert(type(compressed) == "string", "Compression did not return a string")
+	assert(lz4decompress(compressed, #raw) == raw, "Decompression did not return the original string")
+end)
+
+test("lz4decompress", {}, function()
+	local raw = "Hello, world!"
+	local compressed = lz4compress(raw)
+	assert(type(compressed) == "string", "Compression did not return a string")
+	assert(lz4decompress(compressed, #raw) == raw, "Decompression did not return the original string")
+end)
+
+test("messagebox", {})
+
+test("queue_on_teleport", {"queueonteleport"})
+
+test("request", {"http.request", "http_request"}, function()
+	local response = request({
+		Url = "https://httpbin.org/user-agent",
+		Method = "GET",
+	})
+	assert(type(response) == "table", "Response must be a table")
+	assert(response.StatusCode == 200, "Did not return a 200 status code")
+	local data = game:GetService("HttpService"):JSONDecode(response.Body)
+	assert(type(data) == "table" and type(data["user-agent"]) == "string", "Did not return a table with a user-agent key")
+	return "User-Agent: " .. data["user-agent"]
+end)
+
+test("setclipboard", {"toclipboard"})
+
+test("setfpscap", {}, function()
+	local renderStepped = game:GetService("RunService").RenderStepped
+	local function step()
+		renderStepped:Wait()
+		local sum = 0
+		for _ = 1, 5 do
+			sum += 1 / renderStepped:Wait()
+		end
+		return math.round(sum / 5)
+	end
+	setfpscap(60)
+	local step60 = step()
+	setfpscap(0)
+	local step0 = step()
+	return step60 .. "fps @60 • " .. step0 .. "fps @0"
+end)
+
+-- Scripts
+
+test("getgc", {}, function()
+	local gc = getgc()
+	assert(type(gc) == "table", "Did not return a table")
+	assert(#gc > 0, "Did not return a table with any values")
+end)
+
+test("getgenv", {}, function()
+	getgenv().__TEST_GLOBAL = true
+	assert(__TEST_GLOBAL, "Failed to set a global variable")
+	getgenv().__TEST_GLOBAL = nil
+end)
+
+test("getloadedmodules", {}, function()
+	local modules = getloadedmodules()
+	assert(type(modules) == "table", "Did not return a table")
+	assert(#modules > 0, "Did not return a table with any values")
+	assert(typeof(modules[1]) == "Instance", "First value is not an Instance")
+	assert(modules[1]:IsA("ModuleScript"), "First value is not a ModuleScript")
+end)
+
+test("getrenv", {}, function()
+	assert(_G ~= getrenv()._G, "The variable _G in the executor is identical to _G in the game")
+end)
+
+test("getrunningscripts", {}, function()
+	local scripts = getrunningscripts()
+	assert(type(scripts) == "table", "Did not return a table")
+	assert(#scripts > 0, "Did not return a table with any values")
+	assert(typeof(scripts[1]) == "Instance", "First value is not an Instance")
+	assert(scripts[1]:IsA("ModuleScript") or scripts[1]:IsA("LocalScript"), "First value is not a ModuleScript or LocalScript")
+end)
+
+test("getscriptbytecode", {"dumpstring"}, function()
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
+	local bytecode = getscriptbytecode(animate)
+	assert(type(bytecode) == "string", "Did not return a string for Character.Animate (a " .. animate.ClassName .. ")")
+end)
+
+test("getscripthash", {}, function()
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate:Clone()
+	local hash = getscripthash(animate)
+	local source = animate.Source
+	animate.Source = "print('Hello, world!')"
+	task.defer(function()
+		animate.Source = source
+	end)
+	local newHash = getscripthash(animate)
+	assert(hash ~= newHash, "Did not return a different hash for a modified script")
+	assert(newHash == getscripthash(animate), "Did not return the same hash for a script with the same source")
+end)
+
+test("getscripts", {}, function()
+	local scripts = getscripts()
+	assert(type(scripts) == "table", "Did not return a table")
+	assert(#scripts > 0, "Did not return a table with any values")
+	assert(typeof(scripts[1]) == "Instance", "First value is not an Instance")
+	assert(scripts[1]:IsA("ModuleScript") or scripts[1]:IsA("LocalScript"), "First value is not a ModuleScript or LocalScript")
+end)
+
+test("getsenv", {}, function()
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
+	local env = getsenv(animate)
+	assert(type(env) == "table", "Did not return a table for Character.Animate (a " .. animate.ClassName .. ")")
+	assert(env.script == animate, "The script global is not identical to Character.Animate")
+end)
+
+test("getthreadidentity", {"getidentity", "getthreadcontext"}, function()
+	assert(type(getthreadidentity()) == "number", "Did not return a number")
+end)
+
+test("setthreadidentity", {"setidentity", "setthreadcontext"}, function()
+	setthreadidentity(3)
+	assert(getthreadidentity() == 3, "Did not set the thread identity")
+end)
+
+-- Drawing
+
+test("Drawing", {})
+
+test("Drawing.new", {}, function()
+	local drawing = Drawing.new("Square")
+	drawing.Visible = false
+	local canDestroy = pcall(function()
+		drawing:Destroy()
+	end)
+	assert(canDestroy, "Drawing:Destroy() should not throw an error")
+end)
+
+test("Drawing.Fonts", {}, function()
+	assert(Drawing.Fonts.UI == 0, "Did not return the correct id for UI")
+	assert(Drawing.Fonts.System == 1, "Did not return the correct id for System")
+	assert(Drawing.Fonts.Plex == 2, "Did not return the correct id for Plex")
+	assert(Drawing.Fonts.Monospace == 3, "Did not return the correct id for Monospace")
+end)
+
+test("isrenderobj", {}, function()
+	local drawing = Drawing.new("Image")
+	drawing.Visible = true
+	assert(isrenderobj(drawing) == true, "Did not return true for an Image")
+	assert(isrenderobj(newproxy()) == false, "Did not return false for a blank table")
+end)
+
+test("getrenderproperty", {}, function()
+	local drawing = Drawing.new("Image")
+	drawing.Visible = true
+	assert(type(getrenderproperty(drawing, "Visible")) == "boolean", "Did not return a boolean value for Image.Visible")
+	local success, result = pcall(function()
+		return getrenderproperty(drawing, "Color")
+	end)
+	if not success or not result then
+		return "Image.Color is not supported"
+	end
+end)
+
+test("setrenderproperty", {}, function()
+	local drawing = Drawing.new("Square")
+	drawing.Visible = true
+	setrenderproperty(drawing, "Visible", false)
+	assert(drawing.Visible == false, "Did not set the value for Square.Visible")
+end)
+
+test("cleardrawcache", {}, function()
+	cleardrawcache()
+end)
+
+-- WebSocket
+
+test("WebSocket", {})
+
+test("WebSocket.connect", {}, function()
+	local types = {
+		Send = "function",
+		Close = "function",
+		OnMessage = {"table", "userdata"},
+		OnClose = {"table", "userdata"},
+	}
+	local ws = WebSocket.connect("ws://echo.websocket.events")
+	assert(type(ws) == "table" or type(ws) == "userdata", "Did not return a table or userdata")
+	for k, v in pairs(types) do
+		if type(v) == "table" then
+			assert(table.find(v, type(ws[k])), "Did not return a " .. table.concat(v, ", ") .. " for " .. k .. " (a " .. type(ws[k]) .. ")")
+		else
+			assert(type(ws[k]) == v, "Did not return a " .. v .. " for " .. k .. " (a " .. type(ws[k]) .. ")")
+		end
+	end
+	ws:Close()
+end)
+
+-- Wait for the tests still running, up to 20 seconds. A test that never finishes is left out.
+local waitedTests = 0
+repeat
+	task.wait(0.1)
+	waitedTests += 0.1
+until running == 0 or waitedTests >= 20
+return passes, fails, undefined, skipped
+end
+
+-- Where the player goes when the executor is below the minimum.
+Library.InviteLink = "https://discord.gg/deVVQEVybd"
+
+-- Executor check, run before the key gate: the UNC tests give a score. Below Fail the
+-- executor card is shown and loading stops. From Fail up to Warn the script loads with
+-- a banner. At Warn and above it loads normally. UNC = false skips the check. If the
+-- check itself breaks, the script loads anyway, so a bug in the check cannot lock
+-- players out.
+function Library:CheckExecutor(opts)
+    if opts == false then
+        return true
+    end
+    opts = type(opts) == "table" and opts or {}
+    local minimum = tonumber(opts.Fail) or 70
+    local warnAt = tonumber(opts.Warn) or 80
+    if Library._unc == nil then
+        local ok, passes, fails = pcall(Library._runUNC)
+        if ok then
+            local total = passes + fails
+            Library._unc = { score = total > 0 and math.round(passes / total * 100) or 0, passes = passes, fails = fails }
+        else
+            warn("[HawkTokaiLib] The executor check broke, so loading goes on: " .. tostring(passes))
+            Library._unc = false
+        end
+    end
+    local result = Library._unc
+    if not result then
+        return true
+    end
+    if result.score < minimum then
+        Library._showExecutorCard(result.score, minimum)
+        return false
+    end
+    if result.score < warnAt then
+        Library._showExecutorBanner(result.score)
+    end
+    return true
+end
+
+-- The UNC score of this executor, or nil before the check has run.
+function Library:GetExecutorScore()
+    local result = Library._unc
+    return result and result.score or nil
+end
+
+-- The card for an executor below the minimum. The button copies the invite link.
+function Library._showExecutorCard(score, minimum)
+    local gui = create("ScreenGui", {
+        Name = "HawkTokaiLibExecutor",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 25000,
+        Parent = defaultParent(),
+    })
+    create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Parent = gui,
+    })
+    local panel = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(340, 244),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        Parent = gui,
+    })
+    corner(panel, UDim.new(0, 14))
+    stroke(panel, Theme.Accent, 0.4)
+    Library._brandBadge(panel, 52, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 20) })
+    label({
+        Position = UDim2.new(0, 16, 0, 84),
+        Size = UDim2.new(1, -32, 0, 22),
+        Text = "Executor not supported",
+        TextSize = 17,
+        FontFace = Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = panel,
+    })
+    label({
+        Position = UDim2.new(0, 24, 0, 110),
+        Size = UDim2.new(1, -48, 0, 36),
+        Text = string.format("Your executor scored %d%% on the UNC check. This script needs at least %d%%.", score, minimum),
+        TextSize = 13,
+        FontFace = Fonts.Regular,
+        TextColor3 = Theme.Muted,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        Parent = panel,
+    })
+    label({
+        Position = UDim2.new(0, 16, 0, 152),
+        Size = UDim2.new(1, -32, 0, 18),
+        Text = Library.InviteLink,
+        TextSize = 13,
+        FontFace = Fonts.Medium,
+        TextColor3 = Theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = panel,
+    })
+    local copy = create("TextButton", {
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 16, 1, -16),
+        Size = UDim2.new(0.5, -22, 0, 36),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "Copy Discord link",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 13,
+        FontFace = Fonts.Bold,
+        Parent = panel,
+    })
+    corner(copy, UDim.new(0, 8))
+    copy.MouseButton1Click:Connect(function()
+        if typeof(setclipboard) == "function" then
+            pcall(setclipboard, Library.InviteLink)
+            copy.Text = "Copied"
+        else
+            copy.Text = "Copy not supported"
+        end
+    end)
+    local close = create("TextButton", {
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -16, 1, -16),
+        Size = UDim2.new(0.5, -22, 0, 36),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "Close",
+        TextColor3 = Theme.Text,
+        TextSize = 13,
+        FontFace = Fonts.Medium,
+        Parent = panel,
+    })
+    corner(close, UDim.new(0, 8))
+    close.MouseButton1Click:Connect(function()
+        gui:Destroy()
+    end)
+end
+
+-- A short notice at the top of the screen for an executor in the warning range.
+function Library._showExecutorBanner(score)
+    local gui = create("ScreenGui", {
+        Name = "HawkTokaiLibExecutorNotice",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 25000,
+        Parent = defaultParent(),
+    })
+    local banner = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 14),
+        Size = UDim2.fromOffset(380, 40),
+        BackgroundColor3 = Theme.Surface,
+        BorderSizePixel = 0,
+        Parent = gui,
+    })
+    corner(banner, UDim.new(0, 10))
+    stroke(banner, Theme.Warning, 0.3)
+    label({
+        Size = UDim2.new(1, -24, 1, 0),
+        Position = UDim2.fromOffset(12, 0),
+        Text = string.format("UNC %d%%. Some features may not work on this executor.", score),
+        TextSize = 13,
+        FontFace = Fonts.Medium,
+        TextColor3 = Theme.Warning,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = banner,
+    })
+    task.delay(6, function()
+        gui:Destroy()
+    end)
+end
+
 function Library:RunProtected(opts)
     opts = type(opts) == "table" and opts or {}
+    if not self:CheckExecutor(opts.UNC) then
+        return
+    end
     local junkie = type(opts.Junkie) == "table" and opts.Junkie or nil
     assert(junkie and junkie.ScriptId, "RunProtected needs Junkie.ScriptId")
     local key = self:RequireKey(opts)
@@ -5319,21 +6685,15 @@ function Library.Window(_, opts)
         BackgroundTransparency = 1,
         Parent = sidebar,
     })
-    local logo = create("ImageLabel", {
+    local _, logo = Library._brandBadge(header, 40, {
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 14, 0.5, 0),
-        Size = UDim2.fromOffset(32, 32),
-        BackgroundTransparency = 1,
-        Image = "",
-        ImageColor3 = Theme.Accent,
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = header,
+        Position = UDim2.new(0, 12, 0.5, 0),
+        Icon = opts.Icon or Assets.Logo,
     })
-    applyIcon(logo, opts.Icon or Assets.Logo, true)
     local subtitle = opts.Version or opts.Subtitle
     label({
-        Position = UDim2.new(0, 56, 0.5, subtitle and -15 or -9),
-        Size = UDim2.new(1, -68, 0, 18),
+        Position = UDim2.new(0, 60, 0.5, subtitle and -15 or -9),
+        Size = UDim2.new(1, -72, 0, 18),
         Text = self.Title,
         TextSize = 14,
         FontFace = Fonts.Bold,
@@ -5341,8 +6701,8 @@ function Library.Window(_, opts)
     })
     if subtitle then
         label({
-            Position = UDim2.new(0, 56, 0.5, 3),
-            Size = UDim2.new(1, -68, 0, 14),
+            Position = UDim2.new(0, 60, 0.5, 3),
+            Size = UDim2.new(1, -72, 0, 14),
             Text = tostring(subtitle),
             TextSize = 11,
             FontFace = Fonts.Regular,
@@ -6483,16 +7843,11 @@ function Window:_showLoader(opts)
         Parent = loader,
     })
 
-    local logo = create("ImageLabel", {
-        Position = UDim2.fromOffset(PAD, PAD),
-        Size = UDim2.fromOffset(30, 30),
-        BackgroundTransparency = 1,
-        ImageColor3 = Theme.Accent,
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = content,
+    local _, logo = Library._brandBadge(content, 40, {
+        Position = UDim2.fromOffset(PAD, PAD - 5),
+        Icon = opts.Icon or Assets.Logo,
     })
-    applyIcon(logo, opts.Icon or Assets.Logo, true)
-    local TEXT_X = PAD + 42
+    local TEXT_X = PAD + 52
     local titleLabel = label({
         Position = UDim2.fromOffset(TEXT_X, PAD - 2),
         Size = UDim2.new(1, -(TEXT_X + 70), 0, 18),
@@ -8506,8 +9861,9 @@ Library.BackgroundPresets = {
     ["Amber Glow"] = "rbxassetid://107795771598485",
     ["Bloomings"] = "rbxassetid://133541508207801",
     ["Lavender Pink"] = "rbxassetid://126107479485287",
+    ["Sakura"] = "rbxassetid://71601749001240",
 }
-Library.BackgroundPresetOrder = { "Deep Violet", "Blood Red", "Cyanic", "Amber Glow", "Bloomings", "Lavender Pink" }
+Library.BackgroundPresetOrder = { "Deep Violet", "Blood Red", "Cyanic", "Amber Glow", "Bloomings", "Lavender Pink", "Sakura" }
 
 -- Table fields, not locals: the library chunk is at Luau's 200 local limit.
 Library._imageExtensions = { png = true, jpg = true, jpeg = true, webp = true, gif = true, bmp = true }
@@ -9825,10 +11181,46 @@ function Tab:_overlayToggles()
     })
 end
 
+-- The music switch and volume, in their own group on the Configs tab.
+function Tab:_musicControls()
+    local window = self.Window
+    if not window._musicId then
+        return
+    end
+    local box = self:Groupbox({ Name = "Music", Icon = "music", Side = "Right" })
+    local function element(kind, options)
+        if type(box[kind]) == "function" then
+            return box[kind](box, options)
+        end
+        if type(box["Create" .. kind]) == "function" then
+            return box["Create" .. kind](box, options)
+        end
+    end
+    element("Toggle", {
+        Name = "Background music",
+        Desc = "Loops the track set in the script. Saved with your settings.",
+        CurrentValue = window:IsMusicPlaying(),
+        Callback = function(value)
+            window:SetMusicPlaying(value)
+        end,
+    })
+    element("Slider", {
+        Name = "Volume",
+        Range = { 0, 100 },
+        Increment = 5,
+        Suffix = "%",
+        CurrentValue = math.floor(window:GetMusicVolume() * 100 + 0.5),
+        Callback = function(value)
+            window:SetMusicVolume(value / 100)
+        end,
+    })
+end
+
 function Tab:ConfigManager(opts)
     opts = normalize(opts, { Title = "Name" })
     local host = managerHost(self, opts, "Configs", "folder")
     self:_overlayToggles()
+    self:_musicControls()
     local window = self.Window
     local manager = {}
     local list, status, modeList
@@ -21186,6 +22578,85 @@ function Window:Notify(opts)
     return { Dismiss = dismiss }
 end
 
+-- Background music: one looping Sound in SoundService, created the first time a
+-- track is set. It stays silent until the player turns it on in the Configs tab
+-- (Music group). The on/off choice and the volume are saved beside the configs.
+-- Window:SetMusic("rbxassetid://1234567890", 0.5) sets the track and its
+-- starting volume; a volume the player already chose wins over that number.
+function Window:_musicAsset(value)
+    local text = tostring(value or "")
+    if text:match("^%d+$") then
+        return "rbxassetid://" .. text
+    end
+    if text:match("^rbxassetid://%d+$") then
+        return text
+    end
+    return nil
+end
+
+function Window:_musicSound()
+    if self._music and self._music.Parent then
+        return self._music
+    end
+    local sound = Instance.new("Sound")
+    sound.Name = "HawkTokaiLibMusic"
+    sound.Looped = true
+    sound.Volume = self:GetMusicVolume()
+    sound.Parent = game:GetService("SoundService")
+    self._music = sound
+    return sound
+end
+
+function Window:SetMusic(id, volume)
+    local asset = self:_musicAsset(id)
+    if not asset then
+        warn("[HawkTokaiLib] SetMusic needs a Roblox audio id, like rbxassetid://1234567890")
+        return false
+    end
+    local saved = tonumber(self:_readConfigSettings().MusicVolume)
+    if saved then
+        self._musicVolume = math.clamp(saved, 0, 1)
+    elseif tonumber(volume) then
+        self._musicVolume = math.clamp(tonumber(volume), 0, 1)
+    end
+    self._musicId = asset
+    local sound = self:_musicSound()
+    sound.SoundId = asset
+    sound.Volume = self:GetMusicVolume()
+    if self:IsMusicPlaying() then
+        sound:Play()
+    end
+    return true
+end
+
+function Window:SetMusicPlaying(playing)
+    local on = playing == true
+    self:_writeConfigSettings({ MusicPlaying = on })
+    if on and self._musicId then
+        self:_musicSound():Play()
+    elseif self._music then
+        self._music:Pause()
+    end
+    return self
+end
+
+function Window:IsMusicPlaying()
+    return self:_readConfigSettings().MusicPlaying == true
+end
+
+function Window:SetMusicVolume(volume)
+    self._musicVolume = math.clamp(tonumber(volume) or 0.5, 0, 1)
+    self:_writeConfigSettings({ MusicVolume = self._musicVolume })
+    if self._music then
+        self._music.Volume = self._musicVolume
+    end
+    return self
+end
+
+function Window:GetMusicVolume()
+    return self._musicVolume or 0.5
+end
+
 function Window:Destroy()
     if self._destroyed then
         return
@@ -21205,6 +22676,12 @@ function Window:Destroy()
     self._connections = {}
     self._inputListeners = { Began = {}, Changed = {}, Ended = {}, Render = {} }
     self._frameSteps = {}
+    if self._music then
+        pcall(function()
+            self._music:Destroy()
+        end)
+        self._music = nil
+    end
 
     local gui = self.Gui
     local removed = false

@@ -55,7 +55,7 @@ local Window = Library:CreateWindow({
     Home = {
         KeyInfo = keyInfo,
         Tier = "Free",
-        Discord = "discord.gg/example",
+        Discord = "https://discord.gg/deVVQEVybd",
         Website = "example.com",
         Stats = { "Players", "Execs", "Session", "FPS", "Ping" },
         -- Features = { List = { { Name = "Main", Items = { "Automation", { Name = "Targeting", Tag = "New" } } } } },
@@ -63,6 +63,7 @@ local Window = Library:CreateWindow({
 })
 
 Window:SetWatermark({ Text = "Example", FPS = true, Time = true })
+
 
 --------------------------------------------------------------------------------
 -- Main: tabs hold sub tabs, sub tabs hold groupboxes, groupboxes hold elements

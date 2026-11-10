@@ -214,6 +214,9 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetWatermark(text)` / `SetWatermark({ Text, FPS, Ping, Time, Corner })` | A small corner readout. A string sets its text; a table also switches on live FPS, ping and clock readouts. The clock uses the GMT offset chosen on the Home clock. `Corner` is `"TopRight"` (default), `"TopLeft"`, `"BottomRight"` or `"BottomLeft"`. Nothing shows until you call it. |
 | `SetWatermarkVisible(visible)` | Show or hide the readout without losing its text or settings. |
 | `SetWatermarkEnabled(enabled)` / `IsWatermarkEnabled()` | The player's choice in the Configs tab (Overlays group). Saved beside the configs, and a choice of off always wins over `SetWatermarkVisible`. |
+| `SetMusic(id, volume)` | The background track: a Roblox audio id, an `rbxassetid://` link or a bare number. It loops. The Music group on the Configs tab appears once a track is set, and the player turns playback on there. `volume` is the starting volume from 0 to 1; a volume the player already chose wins. |
+| `SetMusicPlaying(playing)` / `IsMusicPlaying()` | Plays or pauses the track. The choice is saved beside the configs. |
+| `SetMusicVolume(volume)` / `GetMusicVolume()` | Volume from 0 to 1, saved beside the configs. |
 | `SetKeybindListEnabled(enabled)` / `IsKeybindListEnabled()` | The same for the keybind list. Both overlays can be dragged, and the place is saved beside the configs. |
 | `BindToggle(toggle, key, mode?)` | Bind a key to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
 | `SetKeybindListVisible(visible)` | Show or hide an overlay that lists every key bound with `BindToggle`, with its mode and whether the toggle is on. |
@@ -221,7 +224,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetDragStyle(style)` / `GetDragStyle()` | Set or read the drag style (see `DragStyle`). `SetDragSkeleton(enabled)` still works as an on/off switch. |
 | `SetIslandStyle(style)` / `GetIslandStyle()` | Set or read the island style (see `IslandStyle`). |
 | `SetTransparent(enabled)` / `.Transparent` | See-through window on or off. |
-| `SetBackground(source)` / `.Background` | Background image. `source` is a preset name (`Library.BackgroundPresets`: Deep Violet, Blood Red, Cyanic, Amber Glow, Bloomings, Lavender Pink), an image asset id or `rbxassetid://` link (an Image id, not a Decal id), an http(s) image link (downloaded once to `<FolderName>/backgrounds/cache`, needs `writefile` and `getcustomasset`), or an image file dropped into `<FolderName>/backgrounds`. `nil` or `"None"` removes it. Yields while a link downloads; returns `ok, err`. |
+| `SetBackground(source)` / `.Background` | Background image. `source` is a preset name (`Library.BackgroundPresets`: Deep Violet, Blood Red, Cyanic, Amber Glow, Bloomings, Lavender Pink, Sakura), an image asset id or `rbxassetid://` link (an Image id, not a Decal id), an http(s) image link (downloaded once to `<FolderName>/backgrounds/cache`, needs `writefile` and `getcustomasset`), or an image file dropped into `<FolderName>/backgrounds`. `nil` or `"None"` removes it. Yields while a link downloads; returns `ok, err`. |
 | `SetBackgroundTransparency(value)` / `ListBackgrounds()` | Image transparency, 0 to 1; presets plus the files in the backgrounds folder. |
 | `SetWeatherMode(mode)` / `.WeatherMode` | `"Screen"` or `"UI"`. |
 | `SetHideName(hidden)` / `SetHideAvatar(hidden)` | Hide the player's name or headshot everywhere, same as the home switches. |
@@ -287,6 +290,7 @@ print(info.JD_TIER_NAME, info.is_premium)
 | `Validate` | function | — | `function(key, Junkie)` returns `true` for a valid key. With `Junkie`, the SDK is the second argument. |
 | `Link` | string | — | Adds a Get key button that copies this link. |
 | `Junkie` | table | — | `Service` and `Identifier` are required. `Provider` is needed for Get key. `ScriptId` and `Sdk` are optional. |
+| `UNC` | table or `false` | `{ Fail = 70, Warn = 80 }` | The executor check, run before the key gate. Below `Fail` the player sees a card with the Discord link and loading stops. From `Fail` up to `Warn` the script loads with a banner. `false` skips the check. |
 | `Save` | boolean | `true` | Remember an accepted key in `File`. |
 | `File` | string | `"HawkTokaiLibUI/key.txt"` | Where the key is saved. |
 
@@ -302,7 +306,7 @@ Saved keys: `Save` writes the key as plain text to `File`, and each run checks i
 
 ### Protected script
 
-`RunProtected` checks the key, then `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card.
+`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score.
 
 ```lua
 -- Loader.luau, run in the executor
@@ -319,6 +323,38 @@ Library:RunProtected({
 ```
 
 Runtime variables exist only inside the protected script, not in the loader or in a chunk loaded with `loadstring`. That is why the library receives them through `KeyInfo`.
+
+---
+
+### Easter egg
+
+When the player types the secret phrase into the key box, a small button appears in the footer. Pressing it covers the screen with a video that fades in, plays with its sound, fades out at the end, and then kicks the player with a message. Nothing underneath can be clicked or pressed while it plays. The Escape key still opens the Roblox menu.
+
+No Roblox upload is needed. The video is downloaded while the key box is open: the library saves it into the workspace folder (`HawkTokaiLibUI` by default) and plays it from there with `getcustomasset`. The executor needs `writefile`, `isfile`, `getcustomasset` and `game:HttpGet`. Not every executor plays an mp4 this way. If the video never appears, the console says so after 15 seconds and the player is not kicked.
+
+Set it in the `RunProtected` or `RequireKey` options:
+
+```lua
+EasterEgg = {
+    Hash = 0,                                                             -- hash of the secret phrase, not the phrase
+    VideoUrl = "https://raw.githubusercontent.com/.../assets/egg.mp4",   -- a direct link to the mp4
+    Volume = 10,
+    Kick = "The message the player sees when the video ends.",
+}
+```
+
+Put the mp4 in the repo at `assets/egg.mp4`, or host it anywhere that gives a direct link. The phrase is stored as a hash, so it does not appear in the code. To get the hash of your phrase, run:
+
+```lua
+local function hash(text)
+    local h = 0
+    for i = 1, #text do
+        h = (h * 31 + string.byte(text, i)) % 1000000007
+    end
+    return h
+end
+print(hash("your secret phrase"))
+```
 
 ---
 
