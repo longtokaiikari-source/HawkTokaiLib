@@ -315,6 +315,37 @@ function Library:LoadFont(opts)
     return true
 end
 
+-- Switches every font the library draws with. A built-in font is ready at once; a URL
+-- preset is downloaded the first time it is chosen. Text already on screen is restyled too.
+function Library:SetFont(name)
+    name = tostring(name or "")
+    local builtin = Library.BuiltinFonts[name]
+    if builtin then
+        local ok, faces = pcall(builtin)
+        if not ok then
+            warn("[HawkTokaiLib] " .. name .. " is not available on this client: " .. tostring(faces))
+            return false
+        end
+        Library.Fonts.Regular = faces.Regular
+        Library.Fonts.Medium = faces.Medium
+        Library.Fonts.Bold = faces.Bold
+    elseif Library.FontPresets[name] then
+        if not Library:LoadFont({ Name = name }) then
+            return false
+        end
+    else
+        warn("[HawkTokaiLib] unknown font: " .. name)
+        return false
+    end
+    Library._fontName = name
+    for _, window in ipairs(Library._windows or {}) do
+        pcall(function()
+            window:_restyleText()
+        end)
+    end
+    return true
+end
+
 function Library:PreloadIcons()
     return loadLucide() ~= false
 end
@@ -377,6 +408,46 @@ Library.Fonts = {
     Medium = Font.new(FONT_FAMILY, Enum.FontWeight.Medium),
     Bold = Font.new(FONT_FAMILY, Enum.FontWeight.SemiBold),
 }
+
+-- The fonts the Settings tab can pick. Built-in fonts come with Roblox and need no download.
+-- Each entry gives the Regular, Medium and Bold faces; a single-weight font uses one face
+-- for all three.
+function Library._enumFonts(regular, medium, bold)
+    return {
+        Regular = Font.fromEnum(regular),
+        Medium = Font.fromEnum(medium or regular),
+        Bold = Font.fromEnum(bold or medium or regular),
+    }
+end
+
+Library.BuiltinFonts = {
+    -- The normal text of the window. Picking it puts back the library font.
+    None = function()
+        return {
+            Regular = Font.new(FONT_FAMILY, Enum.FontWeight.Regular),
+            Medium = Font.new(FONT_FAMILY, Enum.FontWeight.Medium),
+            Bold = Font.new(FONT_FAMILY, Enum.FontWeight.SemiBold),
+        }
+    end,
+    SourceSans = function() return Library._enumFonts(Enum.Font.SourceSans, Enum.Font.SourceSansSemibold, Enum.Font.SourceSansBold) end,
+    Arial = function() return Library._enumFonts(Enum.Font.Arial, Enum.Font.Arial, Enum.Font.ArialBold) end,
+    Legacy = function() return Library._enumFonts(Enum.Font.Legacy) end,
+    Garamond = function() return Library._enumFonts(Enum.Font.Garamond) end,
+    Bodoni = function() return Library._enumFonts(Enum.Font.Bodoni) end,
+    Cartoon = function() return Library._enumFonts(Enum.Font.Cartoon) end,
+    Code = function() return Library._enumFonts(Enum.Font.Code) end,
+    Highway = function() return Library._enumFonts(Enum.Font.Highway) end,
+    SciFi = function() return Library._enumFonts(Enum.Font.SciFi) end,
+    Arcade = function() return Library._enumFonts(Enum.Font.Arcade) end,
+    Fantasy = function() return Library._enumFonts(Enum.Font.Fantasy) end,
+    Antique = function() return Library._enumFonts(Enum.Font.Antique) end,
+    Bangers = function() return Library._enumFonts(Enum.Font.Bangers) end,
+    FredokaOne = function() return Library._enumFonts(Enum.Font.FredokaOne) end,
+}
+
+-- The order of the list in Settings. The window starts with None, the normal text, until a player picks a font.
+Library.FontOrder = { "None", "Tahoma8", "ValleySans", "SourceSans", "Arial", "Legacy", "Garamond", "Bodoni", "Cartoon", "Code", "Highway", "SciFi", "Arcade", "Fantasy", "Antique", "Bangers", "FredokaOne" }
+Library.DefaultFont = "None"
 
 local Theme = Library.Theme
 local Assets = Library.Assets
@@ -1170,6 +1241,70 @@ function Tab:_nextOrder()
     return self._order
 end
 
+-- A dependency box: a sub-group of controls that shows only while another control holds a
+-- given value. It takes the same element calls as a groupbox:
+--   local aim = box:Toggle({ Name = "Aimbot" })
+--   local extra = box:DependencyBox({ Depends = aim, Value = true })
+--   extra:Slider({ Name = "FOV", Range = { 1, 180 }, CurrentValue = 60 })
+-- Without Value, it shows while the control is on, or while it is not empty.
+function Tab:DependencyBox(opts)
+    opts = opts or {}
+    local source = opts.Depends
+    local wanted = opts.Value
+    local frame = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+        LayoutOrder = self:_nextOrder(),
+        Parent = self.List,
+    })
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+        Parent = frame,
+    })
+    local order = 0
+    -- The same element builders, pointed at this frame instead of the groupbox's list.
+    -- Anything it does not override is read from the groupbox, so search and themes still work.
+    local inner = setmetatable({
+        List = frame,
+        _nextOrder = function()
+            order += 1
+            return order
+        end,
+    }, { __index = self })
+    local function holds()
+        if source == nil then
+            return true
+        end
+        local value
+        if type(source.Get) == "function" then
+            value = source:Get()
+        else
+            value = source.Value
+        end
+        if wanted == nil then
+            return value ~= nil and value ~= false and value ~= ""
+        end
+        return value == wanted
+    end
+    local shown
+    local function refresh()
+        local now = holds()
+        if now ~= shown then
+            shown = now
+            frame.Visible = now
+            -- Hidden controls drop out of search, the same way a hidden tab does.
+            inner._userVisible = now
+        end
+    end
+    refresh()
+    self.Window:_listen("Render", refresh, inner)
+    return inner
+end
+
 function Tab:Section(text)
     local visible = not (type(text) == "table" and text.Visible == false)
     if type(text) == "table" then
@@ -1544,11 +1679,165 @@ function Tab:Code(opts)
     }, frame, "Code")
 end
 
+-- A log: timestamped lines in a monospace box that follows the newest line until you scroll
+-- up. Lines are plain text, so nothing in them is read as rich text. Scripts add lines with
+-- handle:Log(text, color), where color is a Color3, a theme key ("Success", "Warning",
+-- "Error", "Muted") or nil.
+function Tab:Log(opts)
+    opts = normalize(opts, { Title = "Name" })
+    local frame = card(self, "Frame", 0, opts)
+    frame.AutomaticSize = Enum.AutomaticSize.Y
+    padding(frame, 14, 14, 10, 12)
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+        Parent = frame,
+    })
+    local height = math.clamp(tonumber(opts.Height) or 160, 60, 600)
+    local maxLines = math.max(tonumber(opts.MaxLines) or 200, 10)
+    local timestamps = opts.Timestamps ~= false
+    local header = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 22),
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        Parent = frame,
+    })
+    label({
+        Size = UDim2.new(1, -92, 1, 0),
+        Text = opts.Name or "Log",
+        TextSize = 13,
+        FontFace = Fonts.Bold,
+        Parent = header,
+    })
+    local clear = create("TextButton", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(84, 22),
+        BackgroundColor3 = Theme.Surface,
+        Text = "Clear",
+        TextSize = 12,
+        TextColor3 = Theme.Text,
+        FontFace = Fonts.Medium,
+        AutoButtonColor = false,
+        Parent = header,
+    })
+    corner(clear, UDim.new(0, 6))
+    stroke(clear)
+    local scroller = create("ScrollingFrame", {
+        Size = UDim2.new(1, 0, 0, height),
+        BackgroundColor3 = Theme.Surface,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ScrollBarThickness = 3,
+        LayoutOrder = 2,
+        Parent = frame,
+    })
+    corner(scroller, UDim.new(0, 6))
+    padding(scroller, 10, 10, 8, 8)
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2),
+        Parent = scroller,
+    })
+
+    local lines = {}
+    local order = 0
+    local function colorOf(value)
+        if typeof(value) == "Color3" then
+            return value
+        end
+        if type(value) == "string" and Theme[value] then
+            return Theme[value]
+        end
+        return Theme.Text
+    end
+    local function addLine(text, color)
+        local atBottom = scroller.CanvasPosition.Y >= scroller.AbsoluteCanvasSize.Y - scroller.AbsoluteSize.Y - 6
+        order += 1
+        local line = label({
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Text = text,
+            TextSize = 12,
+            FontFace = Font.fromEnum(Enum.Font.Code),
+            TextColor3 = colorOf(color),
+            TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            LayoutOrder = order,
+            Parent = scroller,
+        })
+        table.insert(lines, { frame = line, text = text })
+        while #lines > maxLines do
+            local old = table.remove(lines, 1)
+            old.frame:Destroy()
+        end
+        if atBottom then
+            task.spawn(function()
+                task.wait()
+                if scroller.Parent then
+                    scroller.CanvasPosition = Vector2.new(0, math.max(0, scroller.AbsoluteCanvasSize.Y - scroller.AbsoluteSize.Y))
+                end
+            end)
+        end
+    end
+    local function clearLines()
+        for _, line in ipairs(lines) do
+            line.frame:Destroy()
+        end
+        table.clear(lines)
+        order = 0
+    end
+    clear.MouseButton1Click:Connect(clearLines)
+
+    local handle = {}
+    function handle:Log(text, color)
+        local stamp = ""
+        if timestamps then
+            local ok, value = pcall(os.date, "%H:%M:%S")
+            stamp = "[" .. (ok and value or "--:--:--") .. "]  "
+        end
+        addLine(stamp .. tostring(text == nil and "" or text), color)
+        return handle
+    end
+    function handle:Clear()
+        clearLines()
+    end
+    function handle:GetLines()
+        local out = {}
+        for index, line in ipairs(lines) do
+            out[index] = line.text
+        end
+        return out
+    end
+    return finishElement(self, opts, handle, frame, "Log")
+end
+
+-- The press feel of a button: a quick squeeze while the mouse or finger is down, a springy
+-- release when it lets go, and a ripple that starts at the press point, not at the release.
+local function attachPress(button)
+    local scale = create("UIScale", { Scale = 1, Parent = button })
+    button.MouseButton1Down:Connect(function()
+        tween(scale, { Scale = 0.965 }, 0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        ripple(button)
+    end)
+    button.MouseButton1Up:Connect(function()
+        tween(scale, { Scale = 1 }, 0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end)
+    button.MouseLeave:Connect(function()
+        tween(scale, { Scale = 1 }, 0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end)
+    return scale
+end
+
 local function rowButton(tab, opts)
     local primary = opts.Style == "Primary"
     local boxHeight = TOUCH and 34 or 28
     local height = boxHeight + 6 + (opts.Desc and 16 or 0)
     local button = card(tab, "TextButton", height, opts)
+    attachPress(button)
 
     local box = create("Frame", {
         Position = UDim2.fromOffset(14, 3),
@@ -1683,8 +1972,8 @@ function Tab:Button(opts)
 
     glowIcon(button, BUTTON_HINT_ICON, primary and Theme.AccentDark or Theme.Muted, UDim2.new(1, -30, 0.5, 0))
 
+    attachPress(button)
     button.MouseButton1Click:Connect(function()
-        ripple(button)
         safeCall(opts.Callback)
     end)
 
@@ -3152,10 +3441,62 @@ function Tab:Keybind(opts)
         fitChip(false)
     end)
 
+    -- While it waits for a key, three dots rise and fall in a wave inside the box.
+    local DOT_X = { -8, 0, 8 }
+    local dots = {}
+    local dotsHolder = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ZIndex = 2,
+        Parent = chip,
+    })
+    for index = 1, 3 do
+        dots[index] = create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, DOT_X[index], 0.5, 0),
+            Size = UDim2.fromOffset(5, 5),
+            BackgroundColor3 = Theme.Accent,
+            BorderSizePixel = 0,
+            Parent = dotsHolder,
+        })
+        corner(dots[index], UDim.new(1, 0))
+    end
+    local dotsRunning = false
+    local function stopDots()
+        dotsRunning = false
+    end
+    local function startDots()
+        if dotsRunning then
+            return
+        end
+        dotsRunning = true
+        task.spawn(function()
+            local t = 0
+            while dotsRunning and chip.Parent do
+                t += task.wait()
+                for index, dot in ipairs(dots) do
+                    local lift = math.max(0, math.sin(t * 6 - (index - 1) * 0.9)) * 4
+                    dot.Position = UDim2.new(0.5, DOT_X[index], 0.5, -lift)
+                end
+            end
+            for index, dot in ipairs(dots) do
+                dot.Position = UDim2.new(0.5, DOT_X[index], 0.5, 0)
+            end
+        end)
+    end
+
     local function render()
-        chipLabel.Text = self_.Listening and "..." or keyName(self_.Value)
-        tween(chipStroke, { Color = self_.Listening and Theme.StrokeHover or Theme.Stroke }, 0.15)
-        tween(chipLabel, { TextColor3 = self_.Listening and Theme.Accent or Theme.Muted }, 0.15)
+        local listening = self_.Listening
+        chipLabel.Text = listening and "" or keyName(self_.Value)
+        dotsHolder.Visible = listening
+        tween(chipStroke, { Color = listening and Theme.StrokeHover or Theme.Stroke }, 0.15)
+        tween(chipLabel, { TextColor3 = listening and Theme.Accent or Theme.Muted }, 0.15)
+        if listening then
+            startDots()
+        else
+            stopDots()
+        end
     end
 
     function self_:Set(keyCode, silent)
@@ -4899,7 +5240,7 @@ function Library:RequireKey(opts)
     local glow = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(620, 620),
+        Size = UDim2.fromOffset(640, 640),
         BackgroundTransparency = 1,
         Image = Assets.Glow,
         ImageColor3 = Theme.Accent,
@@ -4909,21 +5250,21 @@ function Library:RequireKey(opts)
     local panel = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(392, 0),
+        Size = UDim2.fromOffset(400, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = backdrop,
     })
-    corner(panel, UDim.new(0, 16))
+    corner(panel, UDim.new(0, 18))
     create("UIGradient", {
         Rotation = 90,
         Color = ColorSequence.new(Theme.Surface2, Theme.Background),
         Parent = panel,
     })
-    stroke(panel, Theme.Accent, 0.55)
-    padding(panel, 22, 22, 22, 20)
+    stroke(panel, Theme.Accent, 0.5)
+    padding(panel, 24, 24, 24, 20)
     local scale = create("UIScale", {
         Scale = 0.92,
         Parent = panel,
@@ -4934,38 +5275,60 @@ function Library:RequireKey(opts)
         Parent = panel,
     })
 
-    -- Header: the brand mark, a title and a subtitle.
+    -- Header: the brand mark, the title, and a chip that says the key is secured.
     local header = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 52),
+        Size = UDim2.new(1, 0, 0, 56),
         BackgroundTransparency = 1,
         LayoutOrder = 1,
         Parent = panel,
     })
-    local _, badgeIcon = Library._brandBadge(header, 52, { Icon = Assets.Logo })
+    local _, badgeIcon = Library._brandBadge(header, 56, { Icon = Assets.Logo })
     label({
-        Position = UDim2.fromOffset(64, 6),
-        Size = UDim2.new(1, -64, 0, 24),
+        Position = UDim2.fromOffset(72, 4),
+        Size = UDim2.new(1, -72, 0, 26),
         Text = opts.Title or "Key required",
-        TextSize = 19,
+        TextSize = 20,
         FontFace = Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
         Parent = header,
     })
+    local chip = create("Frame", {
+        Position = UDim2.fromOffset(72, 32),
+        Size = UDim2.fromOffset(152, 20),
+        BackgroundColor3 = Theme.Surface3,
+        BorderSizePixel = 0,
+        Parent = header,
+    })
+    corner(chip, UDim.new(1, 0))
+    local lockIcon = create("ImageLabel", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 9, 0.5, 0),
+        Size = UDim2.fromOffset(12, 12),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Accent,
+        Parent = chip,
+    })
+    applyIcon(lockIcon, "lock")
     label({
-        Position = UDim2.fromOffset(64, 30),
-        Size = UDim2.new(1, -64, 0, 16),
+        Position = UDim2.fromOffset(26, 0),
+        Size = UDim2.new(1, -30, 1, 0),
         Text = "Secured with Junkie",
-        TextSize = 12,
+        TextSize = 11,
+        FontFace = Fonts.Medium,
         TextColor3 = Theme.Muted,
-        Parent = header,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = chip,
     })
+
     label({
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Text = opts.Desc or "Enter your key to continue.",
         TextSize = 13,
+        FontFace = Fonts.Regular,
         TextColor3 = Theme.Muted,
         TextWrapped = true,
-        TextTruncate = Enum.TextTruncate.None,
+        TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
         LayoutOrder = 2,
         Parent = panel,
@@ -4973,13 +5336,13 @@ function Library:RequireKey(opts)
 
     -- The key field: a key icon, the text box, and a clear button that shows once there is text.
     local field = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 46),
+        Size = UDim2.new(1, 0, 0, 48),
         BackgroundColor3 = Theme.Surface,
         BorderSizePixel = 0,
         LayoutOrder = 3,
         Parent = panel,
     })
-    corner(field, UDim.new(0, 12))
+    corner(field, UDim.new(0, 14))
     local fieldStroke = create("UIStroke", {
         Color = Theme.Stroke,
         Thickness = 1,
@@ -4988,7 +5351,7 @@ function Library:RequireKey(opts)
     })
     local keyIcon = create("ImageLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 14, 0.5, 0),
+        Position = UDim2.new(0, 16, 0.5, 0),
         Size = UDim2.fromOffset(16, 16),
         BackgroundTransparency = 1,
         ImageColor3 = Theme.Muted,
@@ -4996,8 +5359,8 @@ function Library:RequireKey(opts)
     })
     applyIcon(keyIcon, "key")
     local box = create("TextBox", {
-        Position = UDim2.fromOffset(40, 0),
-        Size = UDim2.new(1, -78, 1, 0),
+        Position = UDim2.fromOffset(42, 0),
+        Size = UDim2.new(1, -80, 1, 0),
         BackgroundTransparency = 1,
         Text = "",
         PlaceholderText = "Paste your key",
@@ -5011,14 +5374,17 @@ function Library:RequireKey(opts)
     })
     local clear = create("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -10, 0.5, 0),
-        Size = UDim2.fromOffset(24, 24),
+        Position = UDim2.new(1, -12, 0.5, 0),
+        Size = UDim2.fromOffset(26, 26),
+        BackgroundColor3 = Theme.Surface3,
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
         Visible = false,
         Parent = field,
     })
+    corner(clear, UDim.new(1, 0))
     local clearIcon = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
@@ -5028,6 +5394,12 @@ function Library:RequireKey(opts)
         Parent = clear,
     })
     applyIcon(clearIcon, "x")
+    clear.MouseEnter:Connect(function()
+        tween(clear, { BackgroundTransparency = 0.3 }, 0.12)
+    end)
+    clear.MouseLeave:Connect(function()
+        tween(clear, { BackgroundTransparency = 1 }, 0.12)
+    end)
 
     -- Status line, then a thin bar that sweeps while the key is being checked.
     local statusRow = create("Frame", {
@@ -5050,6 +5422,7 @@ function Library:RequireKey(opts)
         TextSize = 12,
         TextColor3 = Theme.Error,
         FontFace = Fonts.Medium,
+        TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = statusRow,
     })
@@ -5070,9 +5443,9 @@ function Library:RequireKey(opts)
     })
     corner(bar, UDim.new(1, 0))
 
-    -- The two buttons, with a small press effect.
+    -- The buttons: Close (ghost), Get key (secondary, when there is a link), Verify (primary).
     local buttons = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 46),
         BackgroundTransparency = 1,
         LayoutOrder = 6,
         Parent = panel,
@@ -5083,31 +5456,33 @@ function Library:RequireKey(opts)
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = buttons,
     })
-    local function button(text, primary, order, width)
+    local function button(text, kind, order, width)
+        local base = kind == "ghost" and 1 or 0
         local b = create("TextButton", {
             Size = width,
-            BackgroundColor3 = primary and Theme.Accent or Theme.Surface,
+            BackgroundColor3 = kind == "primary" and Theme.Accent or Theme.Surface2,
+            BackgroundTransparency = base,
             Text = text,
             TextSize = 14,
-            TextColor3 = Theme.Text,
+            TextColor3 = kind == "primary" and Theme.Background or Theme.Text,
             FontFace = Fonts.Bold,
             AutoButtonColor = false,
             LayoutOrder = order,
             Parent = buttons,
         })
         corner(b, UDim.new(0, 12))
-        if not primary then
-            stroke(b)
+        if kind ~= "primary" then
+            stroke(b, Theme.Stroke, 0.2)
         end
         local press = create("UIScale", {
             Scale = 1,
             Parent = b,
         })
         b.MouseEnter:Connect(function()
-            tween(b, { BackgroundTransparency = 0.12 }, 0.12)
+            tween(b, { BackgroundTransparency = kind == "ghost" and 0.8 or 0.12 }, 0.12)
         end)
         b.MouseLeave:Connect(function()
-            tween(b, { BackgroundTransparency = 0 }, 0.12)
+            tween(b, { BackgroundTransparency = base }, 0.12)
             tween(press, { Scale = 1 }, 0.14)
         end)
         b.MouseButton1Down:Connect(function()
@@ -5118,28 +5493,31 @@ function Library:RequireKey(opts)
         end)
         return b
     end
+    local closeButton = button("Close", "ghost", 1, UDim2.new(0.28, -8, 1, 0))
     local getKey
     if linkUrl or sdk then
-        getKey = button("Get key", false, 1, UDim2.new(0.5, -5, 1, 0))
+        getKey = button("Get key", "secondary", 2, UDim2.new(0.32, -8, 1, 0))
     end
-    local verify = button("Verify", true, 2, getKey and UDim2.new(0.5, -5, 1, 0) or UDim2.new(1, 0, 1, 0))
+    local verify = button("Verify", "primary", 3, getKey and UDim2.new(0.40, -8, 1, 0) or UDim2.new(0.72, -8, 1, 0))
+
     local footer = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 18),
+        Size = UDim2.new(1, 0, 0, 16),
         BackgroundTransparency = 1,
         LayoutOrder = 7,
         Parent = panel,
     })
     label({
-        Size = UDim2.new(1, -28, 1, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         Text = "Press Enter or Verify after you paste the key.",
         TextSize = 10,
+        FontFace = Fonts.Regular,
         TextColor3 = Theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = footer,
     })
 
     -- Behaviour.
-    local busy, finished, attempts, fetchingLink = false, false, 0, false
+    local busy, finished, closed, attempts, fetchingLink = false, false, false, 0, false
     local sweep
     local function startSweep()
         track.Visible = true
@@ -5188,6 +5566,9 @@ function Library:RequireKey(opts)
         end
     end
     local function accept(key)
+        if closed then
+            return
+        end
         finished = true
         if saving then
             pcall(function()
@@ -5200,7 +5581,7 @@ function Library:RequireKey(opts)
         stopSweep()
         local tier = keyInfo and (keyInfo.JD_TIER_NAME or (keyInfo.is_premium == true and "Premium" or "Standard")) or nil
         setStatus(tier and ("Key accepted  |  " .. tostring(tier)) or "Key accepted", "ok")
-        tween(badgeIcon, { Size = UDim2.fromOffset(38, 38) }, 0.4, Enum.EasingStyle.Back)
+        tween(badgeIcon, { Size = UDim2.fromOffset(40, 40) }, 0.4, Enum.EasingStyle.Back)
         tween(verify, { BackgroundColor3 = Theme.Success }, 0.2)
         task.delay(0.8, function()
             tween(backdrop, { BackgroundTransparency = 1 }, 0.25)
@@ -5210,8 +5591,22 @@ function Library:RequireKey(opts)
             done:Fire(key, keyInfo)
         end)
     end
+    -- Close: the gate goes away and the protected script is not loaded.
+    local function close()
+        if finished or closed then
+            return
+        end
+        closed = true
+        stopSweep()
+        tween(backdrop, { BackgroundTransparency = 1 }, 0.2)
+        tween(panel, { BackgroundTransparency = 1 }, 0.2)
+        task.delay(0.22, function()
+            gui:Destroy()
+            done:Fire(nil)
+        end)
+    end
     local function check()
-        if finished or busy then
+        if finished or busy or closed then
             return
         end
         if junkieError then
@@ -5232,6 +5627,9 @@ function Library:RequireKey(opts)
         lastError = nil
         local valid = isValid(key)
         busy = false
+        if closed then
+            return
+        end
         if valid then
             accept(key)
         else
@@ -5246,6 +5644,7 @@ function Library:RequireKey(opts)
         end
     end
 
+    closeButton.MouseButton1Click:Connect(close)
     verify.MouseButton1Click:Connect(check)
     clear.MouseButton1Click:Connect(function()
         box.Text = ""
@@ -6590,6 +6989,8 @@ function Library.Window(_, opts)
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     })
     self.Gui = gui
+    Library._windows = Library._windows or {}
+    table.insert(Library._windows, self)
 
     local root = create("Frame", {
         Name = "Window",
@@ -6968,6 +7369,17 @@ function Library.Window(_, opts)
 
     table.insert(Library.Windows, self)
 
+    -- The font to draw with: the one picked in Settings if it is still known, else the default.
+    do
+        local saved = self:_readConfigSettings().Font
+        local wanted = Library.DefaultFont
+        if type(saved) == "string" and (Library.BuiltinFonts[saved] or Library.FontPresets[saved]) then
+            wanted = saved
+        end
+        if wanted ~= Library._fontName then
+            Library:SetFont(wanted)
+        end
+    end
     if opts.Home ~= false then
         self:_buildHome(type(opts.Home) == "table" and opts.Home or {})
     end
@@ -9491,6 +9903,28 @@ local function settingsPath(self)
     return self.ConfigFolder .. "/configsettings.txt"
 end
 
+-- Gives every text object in this window the current font, keeping its weight: heavy text
+-- gets Bold, Medium gets Medium, and everything else gets Regular.
+function Window:_restyleText()
+    local gui = self.Gui
+    if not gui then
+        return
+    end
+    local fonts = Library.Fonts
+    for _, item in ipairs(gui:GetDescendants()) do
+        if item:IsA("TextLabel") or item:IsA("TextButton") or item:IsA("TextBox") then
+            local weight = item.FontFace.Weight
+            if weight == Enum.FontWeight.Bold or weight == Enum.FontWeight.SemiBold or weight == Enum.FontWeight.ExtraBold or weight == Enum.FontWeight.Heavy then
+                item.FontFace = fonts.Bold
+            elseif weight == Enum.FontWeight.Medium then
+                item.FontFace = fonts.Medium
+            else
+                item.FontFace = fonts.Regular
+            end
+        end
+    end
+end
+
 function Window:_readConfigSettings()
     local text = readText(settingsPath(self))
     if text then
@@ -11229,11 +11663,37 @@ function Tab:_musicControls()
     })
 end
 
+-- The font picker, in its own group on the Configs tab. The choice is saved with the configs.
+function Tab:_fontControls()
+    local window = self.Window
+    local box = self:Groupbox({ Name = "Font", Icon = "type", Side = "Right" })
+    local function element(kind, options)
+        if type(box[kind]) == "function" then
+            return box[kind](box, options)
+        end
+        if type(box["Create" .. kind]) == "function" then
+            return box["Create" .. kind](box, options)
+        end
+    end
+    element("Dropdown", {
+        Name = "Font",
+        Desc = "Changes the text of the whole window. Saved with your settings.",
+        Options = Library.FontOrder,
+        Default = Library._fontName or Library.DefaultFont,
+        Callback = function(value)
+            if Library:SetFont(value) then
+                window:_writeConfigSettings({ Font = value })
+            end
+        end,
+    })
+end
+
 function Tab:ConfigManager(opts)
     opts = normalize(opts, { Title = "Name" })
     local host = managerHost(self, opts, "Configs", "folder")
     self:_overlayToggles()
     self:_musicControls()
+    self:_fontControls()
     local window = self.Window
     local manager = {}
     local list, status, modeList
@@ -12949,19 +13409,31 @@ function Tab:Image(opts)
     return finishElement(self, opts, handle, parts.Frame, "Image")
 end
 
+-- Lighting presets for the 3D preview. The sun button cycles through the order below.
+-- Edit a preset, or add one and its name to Library.ViewportLightOrder.
+Library.ViewportLights = {
+    Studio = { Ambient = Color3.fromRGB(128, 124, 140), LightColor = Color3.fromRGB(255, 242, 232) },
+    Warm = { Ambient = Color3.fromRGB(150, 128, 116), LightColor = Color3.fromRGB(255, 214, 170) },
+    Cool = { Ambient = Color3.fromRGB(108, 124, 150), LightColor = Color3.fromRGB(206, 228, 255) },
+    Night = { Ambient = Color3.fromRGB(58, 58, 78), LightColor = Color3.fromRGB(150, 160, 200) },
+}
+Library.ViewportLightOrder = { "Studio", "Warm", "Cool", "Night" }
+
 function Tab:Viewport(opts)
     local parts
     opts, parts = self:_mediaCard(opts, 180)
     local window = self.Window
     local media = parts.Media
     applyIcon(parts.Placeholder, "box")
+    local lightName = Library.ViewportLights[opts.Lighting] and opts.Lighting or "Studio"
+    local preset = Library.ViewportLights[lightName]
     -- A soft backdrop: a gradient, a glow behind the model, and a shadow under it.
     create("UIGradient", {
         Rotation = 90,
         Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 146, 160)),
         Parent = media,
     })
-    create("ImageLabel", {
+    local glowImage = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromScale(1.4, 1.4),
@@ -12969,6 +13441,7 @@ function Tab:Viewport(opts)
         Image = Assets.Glow,
         ImageColor3 = Theme.Accent,
         ImageTransparency = 0.8,
+        Visible = opts.Glow ~= false,
         ZIndex = 1,
         Parent = media,
     })
@@ -12977,8 +13450,8 @@ function Tab:Viewport(opts)
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         ImageTransparency = 1,
-        Ambient = opts.Ambient or Color3.fromRGB(128, 124, 140),
-        LightColor = opts.LightColor or Color3.fromRGB(255, 242, 232),
+        Ambient = opts.Ambient or preset.Ambient,
+        LightColor = opts.LightColor or preset.LightColor,
         LightDirection = Vector3.new(-0.6, -1, -0.8),
         ZIndex = 2,
         Parent = media,
@@ -12994,15 +13467,20 @@ function Tab:Viewport(opts)
         Model = nil,
         Spin = opts.Spin ~= false,
         SpinSpeed = tonumber(opts.SpinSpeed) or 25,
+        Lighting = lightName,
     }
     local angle = math.rad(tonumber(opts.Angle) or 0)
-    local pitch = math.rad(tonumber(opts.Pitch) or 12)
+    local pitch = math.rad(math.clamp(tonumber(opts.Pitch) or 12, -80, 80))
     local distanceScale = tonumber(opts.Distance) or 1.08
     local center, distance, basis = nil, 10, CFrame.new()
+    local baseDistance, lastSize = 10, Vector3.new()
+    local showShadow = opts.Shadow ~= false
     local shadowPart
     local source = nil
     local generation = 0
     local dragging, lastX, resumeAt = false, 0, 0
+    local spinIcon
+    local toolbar
 
     local function place()
         if not center then
@@ -13028,6 +13506,7 @@ function Tab:Viewport(opts)
             return false
         end
         center = cf.Position
+        lastSize = size
         if shadowPart then
             shadowPart:Destroy()
         end
@@ -13041,14 +13520,49 @@ function Tab:Viewport(opts)
         shadowPart.CastShadow = false
         shadowPart.Material = Enum.Material.SmoothPlastic
         shadowPart.Color = Color3.new(0, 0, 0)
-        shadowPart.Transparency = 0.6
+        shadowPart.Transparency = showShadow and 0.6 or 1
         shadowPart.Size = Vector3.new(0.05, diameter, diameter)
         shadowPart.CFrame = CFrame.new(center.X, cf.Position.Y - size.Y / 2 - 0.02, center.Z) * CFrame.Angles(0, 0, math.rad(90))
         shadowPart.Parent = world
         local radius = math.max(size.Magnitude / 2, 0.5)
         distance = radius / math.tan(math.rad(camera.FieldOfView / 2)) * distanceScale
+        baseDistance = distance
         place()
         return true
+    end
+
+    -- Moves the camera in or out. Below 1 zooms in, above 1 zooms out.
+    local function zoomBy(factor)
+        if not center then
+            return
+        end
+        distance = math.clamp(distance * factor, baseDistance * 0.3, baseDistance * 2.5)
+        place()
+    end
+
+    local function resetView()
+        angle = math.rad(tonumber(opts.Angle) or 0)
+        pitch = math.rad(math.clamp(tonumber(opts.Pitch) or 12, -80, 80))
+        distance = baseDistance
+        resumeAt = 0
+        place()
+    end
+
+    local function setLighting(name)
+        local chosen = Library.ViewportLights[name]
+        if not chosen then
+            return false
+        end
+        lightName = name
+        handle.Lighting = name
+        tween(viewport, { Ambient = chosen.Ambient, LightColor = chosen.LightColor }, 0.4)
+        return true
+    end
+
+    local function overGui(object, position)
+        local origin, size = object.AbsolutePosition, object.AbsoluteSize
+        return position.X >= origin.X and position.X <= origin.X + size.X
+            and position.Y >= origin.Y and position.Y <= origin.Y + size.Y
     end
 
     -- A copy with its scripts and sounds stripped and every part anchored.
@@ -13164,6 +13678,9 @@ function Tab:Viewport(opts)
 
     function handle:SetSpin(enabled)
         handle.Spin = enabled ~= false
+        if spinIcon then
+            applyIcon(spinIcon, handle.Spin and "pause" or "play")
+        end
     end
 
     function handle:SetSpinSpeed(degrees)
@@ -13173,6 +13690,50 @@ function Tab:Viewport(opts)
     function handle:SetAngle(degrees)
         angle = math.rad(tonumber(degrees) or 0)
         place()
+    end
+
+    function handle:SetPitch(degrees)
+        pitch = math.rad(math.clamp(tonumber(degrees) or 12, -80, 80))
+        place()
+    end
+
+    function handle:Zoom(factor)
+        zoomBy(tonumber(factor) or 1)
+    end
+
+    function handle:ResetView()
+        resetView()
+    end
+
+    function handle:SetLighting(name)
+        return setLighting(name)
+    end
+
+    function handle:SetGlow(enabled)
+        glowImage.Visible = enabled ~= false
+    end
+
+    function handle:SetShadow(enabled)
+        showShadow = enabled ~= false
+        if shadowPart then
+            shadowPart.Transparency = showShadow and 0.6 or 1
+        end
+    end
+
+    function handle:GetInfo()
+        local count = 0
+        local model = handle.Model
+        if model then
+            if model:IsA("BasePart") then
+                count = 1
+            end
+            for _, object in ipairs(model:GetDescendants()) do
+                if object:IsA("BasePart") then
+                    count += 1
+                end
+            end
+        end
+        return { Parts = count, Size = lastSize }
     end
 
     function handle:SetCaption(text)
@@ -13185,8 +13746,77 @@ function Tab:Viewport(opts)
         end
     end
 
+    -- The toolbar: reset, pause or play, zoom in, zoom out, and the lighting presets.
+    if opts.Toolbar ~= false then
+        toolbar = create("Frame", {
+            AnchorPoint = Vector2.new(1, 1),
+            Position = UDim2.new(1, -8, 1, -8),
+            Size = UDim2.fromOffset(164, 36),
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundTransparency = 0.45,
+            BorderSizePixel = 0,
+            ZIndex = 6,
+            Parent = media,
+        })
+        corner(toolbar, UDim.new(0, 10))
+        padding(toolbar, 4, 4, 4, 4)
+        create("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            Padding = UDim.new(0, 4),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent = toolbar,
+        })
+        local function tool(icon, order, onClick)
+            local b = create("TextButton", {
+                Size = UDim2.fromOffset(28, 28),
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                LayoutOrder = order,
+                ZIndex = 7,
+                Parent = toolbar,
+            })
+            corner(b, UDim.new(0, 7))
+            local img = create("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(16, 16),
+                BackgroundTransparency = 1,
+                ImageColor3 = Color3.new(1, 1, 1),
+                ZIndex = 8,
+                Parent = b,
+            })
+            applyIcon(img, icon)
+            b.MouseEnter:Connect(function()
+                tween(b, { BackgroundTransparency = 0.82 }, 0.12)
+            end)
+            b.MouseLeave:Connect(function()
+                tween(b, { BackgroundTransparency = 1 }, 0.12)
+            end)
+            b.MouseButton1Click:Connect(onClick)
+            return img
+        end
+        tool("rotate-ccw", 1, resetView)
+        spinIcon = tool(handle.Spin and "pause" or "play", 2, function()
+            handle:SetSpin(not handle.Spin)
+        end)
+        tool("zoom-in", 3, function()
+            zoomBy(0.8)
+        end)
+        tool("zoom-out", 4, function()
+            zoomBy(1.25)
+        end)
+        tool("sun", 5, function()
+            local order = Library.ViewportLightOrder
+            local index = table.find(order, lightName) or 0
+            handle:SetLighting(order[index % #order + 1])
+        end)
+    end
+
     media.InputBegan:Connect(function(input)
-        if isPress(input) and handle.Model then
+        if isPress(input) and handle.Model and not (toolbar and overGui(toolbar, pointerPosition())) then
             dragging = true
             lastX = pointerPosition().X
         end
@@ -13197,6 +13827,11 @@ function Tab:Viewport(opts)
             angle -= (x - lastX) * 0.012
             lastX = x
             place()
+        end
+    end, handle)
+    window:_listen("Changed", function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel and handle.Model and overGui(media, pointerPosition()) then
+            zoomBy(input.Position.Z > 0 and 0.9 or 1.1)
         end
     end, handle)
     window:_listen("Ended", function(input)
@@ -22830,11 +23465,48 @@ function Window:GetMusicVolume()
     return self._musicVolume or 0.5
 end
 
+-- A one-time message. It shows the first time it is called for a Key, and the saved settings
+-- remember it. Window:ResetWelcome(key) shows it again.
+--   Window:Welcome({ Key = "intro", Title = "Welcome", Text = "Press the menu key to hide me.", Button = "Got it" })
+function Window:Welcome(opts)
+    opts = opts or {}
+    local name = "Welcome_" .. tostring(opts.Key or "default")
+    if self:_readConfigSettings()[name] == true then
+        return false
+    end
+    self:_writeConfigSettings({ [name] = true })
+    self:Dialog({
+        Title = opts.Title or "Welcome",
+        Content = opts.Text or opts.Content or "",
+        Icon = opts.Icon,
+        Buttons = { { Title = opts.Button or "Got it", Variant = "Primary" } },
+    })
+    return true
+end
+
+function Window:ResetWelcome(key)
+    self:_writeConfigSettings({ ["Welcome_" .. tostring(key or "default")] = false })
+end
+
+-- Runs callback when the window is destroyed, e.g. to stop your own loops and connections.
+function Window:OnUnload(callback)
+    if type(callback) ~= "function" then
+        return false
+    end
+    self._unloadCallbacks = self._unloadCallbacks or {}
+    table.insert(self._unloadCallbacks, callback)
+    return true
+end
+
 function Window:Destroy()
     if self._destroyed then
         return
     end
     self._destroyed = true
+    for _, callback in ipairs(self._unloadCallbacks or {}) do
+        pcall(callback)
+    end
+    self._unloadCallbacks = {}
     for index, entry in ipairs(Library.Windows) do
         if entry == self then
             table.remove(Library.Windows, index)

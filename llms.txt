@@ -65,11 +65,15 @@ Window:LoadAutoload()                      -- apply the player's autoload config
 - `Flag` strings must be unique across the whole script. Toggles, sliders, steppers, dropdowns, order lists, inputs, keybinds and colour pickers take flags. Labels, buttons, statuses and tables do not.
 - Flagged toggles that are on count as "running" on the minimized island. Don't flag a toggle that is only a setting if that would mislead; a setting is still fine to flag.
 - `Set(value, true)` skips the callback. Use it when syncing UI from code.
+- `Tab:DependencyBox({ Depends = toggle, Value = true })` returns a group that shows only while `toggle` holds that value. Add controls to the returned object as to a groupbox.
+- `Window:OnUnload(callback)` runs `callback` when the window is destroyed; use it to stop your own loops and connections.
+- `Window:Welcome({ Key, Title, Text, Button })` shows a message once per `Key`, remembered in the saved settings; `Window:ResetWelcome(key)` shows it again.
 - `Update` functions may yield (`InvokeServer`, `task.wait`); they run on their own thread. Element callbacks run inline and errors are caught and warned, so keep them quick and wrap long loops in `task.spawn`. Library calls made from a thread that yielded in an engine call are made safe automatically.
 - `Update` functions on labels and statuses run every `UpdateRate` seconds (default 1). Status lists only refresh while visible.
 - `Window:LoadAutoload()` may run before every element exists: values for flags not created yet are held and applied when the element appears.
 - Never build your own config, theme or minimize UI. Use `CreateConfigManager`, `CreateThemeManager` and the built-in island.
 - Icons: a lucide name (`"zap"`, `"lucide:zap"`), an asset id number or `"rbxassetid://…"`, or `{ Image, RectOffset, RectSize, Tint }`.
+- Motion: buttons squeeze while held and spring back, with the ripple starting at the press point. A keybind waiting for a key shows three bouncing dots.
 - `HawkTokaiLib.Touch` is true on touch-only devices. Layout already adapts; only read it for game logic.
 
 ## Elements
@@ -98,7 +102,8 @@ Every element takes `Name`, `Desc` (a muted hint under the name), `Tooltip` (a s
 | `Progress` | `CurrentValue` 0..1, `Color`, `TextColor`, `Format(fraction)` | `Set`, `Get`, `SetColor`, `SetTextColor` |
 | `Table` | `Columns` (names or `{ Name, Key, Width, Align, Format, Color, Sortable }`), `Rows`, `Rank`, `SortBy`, `MaxRows`, `Search` (built-in search box, default on), `Highlight(row)`, `Callback(row, i)` | `SetRows`, `AddRow`, `UpdateRow`, `RemoveRow`, `Clear`, `Sort`, `SetColumns`, `SetSearch(text)` |
 | `Image` | `Image` (asset id, link, file, preset or `"Avatar"`), `Height`, `Caption`, `ScaleType` | `SetImage`, `SetCaption`, `SetTitle` |
-| `Viewport` | `Model` (Instance, `"Avatar"`, Player or function), `Height`, `SpinSpeed` | `SetModel`, `Refresh`, `SetSpin` |
+| `Viewport` | `Model` (Instance, `"Avatar"`, Player or function), `Height`, `SpinSpeed`, `Lighting`, `Glow`, `Shadow`, `Toolbar` | `SetModel`, `Refresh`, `SetSpin`, `SetPitch`, `Zoom`, `ResetView`, `SetLighting`, `GetInfo` |
+| `Log` | `Name`, `Height`, `MaxLines`, `Timestamps` | `Log(text, color)`, `Clear`, `GetLines` |
 
 Status list rows are strings (one muted wrapped line) or `{ Text, Value, Tone }`. Table rows are value lists in column order or tables keyed by column `Key`; add `Highlight = true` to mark a row and `Colors = { [key or index] = color }` to colour single cells.
 
@@ -129,8 +134,8 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Code block: `Tab:CreateCode({ Name = "Script", Code = [[...]], Language = "lua" })`. Monospace, copy button, Lua is coloured.
 - Key gate: `Library:RequireKey({ Keys = { "..." } })`, or `Library:RequireKey({ Junkie = { Service = "...", Identifier = "...", Provider = "..." } })` for Junkie Development. It checks keys with the SDK's `check_key`, returns the key and the check result, and saves the key by default. Call it before `Library.Window`.
 - Executor check: `Library:CheckExecutor(opts)` runs inside `RunProtected` before the key gate; `Library:GetExecutorScore()` returns the score once it has run.
-- Fonts: `Library:LoadFont({ Name = "Tahoma8" })` loads the built-in pixel Tahoma 8px; `Library.FontPresets` holds the built-in URLs and can be edited.
-- Protected script: `Library:RunProtected({ Title, Junkie = { Service, Identifier, Provider, ScriptId } })` runs the executor check (`UNC = { Fail = 70, Warn = 80 }`), then checks the key and `load_script` runs the script from Junkie's Original Code. In that script pass `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON` to `Home.KeyInfo` for the profile card.
+- Fonts: Configs tab > Font picks one of `Library.FontOrder` (default `Library.DefaultFont` = None, the normal text; a choice is saved with the configs). `Library:SetFont(name)` switches every font and restyles the window. `Library.FontPresets` holds the downloaded URL fonts; `Library.BuiltinFonts` holds the Roblox fonts.
+- Protected script: `Library:RunProtected({ Title, Junkie = { Service, Identifier, Provider, ScriptId } })` runs the executor check (`UNC = { Fail = 70, Warn = 80 }`), then checks the key and `load_script` runs the script from Junkie's Original Code. In that script pass `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON` to `Home.KeyInfo` for the profile card. The key gate has a Close button, which stops the load without running the script.
 - Junkie setup check: `JunkieTest.lua` runs the settings, SDK, `check_key` and optional `get_key_link` steps and prints each result with the error meaning.
 
 - Overlays: the watermark and the keybind list can be dragged; their place and on/off choice are saved beside the configs. Both switches are in the Configs tab, group Overlays.

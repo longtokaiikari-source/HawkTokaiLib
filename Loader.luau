@@ -2,7 +2,7 @@
 -- the protected script (Example.luau pasted into the script's Original Code on Junkie).
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
 
-Library:LoadFont({ Name = "Tahoma8" })   -- the pixel font, so the key gate and the window match
+Library:SetFont(Library.DefaultFont)   -- the normal text until a player picks a font in Configs
 
 Library:RunProtected({
     Title = "Key required",

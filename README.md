@@ -242,6 +242,31 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 
 ---
 
+### Welcome
+
+`Window:Welcome({ Key, Title, Text, Button })` shows a message the first time it is called for that `Key`, and the saved settings remember it, so the next run stays quiet. `Window:ResetWelcome(key)` makes it show again.
+
+```lua
+Window:Welcome({
+    Key = "intro",
+    Title = "Welcome",
+    Text = "Press the menu key to hide the window.",
+    Button = "Got it",
+})
+```
+
+### OnUnload
+
+`Window:OnUnload(callback)` runs `callback` when the window is destroyed. Use it to stop your own loops and disconnect your own connections.
+
+```lua
+Window:OnUnload(function()
+    loop:Disconnect()
+end)
+```
+
+---
+
 ## Key System
 
 > A key gate that blocks the script until the player enters a valid key. Call it before `Library.Window`. A key saved by an earlier run is checked first, so the gate only shows when it is needed.
@@ -308,7 +333,7 @@ Saved keys: `Save` writes the key as plain text to `File`, and each run checks i
 
 ### Protected script
 
-`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite, and a small card shows its progress while it runs, and while the protected script loads. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score.
+`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite, and a small card shows its progress while it runs, and while the protected script loads. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score. The key gate has a Close button: it closes the gate and the protected script is not loaded.
 
 ```lua
 -- Loader.luau, run in the executor
@@ -578,6 +603,18 @@ Charge = Box:CreateSlider({ Name = "Charge Distance", Range = { 5, 60 }, Visible
 
 ---
 
+### Dependency boxes
+
+`Tab:DependencyBox({ Depends = toggle, Value = true })` returns a group of controls that shows only while `toggle` holds that value. It takes the same element calls as a groupbox, so you add controls to it as usual:
+
+```lua
+local aim = box:Toggle({ Name = "Aimbot" })
+local extra = box:DependencyBox({ Depends = aim, Value = true })
+extra:Slider({ Name = "FOV", Range = { 1, 180 }, CurrentValue = 60 })
+```
+
+Without `Value`, the group shows while the control is on, or while it is not empty. `Depends` can be any control with a `Get()` method, such as a toggle, a slider or a dropdown. The check runs every frame, so a change shows up at once, and hidden controls are left out of search results.
+
 ## Tooltips
 
 Every element takes `Tooltip`: a string, or `{ Title, Text, Icon }` for a card with a heading and an icon.
@@ -845,6 +882,8 @@ Tab:CreateCode({
 ---
 
 ## Button
+
+Pressing it squeezes it a little, and a ripple starts at the press point. Letting go springs it back.
 
 > A full-width card that ripples on click.
 
@@ -1217,6 +1256,8 @@ Input:Set("HawkTokaiLib")
 
 ## Keybind
 
+While it waits for a key, three dots rise and fall in the box. Escape cancels.
+
 > Bind an action to a key.
 
 ```lua
@@ -1345,7 +1386,7 @@ A placeholder icon shows until the image has loaded, then the picture fades in. 
 
 ## Viewport
 
-> A 3D preview: a model, a part or the player's avatar, turning slowly.
+> A 3D preview: a model, a part or the player's avatar, turning slowly. Drag it to spin it, and zoom with the mouse wheel or the toolbar.
 
 ```lua
 local Preview = Tab:CreateViewport({
@@ -1353,12 +1394,22 @@ local Preview = Tab:CreateViewport({
     Model = "Avatar", -- or any Model / BasePart (it is copied), a Player, or a function returning one
     Height = 200,
     SpinSpeed = 25,
+    Lighting = "Warm",
 })
 
 Preview:SetModel(workspace.Sword)
+Preview:Zoom(0.8) -- below 1 zooms in
 ```
 
-The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to turn it by hand; the spin picks up again a moment after you let go. It only spins while the window is open. `"Avatar"` waits for the character to spawn if it hasn't yet; call `Refresh()` after a respawn or an outfit change to copy it again.
+The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card to spin it; the spin resumes a moment after you let go.
+
+### Toolbar
+
+Five buttons along the bottom right: reset the view, pause or play the spin, zoom in, zoom out, and cycle the lighting presets. The mouse wheel zooms when the pointer is over the preview. `Toolbar = false` hides the buttons.
+
+### Lighting
+
+`Lighting` picks a preset from `Library.ViewportLights`: `Studio`, `Warm`, `Cool` and `Night`. Edit a preset there, or add one and its name to `Library.ViewportLightOrder`, which sets the order the sun button cycles through.
 
 ### Properties
 
@@ -1370,12 +1421,16 @@ The model is copied into the card with its scripts and sounds stripped and every
 | `Height` | number | `180` | Height of the preview, 40 to 600. |
 | `Spin` | boolean | `true` | Turn slowly on its own. |
 | `SpinSpeed` | number | `25` | Degrees per second. |
-| `Angle` / `Pitch` | number | `0` / `10` | Starting turn, and how far above the model the camera sits, in degrees. |
-| `Distance` | number | `1` | Camera distance multiplier. Below 1 zooms in. |
-| `FieldOfView` | number | `35` | Camera field of view. |
+| `Angle` / `Pitch` | number | `0` / `12` | Starting turn, and how far above the model the camera sits, in degrees. Pitch is kept between -80 and 80. |
+| `Distance` | number | `1.08` | Camera distance multiplier. Below 1 zooms in. |
+| `FieldOfView` | number | `32` | Camera field of view. |
 | `Clone` | boolean | `true` | `false` moves the instance itself into the card instead of a copy. |
 | `Caption` | string | — | Line over the bottom of the preview. |
-| `Ambient` / `LightColor` | Color3 | soft grey / warm white | Lighting. |
+| `Lighting` | string | `"Studio"` | A preset from `Library.ViewportLights`. |
+| `Ambient` / `LightColor` | Color3 | from the preset | Override the preset's lighting. |
+| `Glow` | boolean | `true` | The soft glow behind the model. |
+| `Shadow` | boolean | `true` | The ground shadow under the model. |
+| `Toolbar` | boolean | `true` | The buttons along the bottom right. |
 
 ### Handle
 
@@ -1384,8 +1439,50 @@ The model is copied into the card with its scripts and sounds stripped and every
 | `.Model` | The copy on show. |
 | `SetModel(value)` / `Set(value)` | Show something else. `nil` clears it. Yields while waiting for a character; returns `ok, err`. |
 | `Refresh()` | Copy the current source again. |
-| `SetSpin(enabled)` / `SetSpinSpeed(degrees)` / `SetAngle(degrees)` | Control the turn. |
+| `SetSpin(enabled)` / `SetSpinSpeed(degrees)` | Turn the spin on or off, and set its speed. |
+| `SetAngle(degrees)` / `SetPitch(degrees)` | Set the turn, and the camera height. |
+| `Zoom(factor)` | Multiply the camera distance. Below 1 zooms in, above 1 zooms out. The distance stays between 30% and 250% of the framed distance. |
+| `ResetView()` | Back to the starting angle, pitch and distance. |
+| `SetLighting(name)` | Switch to a preset. Returns `false` for an unknown name. |
+| `SetGlow(enabled)` / `SetShadow(enabled)` | Show or hide the glow or the shadow. |
+| `GetInfo()` | `{ Parts = count, Size = Vector3 }` of the model on show. |
 | `SetCaption(text)` / `SetTitle(text)` | Change the caption or the title. |
+
+---
+
+## Log
+
+> A monospace box of timestamped lines. New lines go at the bottom, and the box keeps following them until you scroll up.
+
+```lua
+local Log = Tab:Log({
+    Name = "Events",
+    Height = 160,
+    MaxLines = 200,
+    Timestamps = true,
+})
+
+Log:Log("Connected to the server")
+Log:Log("Lost a packet", "Warning")
+Log:Log("Failed to load", Color3.fromRGB(255, 90, 90))
+```
+
+### Properties
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Name` | string | `"Log"` | Title above the box. |
+| `Height` | number | `160` | Height of the box, 60 to 600. |
+| `MaxLines` | number | `200` | The oldest lines go once there are more. |
+| `Timestamps` | boolean | `true` | Put `[HH:MM:SS]` in front of each line. |
+
+### Handle
+
+| Member | Description |
+| --- | --- |
+| `Log(text, color)` | Add a line. `color` is a Color3, a theme key (`"Success"`, `"Warning"`, `"Error"`, `"Muted"`), or nil. |
+| `Clear()` | Remove every line. The Clear button does the same. |
+| `GetLines()` | The lines on show, timestamps included. |
 
 ---
 
@@ -1770,34 +1867,32 @@ Names resolve through the [Footagesus/Icons](https://github.com/Footagesus/Icons
 
 ## Fonts
 
-> Download a font once and use it everywhere.
+> Pick a font in the Configs tab, under Font. The window starts with `None`, the normal text, so each player picks a font for themselves. The choice is saved with the configs.
+
+The built-in fonts come with Roblox and need no download. `Tahoma8` is a pixel Tahoma at 8px, sharpest at sizes 8 and 16. `ValleySans` is downloaded once and kept in the workspace folder.
+
+| Name | Where it is listed |
+|---|---|
+| `Tahoma8`, `ValleySans` | `Library.FontPresets` (downloaded presets) |
+| `None` (the normal text), `SourceSans`, `Arial`, `Legacy`, `Garamond`, `Bodoni`, `Cartoon`, `Code`, `Highway`, `SciFi`, `Arcade`, `Fantasy`, `Antique`, `Bangers`, `FredokaOne` | `Library.BuiltinFonts` (built-in) |
 
 ```lua
-HawkTokaiLib:LoadFont({ Name = "ValleySans" })
-HawkTokaiLib:LoadFont({ Name = "Tahoma8" })   -- pixel Tahoma 8px: sharpest at sizes 8 and 16
-
-HawkTokaiLib:LoadFont({
-    Name = "MyFont",
-    Folder = "HawkTokaiLibFonts",
-    Weights = {
-        Regular = "https://example.com/MyFont-Regular.ttf",
-        Medium = "https://example.com/MyFont-Medium.ttf",
-        SemiBold = "https://example.com/MyFont-SemiBold.ttf",
-    },
-})
+HawkTokaiLib:SetFont("Tahoma8")         -- switch every font the window draws with
+HawkTokaiLib.DefaultFont = "None"      -- the font the window starts with; None is the normal text
+HawkTokaiLib.FontOrder                  -- the order of the list in Settings
 ```
 
-Call it before `CreateWindow`. The TTFs are saved to the folder on first run and reused after that. Needs `writefile`, `isfile` and `getcustomasset`; without them the default Builder Sans stays.
+To add your own font, put its URLs in `Library.FontPresets`, then add its name to `Library.FontOrder`:
 
-### Properties
+```lua
+HawkTokaiLib.FontPresets.MyFont = {
+    Regular = "https://example.com/MyFont-Regular.ttf",
+    Bold = "https://example.com/MyFont-Bold.ttf",
+}
+table.insert(HawkTokaiLib.FontOrder, "MyFont")
+```
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `Name` | string | — | Family name. `"ValleySans"` and `"Tahoma8"` use the built-in URLs. `Library.FontPresets` holds them, so you can change a URL or add a family. |
-| `Folder` | string | `"HawkTokaiLibFonts"` | Where the TTFs and family file are saved. |
-| `Weights` | table | preset | `Regular`, `Medium`, `SemiBold`, `Bold` → TTF URL. |
-
----
+`HawkTokaiLib:LoadFont({ Name = "MyFont" })` downloads the weights once and keeps them in the `HawkTokaiLibUI` folder. The faces live in `Library.Fonts` (Regular, Medium, Bold).
 
 ## Theme
 
