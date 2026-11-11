@@ -5124,34 +5124,30 @@ function Library:RequireKey(opts)
         Parent = panel,
     })
     label({
-        Size = UDim2.new(1, -28, 1, 0),
+        Size = UDim2.new(1, -58, 1, 0),
         Text = "Press Enter or Verify after you paste the key.",
         TextSize = 10,
         TextColor3 = Theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = footer,
     })
-    -- The egg button is an accent dot drawn with frames, so it shows even when the icon set cannot load.
+    -- The hidden button. It appears on the footer line once the secret phrase is typed.
     local eggButton = create("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -4, 0.5, 0),
-        Size = UDim2.fromOffset(20, 20),
+        Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(50, 18),
+        BackgroundColor3 = Theme.Accent,
         BackgroundTransparency = 1,
-        Text = "",
+        BorderSizePixel = 0,
+        Text = "Play",
+        TextColor3 = Theme.Background,
+        TextSize = 10,
+        TextTransparency = 1,
         AutoButtonColor = false,
         Visible = false,
         Parent = footer,
     })
-    local eggDot = create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(10, 10),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Parent = eggButton,
-    })
-    corner(eggDot, UDim.new(1, 0))
+    corner(eggButton, UDim.new(0, 6))
 
     -- Behaviour.
     local busy, finished, attempts, fetchingLink = false, false, 0, false
@@ -5225,7 +5221,12 @@ function Library:RequireKey(opts)
             done:Fire(key, keyInfo)
         end)
     end
+    -- Set when the typed text is the secret phrase. Such text is never sent to Junkie.
+    local eggMatched = false
     local function check()
+        if eggMatched then
+            return
+        end
         if finished or busy then
             return
         end
@@ -5281,19 +5282,24 @@ function Library:RequireKey(opts)
             end
         end)
     end
-    -- Typing the phrase shows the dot. The check also runs when the box loses focus, so
-    -- Enter or a click away is enough even if a text change was missed.
-    local function revealEgg()
-        if not egg or eggRevealed then
-            return
+    -- Whether the text is the secret phrase. The phrase is compared by hash, never stored.
+    local function isEggPhrase(text)
+        if not egg then
+            return false
         end
-        local typed = string.lower(string.match(box.Text, "^%s*(.-)%s*$") or "")
-        if Library._eggHash(typed) ~= egg.Hash then
+        return Library._eggHash(string.lower(string.match(text, "^%s*(.-)%s*$") or "")) == egg.Hash
+    end
+    -- Typing the phrase shows the Play button and tells the player on the status line.
+    -- Enter or a click away runs the same check, so the phrase never reaches Junkie.
+    local function revealEgg()
+        eggMatched = isEggPhrase(box.Text)
+        if not eggMatched or eggRevealed then
             return
         end
         eggRevealed = true
         eggButton.Visible = true
-        tween(eggDot, { BackgroundTransparency = 0 }, 0.5)
+        tween(eggButton, { BackgroundTransparency = 0, TextTransparency = 0 }, 0.5)
+        setStatus("Press Play.", "info")
         print("[HawkTokaiLib] Easter egg unlocked")
     end
     box:GetPropertyChangedSignal("Text"):Connect(revealEgg)
