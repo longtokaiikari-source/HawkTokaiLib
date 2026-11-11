@@ -240,7 +240,13 @@ local FONT_PRESETS = {
         Medium = "https://raw.githubusercontent.com/HelsinkiTypeStudio/valley-sans/main/fonts/ttf/ValleySans-Medium.ttf",
         SemiBold = "https://raw.githubusercontent.com/HelsinkiTypeStudio/valley-sans/main/fonts/ttf/ValleySans-SemiBold.ttf",
     },
+    -- A pixel-style Tahoma, 8px. It has one face, so Medium and Bold use it too.
+    Tahoma8 = {
+        Regular = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/fonts/fs-tahoma-8px.ttf",
+    },
 }
+
+Library.FontPresets = FONT_PRESETS
 
 local FONT_WEIGHTS = {
     Regular = { 400, Enum.FontWeight.Regular },
@@ -305,7 +311,7 @@ function Library:LoadFont(opts)
     end
     Library.Fonts.Regular = face("Regular", Library.Fonts.Regular)
     Library.Fonts.Medium = face("Medium", face("Regular", Library.Fonts.Medium))
-    Library.Fonts.Bold = face("SemiBold", face("Bold", Library.Fonts.Bold))
+    Library.Fonts.Bold = face("SemiBold", face("Bold", face("Regular", Library.Fonts.Bold)))
     return true
 end
 
@@ -6218,6 +6224,86 @@ end
 -- Where the player goes when the executor is below the minimum.
 Library.InviteLink = "https://discord.gg/deVVQEVybd"
 
+-- A small centred card with the brand mark, a title, a line of detail and a bar that
+-- sweeps while the work runs. Library._hideStatus removes it; the window hides it too.
+function Library._showStatusCard(title, detail)
+    Library._hideStatus()
+    local gui = create("ScreenGui", {
+        Name = "HawkTokaiLibStatus",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 24000,
+        Parent = defaultParent(),
+    })
+    local panel = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(300, 150),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        Parent = gui,
+    })
+    corner(panel, UDim.new(0, 14))
+    stroke(panel, Theme.Accent, 0.4)
+    Library._brandBadge(panel, 48, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 18) })
+    label({
+        Position = UDim2.new(0, 16, 0, 76),
+        Size = UDim2.new(1, -32, 0, 20),
+        Text = title,
+        TextSize = 15,
+        FontFace = Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = panel,
+    })
+    label({
+        Position = UDim2.new(0, 16, 0, 98),
+        Size = UDim2.new(1, -32, 0, 16),
+        Text = detail,
+        TextSize = 12,
+        FontFace = Fonts.Regular,
+        TextColor3 = Theme.Muted,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = panel,
+    })
+    local track = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 1, -22),
+        Size = UDim2.new(1, -48, 0, 4),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Parent = panel,
+    })
+    corner(track, UDim.new(1, 0))
+    local bar = create("Frame", {
+        Size = UDim2.new(0.3, 0, 1, 0),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Parent = track,
+    })
+    corner(bar, UDim.new(1, 0))
+    local running = true
+    task.spawn(function()
+        while running do
+            bar.Position = UDim2.fromScale(-0.3, 0)
+            tween(bar, { Position = UDim2.fromScale(1, 0) }, 1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            task.wait(1.2)
+        end
+    end)
+    Library._statusHide = function()
+        running = false
+        gui:Destroy()
+    end
+end
+
+function Library._hideStatus()
+    local hide = Library._statusHide
+    Library._statusHide = nil
+    if hide then
+        pcall(hide)
+    end
+end
+
 -- Executor check, run before the key gate: the UNC tests give a score. Below Fail the
 -- executor card is shown and loading stops. From Fail up to Warn the script loads with
 -- a banner. At Warn and above it loads normally. UNC = false skips the check. If the
@@ -6231,7 +6317,9 @@ function Library:CheckExecutor(opts)
     local minimum = tonumber(opts.Fail) or 70
     local warnAt = tonumber(opts.Warn) or 80
     if Library._unc == nil then
+        Library._showStatusCard("Checking your executor", "Running the UNC tests.")
         local ok, passes, fails = pcall(Library._runUNC)
+        Library._hideStatus()
         if ok then
             local total = passes + fails
             Library._unc = { score = total > 0 and math.round(passes / total * 100) or 0, passes = passes, fails = fails }
@@ -6418,13 +6506,16 @@ function Library:RunProtected(opts)
     sdk.script_id = junkie.ScriptId
     Library._protected = { Discord = opts.Discord, EasterEgg = opts.EasterEgg }
     getgenv().SCRIPT_KEY = key
+    Library._showStatusCard("Loading", "Fetching the protected script.")
     local okLoad, err = pcall(sdk.load_script)
+    Library._hideStatus()
     if not okLoad then
         warn("[HawkTokaiLib] The protected script failed to load: " .. tostring(err))
     end
 end
 
 function Library.Window(_, opts)
+    Library._hideStatus()
     opts = normalize(opts, { Name = "Title", LoadingSubtitle = "Subtitle", ToggleUIKeybind = "Keybind" })
 
     if type(opts.Keybind) == "string" then
@@ -15247,6 +15338,18 @@ function Window:_homeProfile(list, opts, order)
     applyIcon(bustPlaceholder, "user")
     self:_trackAvatar(bust, bustPlaceholder)
 
+    -- Five quick taps on the avatar show the hidden egg input (see Window:_eggTap).
+    local tapArea = create("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        Parent = bust,
+    })
+    tapArea.MouseButton1Click:Connect(function()
+        self:_eggTap()
+    end)
+
     local textWidth = UDim2.new(1, -190, 0, 0)
     label({
         Position = UDim2.fromOffset(22, 20),
@@ -16837,7 +16940,22 @@ function Window:_homeClock(parent, opts, order)
     return card
 end
 
--- The hidden egg on Home: a small Code box under the profile. Typing the secret phrase
+-- Five quick taps on the Home avatar show the egg input. The five taps must come within four seconds.
+function Window:_eggTap()
+    local now = os.clock()
+    if not self._eggTapStart or now - self._eggTapStart > 4 then
+        self._eggTapStart = now
+        self._eggTaps = 0
+    end
+    self._eggTaps = (self._eggTaps or 0) + 1
+    if self._eggTaps >= 5 and self._eggReveal then
+        self._eggTaps = 0
+        self._eggTapStart = nil
+        self._eggReveal()
+    end
+end
+
+-- The hidden egg on Home: a see-through input at the bottom of Home. Typing the secret phrase
 -- there shows the Play button. The phrase is compared by hash, so it is not in the code.
 -- The picture and the sound download into the workspace folder when the window opens.
 function Window:_homeEgg(parent, opts, order)
@@ -16845,28 +16963,28 @@ function Window:_homeEgg(parent, opts, order)
     if not egg then
         return nil
     end
-    local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "Code", 1)
+    -- No card, no caption, no border or fill: the box sits at the bottom right of Home.
     local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 34),
+        Size = UDim2.new(1, 0, 0, 26),
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
-        Parent = card,
+        LayoutOrder = order,
+        Visible = false,
+        Parent = parent,
     })
     local field = create("TextBox", {
-        Size = UDim2.new(1, -92, 1, 0),
-        BackgroundColor3 = Theme.Surface2,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -92, 0, 2),
+        Size = UDim2.new(0, 120, 1, -4),
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
-        PlaceholderText = "Enter code",
-        PlaceholderColor3 = Theme.Muted,
-        TextColor3 = Theme.Text,
-        TextSize = 12,
+        PlaceholderText = "",
+        TextColor3 = Theme.Muted,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
         Parent = row,
     })
-    corner(field, UDim.new(0, 8))
-    stroke(field)
     local play = create("TextButton", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, 0, 0, 0),
@@ -16876,13 +16994,18 @@ function Window:_homeEgg(parent, opts, order)
         BorderSizePixel = 0,
         Text = "Play",
         TextColor3 = Theme.Background,
-        TextSize = 12,
+        TextSize = 11,
         TextTransparency = 1,
         AutoButtonColor = false,
         Visible = false,
         Parent = row,
     })
     corner(play, UDim.new(0, 8))
+
+    self._eggReveal = function()
+        row.Visible = true
+        field:CaptureFocus()
+    end
 
     -- The picture and the sound download now, so Play starts at once. Errors go to the console.
     local state = { picture = nil, sound = nil, downloading = 0, error = nil, revealed = false, playing = false }
@@ -16945,7 +17068,7 @@ function Window:_homeEgg(parent, opts, order)
             end
         end)
     end)
-    return card
+    return row
 end
 
 function Window:_buildHome(opts)
@@ -16987,7 +17110,7 @@ function Window:_buildHome(opts)
     local list = overview.List
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
-    self:_homeEgg(list, opts, 2)
+    self:_homeEgg(list, opts, 9)
     local refreshStats, resetStats = self:_homeStats(list, opts, 3, tab)
     self:_homeClock(list, opts, 4)
 

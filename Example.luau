@@ -34,7 +34,7 @@ end
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
-Library:LoadFont({ Name = "ValleySans" }) -- downloaded once and used everywhere
+Library:LoadFont({ Name = "Tahoma8" }) -- pixel Tahoma 8px, downloaded once and used everywhere
 -- Library:SetDefaultTheme("Nebula") -- any preset name or a colour table; a theme the player picks wins
 
 --------------------------------------------------------------------------------

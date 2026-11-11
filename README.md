@@ -308,7 +308,7 @@ Saved keys: `Save` writes the key as plain text to `File`, and each run checks i
 
 ### Protected script
 
-`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score.
+`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite, and a small card shows its progress while it runs, and while the protected script loads. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score.
 
 ```lua
 -- Loader.luau, run in the executor
@@ -330,11 +330,11 @@ Runtime variables exist only inside the protected script, not in the loader or i
 
 ### Easter egg
 
-The egg lives on the Home tab, under the profile. Home gets a small Code box. Type the secret phrase there and a Play button appears. Pressing Play covers the screen with the picture, which fades in while the sound plays, fades out near the end, and then kicks the player with a message. Nothing underneath can be clicked or pressed while it plays. The Escape key still opens the Roblox menu.
+The egg lives on the Home tab. The input is hidden. Tap the avatar on Home five times within four seconds, and the input shows at the bottom right, see-through, with no caption or border. Type the secret phrase there, and a Play button appears. Pressing Play covers the screen with the picture, which fades in while the sound plays, fades out near the end, and then kicks the player with a message. Nothing underneath can be clicked or pressed while it plays. The Escape key still opens the Roblox menu.
 
 The picture and the sound download into the workspace folder (`HawkTokaiLibUI` by default) when the window opens, and play from there with `getcustomasset`. The executor needs `writefile`, `isfile`, `getcustomasset` and `game:HttpGet`. The egg runs as long as the sound. If the sound never loads, the console says so after 15 seconds and the player is not kicked.
 
-The Code box shows only when an egg is set: in the Loader's `RunProtected` options (`EasterEgg = {...}`) or in `Home.EasterEgg`. When both are set, the Loader wins.
+The input shows only when an egg is set: in the Loader's `RunProtected` options (`EasterEgg = {...}`) or in `Home.EasterEgg`. When both are set, the Loader wins.
 
 ```lua
 EasterEgg = {
@@ -1774,6 +1774,7 @@ Names resolve through the [Footagesus/Icons](https://github.com/Footagesus/Icons
 
 ```lua
 HawkTokaiLib:LoadFont({ Name = "ValleySans" })
+HawkTokaiLib:LoadFont({ Name = "Tahoma8" })   -- pixel Tahoma 8px: sharpest at sizes 8 and 16
 
 HawkTokaiLib:LoadFont({
     Name = "MyFont",
@@ -1792,7 +1793,7 @@ Call it before `CreateWindow`. The TTFs are saved to the folder on first run and
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `Name` | string | — | Family name. `"ValleySans"` uses the built-in URLs. |
+| `Name` | string | — | Family name. `"ValleySans"` and `"Tahoma8"` use the built-in URLs. `Library.FontPresets` holds them, so you can change a URL or add a family. |
 | `Folder` | string | `"HawkTokaiLibFonts"` | Where the TTFs and family file are saved. |
 | `Weights` | table | preset | `Regular`, `Medium`, `SemiBold`, `Bold` → TTF URL. |
 
