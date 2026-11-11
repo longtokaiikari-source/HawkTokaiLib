@@ -330,25 +330,23 @@ Runtime variables exist only inside the protected script, not in the loader or i
 
 ### Easter egg
 
-The egg lives in the default UI, on the Home tab. Home gets a small Code box at the bottom. Type the secret phrase there and a Play button appears. Pressing Play covers the screen with a video that fades in, plays with its sound, fades out at the end, and then kicks the player with a message. Nothing underneath can be clicked or pressed while it plays. The Escape key still opens the Roblox menu.
+The egg lives on the Home tab, under the profile. Home gets a small Code box. Type the secret phrase there and a Play button appears. Pressing Play covers the screen with the picture, which fades in while the sound plays, fades out near the end, and then kicks the player with a message. Nothing underneath can be clicked or pressed while it plays. The Escape key still opens the Roblox menu.
 
-The video downloads into the workspace folder (`HawkTokaiLibUI` by default) when the window opens, and it plays from there with `getcustomasset`. The executor needs `writefile`, `isfile`, `getcustomasset` and `game:HttpGet`. Not every executor plays an mp4 this way. If the video never appears, the console says so after 15 seconds and the player is not kicked.
+The picture and the sound download into the workspace folder (`HawkTokaiLibUI` by default) when the window opens, and play from there with `getcustomasset`. The executor needs `writefile`, `isfile`, `getcustomasset` and `game:HttpGet`. The egg runs as long as the sound. If the sound never loads, the console says so after 15 seconds and the player is not kicked.
 
 The Code box shows only when an egg is set: in the Loader's `RunProtected` options (`EasterEgg = {...}`) or in `Home.EasterEgg`. When both are set, the Loader wins.
 
-
 ```lua
-Home = {
-    EasterEgg = {
-        Hash = 0,                                                          -- hash of the secret phrase, not the phrase
-        VideoUrl = "https://raw.githubusercontent.com/.../assets/egg.mp4", -- a direct link to the mp4
-        Volume = 10,
-        Kick = "The message the player sees when the video ends.",
-    },
+EasterEgg = {
+    Hash = 0,                                                        -- hash of the secret phrase, not the phrase
+    Image = "https://raw.githubusercontent.com/.../assets/egg.jpg",  -- a direct link to the picture
+    Sound = "https://raw.githubusercontent.com/.../assets/egg.mp3",  -- a direct link to the sound
+    Volume = 10,
+    Kick = "The message the player sees when the sound ends.",
 },
 ```
 
-Put the mp4 in the repo at `assets/egg.mp4`, or host it anywhere that gives a direct link. The phrase is stored as a hash, so it does not appear in the code. To get the hash of your phrase, run:
+Put the picture and the sound in the repo at `assets/egg.jpg` and `assets/egg.mp3`, or host them anywhere that gives a direct link. The phrase is stored as a hash, so it does not appear in the code. To get the hash of your phrase, run:
 
 ```lua
 local function hash(text)

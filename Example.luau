@@ -61,7 +61,8 @@ local Window = Library:CreateWindow({
         -- The hidden egg: a Code box at the bottom of Home. Typing the secret phrase shows Play.
         EasterEgg = {
             Hash = 62829308,                                   -- hash of the secret phrase, not the phrase
-            VideoUrl = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/egg.mp4",
+            Image = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/egg.jpg",   -- the picture, downloaded into the workspace
+            Sound = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/egg.mp3",   -- the sound, downloaded into the workspace
             Volume = 10,
             Kick = "The taxman summoned the blue lobster of Longtokai, and it devoured you. . .",
         },

@@ -4537,12 +4537,12 @@ function Library._eggHash(text)
     return h
 end
 
--- The Easter egg video, downloaded once into the workspace folder and loaded from
--- there with getcustomasset. The file name carries a hash of the URL, so a new URL
--- downloads again. Errors go back to the caller, which warns and moves on.
-function Library._prepareEggVideo(url, folder)
+-- The Easter egg picture or sound, downloaded once into the workspace folder and loaded
+-- from there with getcustomasset. The file name carries a hash of the URL and keeps the
+-- URL's extension, so a new URL downloads again. Errors go back to the caller.
+function Library._prepareEggFile(url, folder)
     if type(url) ~= "string" or url == "" then
-        error("EasterEgg.VideoUrl is empty")
+        error("the egg needs a file url")
     end
     if typeof(writefile) ~= "function" or typeof(isfile) ~= "function" or typeof(getcustomasset) ~= "function" then
         error("this executor cannot save files or load custom assets")
@@ -4554,28 +4554,29 @@ function Library._prepareEggVideo(url, folder)
             pcall(makefolder, current)
         end
     end
-    local path = folder .. "/egg_" .. tostring(Library._eggHash(url)) .. ".mp4"
+    local extension = string.match(url, "%.(%w+)$") or "bin"
+    local path = folder .. "/egg_" .. tostring(Library._eggHash(url)) .. "." .. extension
     if not isfile(path) then
         local body = game:HttpGet(url)
         if type(body) ~= "string" or #body < 1024 then
-            error("the video download came back empty")
+            error("the download came back empty: " .. url)
         end
         writefile(path, body)
     end
     return getcustomasset(path)
 end
 
--- The Easter egg: a full-screen video that fades in and out with its sound, then
--- kicks the player with a message. Nothing underneath can be clicked or pressed
--- while it plays. The Escape key still opens the Roblox menu.
-function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
+-- The Easter egg: a full-screen picture that fades in and out, with its sound, then kicks
+-- the player with a message. Nothing underneath can be clicked or pressed while it plays.
+-- The Escape key still opens the Roblox menu.
+function Library._playEasterEgg(picture, sound, volume, onFinish, kickMessage)
     local function finishedWith()
         if type(onFinish) == "function" then
             pcall(onFinish)
         end
     end
-    if type(videoId) ~= "string" or videoId == "" or string.find(videoId, "YOUR_", 1, true) then
-        warn("[HawkTokaiLib] The Easter egg has no playable video.")
+    if type(picture) ~= "string" or picture == "" or type(sound) ~= "string" or sound == "" then
+        warn("[HawkTokaiLib] The Easter egg needs a picture and a sound.")
         finishedWith()
         return
     end
@@ -4600,22 +4601,15 @@ function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
         Active = true,
         Parent = gui,
     })
-    local video = create("VideoFrame", {
+    create("ImageLabel", {
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
-        Video = videoId,
-        Looped = false,
+        Image = picture,
+        ScaleType = Enum.ScaleType.Fit,
         ZIndex = 2,
         Parent = cover,
     })
-    if not pcall(function()
-        video.Volume = volume or 10
-    end) then
-        pcall(function()
-            video.Volume = 1
-        end)
-    end
-    -- Black over the video: it fades away to show the video, and comes back at the end.
+    -- Black over the picture: it fades away to show the picture, and comes back at the end.
     local shade = create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(0, 0, 0),
@@ -4624,6 +4618,11 @@ function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
         ZIndex = 3,
         Parent = cover,
     })
+    local track = Instance.new("Sound")
+    track.Name = "HawkTokaiLibEgg"
+    track.SoundId = sound
+    track.Volume = tonumber(volume) or 10
+    track.Parent = game:GetService("SoundService")
 
     -- Keys and mouse buttons are sunk, so the game does not react to them.
     local inputs = { Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2 }
@@ -4659,44 +4658,45 @@ function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
             end)
         end
         pcall(function()
-            video:Pause()
+            track:Stop()
+        end)
+        pcall(function()
+            track:Destroy()
         end)
         gui:Destroy()
     end
 
     task.spawn(function()
-        -- Wait for the video to load. Without it there is nothing to show, so stop quietly.
+        -- Wait for the sound to load: the egg is timed by it. Without it, stop quietly.
         local waited = 0
-        while not video.IsLoaded and waited < 15 do
+        while not track.IsLoaded and waited < 15 do
             task.wait(0.1)
             waited += 0.1
         end
-        if not video.IsLoaded then
-            warn("[HawkTokaiLib] The Easter egg video did not load.")
+        if not track.IsLoaded then
+            warn("[HawkTokaiLib] The Easter egg sound did not load.")
             cleanup()
             finishedWith()
             return
         end
-        pcall(function()
-            video:Play()
-        end)
+        track:Play()
         tween(shade, { BackgroundTransparency = 1 }, 1)
 
         local ended = false
         pcall(function()
-            video.Ended:Connect(function()
+            track.Ended:Connect(function()
                 ended = true
             end)
         end)
-        local length = video.TimeLength
+        local length = track.TimeLength
         local fadingOut = false
         local started = os.clock()
         while not ended and not finished do
             task.wait(0.05)
-            if video.TimeLength > 0 then
-                length = video.TimeLength
+            if track.TimeLength > 0 then
+                length = track.TimeLength
             end
-            local position = video.TimePosition
+            local position = track.TimePosition
             if not fadingOut and length > 0 and position >= length - 1.2 then
                 fadingOut = true
                 tween(shade, { BackgroundTransparency = 0 }, 1)
@@ -4704,7 +4704,7 @@ function Library._playEasterEgg(videoId, volume, onFinish, kickMessage)
             if length > 0 and position >= length - 0.05 then
                 ended = true
             end
-            if os.clock() - started > length + 15 then
+            if os.clock() - started > (length > 0 and length or 10) + 15 then
                 ended = true
             end
         end
@@ -16837,9 +16837,9 @@ function Window:_homeClock(parent, opts, order)
     return card
 end
 
--- The hidden egg on Home: a small Code box at the bottom of the page. Typing the secret
--- phrase there shows the Play button. The phrase is compared by hash, so it is not in the code.
--- The video downloads into the workspace folder when the window opens, and Play runs it.
+-- The hidden egg on Home: a small Code box under the profile. Typing the secret phrase
+-- there shows the Play button. The phrase is compared by hash, so it is not in the code.
+-- The picture and the sound download into the workspace folder when the window opens.
 function Window:_homeEgg(parent, opts, order)
     local egg = type(opts.EasterEgg) == "table" and tonumber(opts.EasterEgg.Hash) and opts.EasterEgg or nil
     if not egg then
@@ -16884,21 +16884,24 @@ function Window:_homeEgg(parent, opts, order)
     })
     corner(play, UDim.new(0, 8))
 
-    -- The video downloads now, so Play starts at once. Errors only go to the console.
-    local state = { asset = nil, downloading = false, error = nil, revealed = false, playing = false }
-    if type(egg.VideoUrl) == "string" and egg.VideoUrl ~= "" then
-        state.downloading = true
-        local folder = self.ConfigFolder or "HawkTokaiLibUI"
-        task.spawn(function()
-            local ok, result = pcall(Library._prepareEggVideo, egg.VideoUrl, folder)
-            state.downloading = false
-            if ok then
-                state.asset = result
-            else
-                state.error = tostring(result)
-                warn("[HawkTokaiLib] The egg video is not ready: " .. state.error)
-            end
-        end)
+    -- The picture and the sound download now, so Play starts at once. Errors go to the console.
+    local state = { picture = nil, sound = nil, downloading = 0, error = nil, revealed = false, playing = false }
+    local folder = self.ConfigFolder or "HawkTokaiLibUI"
+    for _, kind in ipairs({ "Image", "Sound" }) do
+        local url = egg[kind]
+        if type(url) == "string" and url ~= "" then
+            state.downloading += 1
+            task.spawn(function()
+                local ok, result = pcall(Library._prepareEggFile, url, folder)
+                state.downloading -= 1
+                if ok then
+                    state[kind == "Image" and "picture" or "sound"] = result
+                else
+                    state.error = tostring(result)
+                    warn("[HawkTokaiLib] An egg file is not ready: " .. state.error)
+                end
+            end)
+        end
     end
 
     local function reveal()
@@ -16924,16 +16927,16 @@ function Window:_homeEgg(parent, opts, order)
         state.playing = true
         task.spawn(function()
             local waited = 0
-            while state.downloading and waited < 20 do
+            while state.downloading > 0 and waited < 20 do
                 task.wait(0.2)
                 waited += 0.2
             end
-            if not state.asset then
+            if not state.picture or not state.sound then
                 warn("[HawkTokaiLib] The egg is not ready: " .. tostring(state.error or "the download did not finish"))
                 state.playing = false
                 return
             end
-            local ok, err = pcall(Library._playEasterEgg, state.asset, egg.Volume, function()
+            local ok, err = pcall(Library._playEasterEgg, state.picture, state.sound, egg.Volume, function()
                 state.playing = false
             end, egg.Kick)
             if not ok then
