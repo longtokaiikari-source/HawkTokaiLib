@@ -109,7 +109,7 @@ local Window = HawkTokaiLib:CreateWindow({
     },
     Home = {
         Tier = "Free",
-        Discord = "dsc.gg/myhub",
+        Discord = "https://discord.gg/deVVQEVybd",
         Website = "myhub.com",
     },
     Parent = game:GetService("CoreGui"),
@@ -291,6 +291,8 @@ print(info.JD_TIER_NAME, info.is_premium)
 | `Link` | string | — | Adds a Get key button that copies this link. |
 | `Junkie` | table | — | `Service` and `Identifier` are required. `Provider` is needed for Get key. `ScriptId` and `Sdk` are optional. |
 | `UNC` | table or `false` | `{ Fail = 70, Warn = 80 }` | The executor check, run before the key gate. Below `Fail` the player sees a card with the Discord link and loading stops. From `Fail` up to `Warn` the script loads with a banner. `false` skips the check. |
+| `Discord` | string | — | Invite link shown on Home. Wins over the protected script's `Home.Discord`. |
+| `EasterEgg` | table | — | The hidden egg on Home. Wins over the protected script's `Home.EasterEgg`. See Easter egg. |
 | `Save` | boolean | `true` | Remember an accepted key in `File`. |
 | `File` | string | `"HawkTokaiLibUI/key.txt"` | Where the key is saved. |
 
@@ -332,7 +334,8 @@ The egg lives in the default UI, on the Home tab. Home gets a small Code box at 
 
 The video downloads into the workspace folder (`HawkTokaiLibUI` by default) when the window opens, and it plays from there with `getcustomasset`. The executor needs `writefile`, `isfile`, `getcustomasset` and `game:HttpGet`. Not every executor plays an mp4 this way. If the video never appears, the console says so after 15 seconds and the player is not kicked.
 
-The Code box shows only when `Home.EasterEgg` is set:
+The Code box shows only when an egg is set: in the Loader's `RunProtected` options (`EasterEgg = {...}`) or in `Home.EasterEgg`. When both are set, the Loader wins.
+
 
 ```lua
 Home = {
@@ -374,7 +377,7 @@ Home = {
     Expiry = os.time() + 3600 * 12,
     Stats = { "Players", "Friends", "Execs", "Session", "FPS", "Ping" },
     SupportedExecutors = { "Potassium", "Wave", "Volt" },
-    Discord = "dsc.gg/myhub",
+    Discord = "https://discord.gg/deVVQEVybd",
     Website = "myhub.com",
     Links = {
         { Icon = "youtube", Title = "Showcase", Text = "youtube.com/@myhub", Button = "Copy Link" },

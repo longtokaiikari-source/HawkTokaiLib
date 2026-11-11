@@ -26,7 +26,7 @@ local Window = HawkTokaiLib:CreateWindow({
     LoadingSubtitle = "by Me",
     ToggleUIKeybind = "RightControl",      -- hides and shows the window
     ConfigurationSaving = { Enabled = true, FolderName = "MyHub" },
-    Home = { Discord = "dsc.gg/myhub" },   -- built-in first tab; false removes it
+    Home = { Discord = "https://discord.gg/deVVQEVybd" },   -- built-in first tab; false removes it
 })
 
 local Main = Window:CreateTab({ Name = "Main", Icon = "swords" })     -- Icon: any lucide name
@@ -134,7 +134,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 
 - Overlays: the watermark and the keybind list can be dragged; their place and on/off choice are saved beside the configs. Both switches are in the Configs tab, group Overlays.
 
-- Easter egg: `Home = { EasterEgg = { Hash, VideoUrl, Volume, Kick } }`. Home gets a Code box; the secret phrase shows a Play button. Play runs the mp4 at `VideoUrl` full screen (downloaded into the workspace folder), then the player is kicked.
+- Easter egg: `RunProtected({ EasterEgg = {...} })` or `Home.EasterEgg`. Home gets a Code box under the profile; the secret phrase shows a Play button. Play runs the mp4 at `VideoUrl` full screen (downloaded into the workspace folder), then the player is kicked. The Loader's `Discord` and `EasterEgg` win over the protected script's Home options.
 
 ## Theme
 

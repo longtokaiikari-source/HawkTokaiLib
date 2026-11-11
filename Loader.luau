@@ -5,6 +5,13 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longt
 Library:RunProtected({
     Title = "Key required",
     UNC = { Fail = 70, Warn = 80 },   -- below 70 stops the load; 70 to 79 loads with a banner
+    Discord = "https://discord.gg/deVVQEVybd",
+    EasterEgg = {
+        Hash = 62829308,                                   -- hash of the secret phrase, not the phrase
+        VideoUrl = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/egg.mp4",
+        Volume = 10,
+        Kick = "The taxman summoned the blue lobster of Longtokai, and it devoured you. . .",
+    },
     Junkie = {
         Service = 89502,
         Identifier = "1030951",

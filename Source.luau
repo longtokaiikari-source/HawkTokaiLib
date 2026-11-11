@@ -6416,6 +6416,7 @@ function Library:RunProtected(opts)
         return
     end
     sdk.script_id = junkie.ScriptId
+    Library._protected = { Discord = opts.Discord, EasterEgg = opts.EasterEgg }
     getgenv().SCRIPT_KEY = key
     local okLoad, err = pcall(sdk.load_script)
     if not okLoad then
@@ -16945,6 +16946,22 @@ function Window:_homeEgg(parent, opts, order)
 end
 
 function Window:_buildHome(opts)
+    -- Values from the Loader (RunProtected) win over the protected script's Home options,
+    -- so the Discord link and the egg follow the Loader even when the protected copy is older.
+    local merged = {}
+    for key, value in pairs(opts) do
+        merged[key] = value
+    end
+    local protected = Library._protected
+    if protected then
+        if protected.Discord ~= nil then
+            merged.Discord = protected.Discord
+        end
+        if protected.EasterEgg ~= nil then
+            merged.EasterEgg = protected.EasterEgg
+        end
+    end
+    opts = merged
     self._hideName = opts.HideName == true
     self._hideAvatar = opts.HideAvatar == true
     self:_renderIdentity(true)
@@ -16967,16 +16984,16 @@ function Window:_buildHome(opts)
     local list = overview.List
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
-    local refreshStats, resetStats = self:_homeStats(list, opts, 2, tab)
-    self:_homeClock(list, opts, 3)
-    self:_homeEgg(list, opts, 5)
+    self:_homeEgg(list, opts, 2)
+    local refreshStats, resetStats = self:_homeStats(list, opts, 3, tab)
+    self:_homeClock(list, opts, 4)
 
     -- Server and links side by side, stacked when narrow.
     local split = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 4,
+        LayoutOrder = 5,
         Parent = list,
     })
     local splitLayout = create("UIListLayout", {
