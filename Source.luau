@@ -5131,26 +5131,27 @@ function Library:RequireKey(opts)
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = footer,
     })
+    -- The egg button is an accent dot drawn with frames, so it shows even when the icon set cannot load.
     local eggButton = create("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(18, 18),
+        Position = UDim2.new(1, -4, 0.5, 0),
+        Size = UDim2.fromOffset(20, 20),
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false,
         Visible = false,
         Parent = footer,
     })
-    local eggIcon = create("ImageLabel", {
+    local eggDot = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(14, 14),
+        Size = UDim2.fromOffset(10, 10),
+        BackgroundColor3 = Theme.Accent,
         BackgroundTransparency = 1,
-        ImageColor3 = Theme.Accent,
-        ImageTransparency = 1,
+        BorderSizePixel = 0,
         Parent = eggButton,
     })
-    applyIcon(eggIcon, "play")
+    corner(eggDot, UDim.new(1, 0))
 
     -- Behaviour.
     local busy, finished, attempts, fetchingLink = false, false, 0, false
@@ -5280,17 +5281,23 @@ function Library:RequireKey(opts)
             end
         end)
     end
-    box:GetPropertyChangedSignal("Text"):Connect(function()
+    -- Typing the phrase shows the dot. The check also runs when the box loses focus, so
+    -- Enter or a click away is enough even if a text change was missed.
+    local function revealEgg()
         if not egg or eggRevealed then
             return
         end
-        local typed = string.lower(box.Text:match("^%s*(.-)%s*$"))
-        if Library._eggHash(typed) == egg.Hash then
-            eggRevealed = true
-            eggButton.Visible = true
-            tween(eggIcon, { ImageTransparency = 0 }, 0.5)
+        local typed = string.lower(string.match(box.Text, "^%s*(.-)%s*$") or "")
+        if Library._eggHash(typed) ~= egg.Hash then
+            return
         end
-    end)
+        eggRevealed = true
+        eggButton.Visible = true
+        tween(eggDot, { BackgroundTransparency = 0 }, 0.5)
+        print("[HawkTokaiLib] Easter egg unlocked")
+    end
+    box:GetPropertyChangedSignal("Text"):Connect(revealEgg)
+    box.FocusLost:Connect(revealEgg)
     eggButton.MouseButton1Click:Connect(function()
         if not egg or eggPlaying then
             return
