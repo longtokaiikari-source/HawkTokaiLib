@@ -5124,30 +5124,13 @@ function Library:RequireKey(opts)
         Parent = panel,
     })
     label({
-        Size = UDim2.new(1, -58, 1, 0),
+        Size = UDim2.new(1, -28, 1, 0),
         Text = "Press Enter or Verify after you paste the key.",
         TextSize = 10,
         TextColor3 = Theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = footer,
     })
-    -- The hidden button. It appears on the footer line once the secret phrase is typed.
-    local eggButton = create("TextButton", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(50, 18),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Text = "Play",
-        TextColor3 = Theme.Background,
-        TextSize = 10,
-        TextTransparency = 1,
-        AutoButtonColor = false,
-        Visible = false,
-        Parent = footer,
-    })
-    corner(eggButton, UDim.new(0, 6))
 
     -- Behaviour.
     local busy, finished, attempts, fetchingLink = false, false, 0, false
@@ -5221,12 +5204,7 @@ function Library:RequireKey(opts)
             done:Fire(key, keyInfo)
         end)
     end
-    -- Set when the typed text is the secret phrase. Such text is never sent to Junkie.
-    local eggMatched = false
     local function check()
-        if eggMatched then
-            return
-        end
         if finished or busy then
             return
         end
@@ -5263,76 +5241,6 @@ function Library:RequireKey(opts)
     end
 
     verify.MouseButton1Click:Connect(check)
-    -- The Easter egg: typing the secret phrase reveals a small button in the footer.
-    -- The video is downloaded into the workspace folder while this box is open, so the
-    -- button plays it at once. Pressing the button before the download ends waits for it.
-    local egg = type(opts.EasterEgg) == "table" and tonumber(opts.EasterEgg.Hash) and opts.EasterEgg or nil
-    local eggRevealed, eggPlaying = false, false
-    local eggVideo = { asset = nil, downloading = false, error = nil }
-    if egg and type(egg.VideoUrl) == "string" and egg.VideoUrl ~= "" then
-        eggVideo.downloading = true
-        task.spawn(function()
-            local ok, result = pcall(Library._prepareEggVideo, egg.VideoUrl, folder)
-            eggVideo.downloading = false
-            if ok then
-                eggVideo.asset = result
-            else
-                eggVideo.error = tostring(result)
-                warn("[HawkTokaiLib] The Easter egg video is not ready: " .. eggVideo.error)
-            end
-        end)
-    end
-    -- Whether the text is the secret phrase. The phrase is compared by hash, never stored.
-    local function isEggPhrase(text)
-        if not egg then
-            return false
-        end
-        return Library._eggHash(string.lower(string.match(text, "^%s*(.-)%s*$") or "")) == egg.Hash
-    end
-    -- Typing the phrase shows the Play button and tells the player on the status line.
-    -- Enter or a click away runs the same check, so the phrase never reaches Junkie.
-    local function revealEgg()
-        eggMatched = isEggPhrase(box.Text)
-        if not eggMatched or eggRevealed then
-            return
-        end
-        eggRevealed = true
-        eggButton.Visible = true
-        tween(eggButton, { BackgroundTransparency = 0, TextTransparency = 0 }, 0.5)
-        setStatus("Press Play.", "info")
-        print("[HawkTokaiLib] Easter egg unlocked")
-    end
-    box:GetPropertyChangedSignal("Text"):Connect(revealEgg)
-    box.FocusLost:Connect(revealEgg)
-    eggButton.MouseButton1Click:Connect(function()
-        if not egg or eggPlaying then
-            return
-        end
-        eggPlaying = true
-        box:ReleaseFocus()
-        task.spawn(function()
-            local waited = 0
-            while eggVideo.downloading and waited < 20 do
-                task.wait(0.2)
-                waited += 0.2
-            end
-            if not eggVideo.asset then
-                warn("[HawkTokaiLib] The Easter egg cannot play yet: " .. tostring(eggVideo.error or "the download is still running"))
-                eggPlaying = false
-                return
-            end
-            gui.Enabled = false
-            local ok, err = pcall(Library._playEasterEgg, eggVideo.asset, egg.Volume, function()
-                eggPlaying = false
-                gui.Enabled = true
-            end, egg.Kick)
-            if not ok then
-                eggPlaying = false
-                gui.Enabled = true
-                warn("[HawkTokaiLib] The Easter egg failed: " .. tostring(err))
-            end
-        end)
-    end)
     clear.MouseButton1Click:Connect(function()
         box.Text = ""
         box:CaptureFocus()
@@ -16928,6 +16836,114 @@ function Window:_homeClock(parent, opts, order)
     return card
 end
 
+-- The hidden egg on Home: a small Code box at the bottom of the page. Typing the secret
+-- phrase there shows the Play button. The phrase is compared by hash, so it is not in the code.
+-- The video downloads into the workspace folder when the window opens, and Play runs it.
+function Window:_homeEgg(parent, opts, order)
+    local egg = type(opts.EasterEgg) == "table" and tonumber(opts.EasterEgg.Hash) and opts.EasterEgg or nil
+    if not egg then
+        return nil
+    end
+    local card = self:_homeCard(parent, order)
+    self:_homeCaption(card, "Code", 1)
+    local row = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 34),
+        BackgroundTransparency = 1,
+        LayoutOrder = 2,
+        Parent = card,
+    })
+    local field = create("TextBox", {
+        Size = UDim2.new(1, -92, 1, 0),
+        BackgroundColor3 = Theme.Surface2,
+        BorderSizePixel = 0,
+        Text = "",
+        PlaceholderText = "Enter code",
+        PlaceholderColor3 = Theme.Muted,
+        TextColor3 = Theme.Text,
+        TextSize = 12,
+        ClearTextOnFocus = false,
+        Parent = row,
+    })
+    corner(field, UDim.new(0, 8))
+    stroke(field)
+    local play = create("TextButton", {
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(0, 82, 1, 0),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Text = "Play",
+        TextColor3 = Theme.Background,
+        TextSize = 12,
+        TextTransparency = 1,
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = row,
+    })
+    corner(play, UDim.new(0, 8))
+
+    -- The video downloads now, so Play starts at once. Errors only go to the console.
+    local state = { asset = nil, downloading = false, error = nil, revealed = false, playing = false }
+    if type(egg.VideoUrl) == "string" and egg.VideoUrl ~= "" then
+        state.downloading = true
+        local folder = self.ConfigFolder or "HawkTokaiLibUI"
+        task.spawn(function()
+            local ok, result = pcall(Library._prepareEggVideo, egg.VideoUrl, folder)
+            state.downloading = false
+            if ok then
+                state.asset = result
+            else
+                state.error = tostring(result)
+                warn("[HawkTokaiLib] The egg video is not ready: " .. state.error)
+            end
+        end)
+    end
+
+    local function reveal()
+        if state.revealed then
+            return
+        end
+        local typed = string.lower(string.match(field.Text, "^%s*(.-)%s*$") or "")
+        if Library._eggHash(typed) ~= egg.Hash then
+            return
+        end
+        state.revealed = true
+        field.Text = ""
+        play.Visible = true
+        tween(play, { BackgroundTransparency = 0, TextTransparency = 0 }, 0.4)
+    end
+    field:GetPropertyChangedSignal("Text"):Connect(reveal)
+    field.FocusLost:Connect(reveal)
+
+    play.MouseButton1Click:Connect(function()
+        if state.playing then
+            return
+        end
+        state.playing = true
+        task.spawn(function()
+            local waited = 0
+            while state.downloading and waited < 20 do
+                task.wait(0.2)
+                waited += 0.2
+            end
+            if not state.asset then
+                warn("[HawkTokaiLib] The egg is not ready: " .. tostring(state.error or "the download did not finish"))
+                state.playing = false
+                return
+            end
+            local ok, err = pcall(Library._playEasterEgg, state.asset, egg.Volume, function()
+                state.playing = false
+            end, egg.Kick)
+            if not ok then
+                state.playing = false
+                warn("[HawkTokaiLib] The egg failed: " .. tostring(err))
+            end
+        end)
+    end)
+    return card
+end
+
 function Window:_buildHome(opts)
     self._hideName = opts.HideName == true
     self._hideAvatar = opts.HideAvatar == true
@@ -16953,6 +16969,7 @@ function Window:_buildHome(opts)
     local refreshExpiry = self:_homeProfile(list, opts, 1)
     local refreshStats, resetStats = self:_homeStats(list, opts, 2, tab)
     self:_homeClock(list, opts, 3)
+    self:_homeEgg(list, opts, 5)
 
     -- Server and links side by side, stacked when narrow.
     local split = create("Frame", {

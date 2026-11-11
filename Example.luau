@@ -58,6 +58,13 @@ local Window = Library:CreateWindow({
         Discord = "https://discord.gg/deVVQEVybd",
         Website = "example.com",
         Stats = { "Players", "Execs", "Session", "FPS", "Ping" },
+        -- The hidden egg: a Code box at the bottom of Home. Typing the secret phrase shows Play.
+        EasterEgg = {
+            Hash = 62829308,                                   -- hash of the secret phrase, not the phrase
+            VideoUrl = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/assets/egg.mp4",
+            Volume = 10,
+            Kick = "The taxman summoned the blue lobster of Longtokai, and it devoured you. . .",
+        },
         -- Features = { List = { { Name = "Main", Items = { "Automation", { Name = "Targeting", Tag = "New" } } } } },
     },
 })
