@@ -4,6 +4,8 @@
 
 # HawkTokaiLib UI
 
+> What changed, version by version: see [CHANGELOG.md](CHANGELOG.md).
+
 **A Roblox UI library with eased motion and a live theme engine.**
 
 Windows, tabs, sub tabs, collapsible groupboxes and fourteen elements, all with lucide icons, plus configs, cloud configs, weather backdrops and a Dynamic Island minimize.
