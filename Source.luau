@@ -1815,10 +1815,44 @@ function Tab:Log(opts)
     return finishElement(self, opts, handle, frame, "Log")
 end
 
+-- A soft band of light that sweeps across a button once each time the pointer enters it.
+-- It sits behind the button's content and copies the button's corner radius.
+function Library._attachSheen(button)
+    local sheen = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Parent = button,
+    })
+    local radius = button:FindFirstChildOfClass("UICorner")
+    if radius then
+        corner(sheen, radius.CornerRadius)
+    end
+    local band = create("UIGradient", {
+        Rotation = 20,
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.42, 1),
+            NumberSequenceKeypoint.new(0.5, 0.9),
+            NumberSequenceKeypoint.new(0.58, 1),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Offset = Vector2.new(-1, 0),
+        Parent = sheen,
+    })
+    button.MouseEnter:Connect(function()
+        band.Offset = Vector2.new(-1, 0)
+        tween(band, { Offset = Vector2.new(1, 0) }, 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    end)
+    return sheen
+end
+
 -- The press feel of a button: a quick squeeze while the mouse or finger is down, a springy
 -- release when it lets go, and a ripple that starts at the press point, not at the release.
-local function attachPress(button)
+function Library._attachPress(button)
     local scale = create("UIScale", { Scale = 1, Parent = button })
+    Library._attachSheen(button)
     button.MouseButton1Down:Connect(function()
         tween(scale, { Scale = 0.965 }, 0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         ripple(button)
@@ -1837,7 +1871,7 @@ local function rowButton(tab, opts)
     local boxHeight = TOUCH and 34 or 28
     local height = boxHeight + 6 + (opts.Desc and 16 or 0)
     local button = card(tab, "TextButton", height, opts)
-    attachPress(button)
+    Library._attachPress(button)
 
     local box = create("Frame", {
         Position = UDim2.fromOffset(14, 3),
@@ -1972,7 +2006,7 @@ function Tab:Button(opts)
 
     glowIcon(button, BUTTON_HINT_ICON, primary and Theme.AccentDark or Theme.Muted, UDim2.new(1, -30, 0.5, 0))
 
-    attachPress(button)
+    Library._attachPress(button)
     button.MouseButton1Click:Connect(function()
         safeCall(opts.Callback)
     end)
@@ -2213,9 +2247,13 @@ function Tab:Slider(opts)
     })
     corner(knob, UDim.new(1, 0))
 
+    -- The press catcher hugs the track: a thin band around the bar, a little wider at both ends,
+    -- so a press in the empty space above or below the bar does nothing. Only the bar and the
+    -- knob start a drag; once a drag starts it follows the pointer anywhere.
+    local bandHeight = TOUCH and 30 or 16
     local hit = create("TextButton", {
-        Position = UDim2.new(0, 8, 0, height - (compact and 13 or 18) - (TOUCH and 19 or 13)),
-        Size = UDim2.new(1, -16, 0, TOUCH and 40 or 28),
+        Position = UDim2.new(0, 6, 0, height - (compact and 13 or 18) + 2.5 - bandHeight / 2),
+        Size = UDim2.new(1, -12, 0, bandHeight),
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false,
@@ -5474,6 +5512,7 @@ function Library:RequireKey(opts)
         if kind ~= "primary" then
             stroke(b, Theme.Stroke, 0.2)
         end
+        Library._attachSheen(b)
         local press = create("UIScale", {
             Scale = 1,
             Parent = b,
@@ -20381,6 +20420,7 @@ function Window:Dialog(opts)
         table.insert(fading, { buttonFrame, "BackgroundTransparency", restBg })
         table.insert(fading, { buttonStroke, "Transparency", restStroke })
         table.insert(fading, { text, "TextTransparency", 0 })
+        Library._attachPress(buttonFrame)
         buttonFrame.MouseEnter:Connect(function()
             if closed then
                 return

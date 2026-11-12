@@ -883,7 +883,7 @@ Tab:CreateCode({
 
 ## Button
 
-Pressing it squeezes it a little, and a ripple starts at the press point. Letting go springs it back.
+Pressing it squeezes it a little, and a ripple starts at the press point. Letting go springs it back. Hovering sweeps a soft band of light across it.
 
 > A full-width card that ripples on click.
 
@@ -973,6 +973,8 @@ Toggle:Set(false)
 ---
 
 ## Slider
+
+Press the bar or the knob and drag; the value follows the pointer from one end to the other. A press in the empty space around the bar does nothing.
 
 > Pick a number in a range.
 

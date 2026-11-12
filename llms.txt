@@ -73,7 +73,7 @@ Window:LoadAutoload()                      -- apply the player's autoload config
 - `Window:LoadAutoload()` may run before every element exists: values for flags not created yet are held and applied when the element appears.
 - Never build your own config, theme or minimize UI. Use `CreateConfigManager`, `CreateThemeManager` and the built-in island.
 - Icons: a lucide name (`"zap"`, `"lucide:zap"`), an asset id number or `"rbxassetid://…"`, or `{ Image, RectOffset, RectSize, Tint }`.
-- Motion: buttons squeeze while held and spring back, with the ripple starting at the press point. A keybind waiting for a key shows three bouncing dots.
+- Motion: buttons squeeze while held and spring back, with the ripple starting at the press point, and a band of light sweeps across on hover. A keybind waiting for a key shows three bouncing dots.
 - `HawkTokaiLib.Touch` is true on touch-only devices. Layout already adapts; only read it for game logic.
 
 ## Elements
