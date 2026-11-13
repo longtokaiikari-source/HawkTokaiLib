@@ -581,7 +581,7 @@ Inside a groupbox, elements are compact rows without their own card. Dropdowns a
 | every element constructor | Adds a row to the groupbox. |
 | `Collapse()` / `Expand()` / `SetCollapsed(bool)` | Animate closed or open. |
 | `IsCollapsed()` | Current state. |
-| `PopOut()` / `Dock()` / `IsPoppedOut()` | Float the groupbox in its own draggable panel, or fly it back to its column. |
+| `PopOut()` / `Dock()` / `IsPoppedOut()` | Float the groupbox in its own draggable panel, or fly it back to its column. A floating box has a grip in its bottom-right corner that changes its width; the width is kept for the next pop-out, and pressing a floating box brings it to the front. |
 | `SetTitle(text)` | Rename the header. |
 | `SetVisible(bool)` / `IsVisible()` | Hide or show the whole card. Its column closes the gap. |
 | `Destroy()` | Remove the groupbox and its elements. |

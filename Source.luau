@@ -11272,6 +11272,16 @@ function Tab:Groupbox(opts, icon)
     local panel, panelScale, panelShadow, slot, stopPanel
     local dragStart, dragOrigin, dragMoved, suppressClick = nil, nil, false, false
     local animating = false
+    -- A floating box can be widened from its bottom-right corner, and the width is kept for the
+    -- next pop-out. Pressing a floating box brings it to the front of the other floating boxes.
+    local minWidth = 240
+    local resizing, resizeStart, resizeWidth, resizeLeft = false, 0, 0, 0
+    local function raise()
+        if panel then
+            window._popTop = (window._popTop or 1) + 1
+            panel.ZIndex = window._popTop
+        end
+    end
 
     local function layerScale()
         return math.max(window.Scale.Scale, 0.05)
@@ -11322,6 +11332,10 @@ function Tab:Groupbox(opts, icon)
         local column = box.Parent
         local from = toLayer(box.AbsolutePosition)
         local width = box.AbsoluteSize.X / scale
+        if group._popWidth then
+            local view = layer.AbsoluteSize.X / scale
+            width = math.clamp(group._popWidth, minWidth, math.max(view - 16, minWidth))
+        end
         local height = box.AbsoluteSize.Y / scale
 
         -- The slot left behind: starts at the box's height so nothing below
@@ -11394,6 +11408,40 @@ function Tab:Groupbox(opts, icon)
         box.Parent = panel
         window._controlsDirty = true
         setPopIcon(true)
+        -- The corner grip sits on top of the box and shows only while the box is open.
+        local grip = create("Frame", {
+            AnchorPoint = Vector2.new(1, 1),
+            Position = UDim2.new(1, 0, 1, 0),
+            Size = UDim2.fromOffset(14, 14),
+            BackgroundTransparency = 1,
+            ZIndex = 5,
+            Parent = panel,
+        })
+        for index = 0, 1 do
+            local dot = create("Frame", {
+                AnchorPoint = Vector2.new(1, 1),
+                Position = UDim2.new(1, -2 - index * 4, 1, -2 - index * 4),
+                Size = UDim2.fromOffset(3, 3),
+                BackgroundColor3 = Theme.Muted,
+                BackgroundTransparency = 0.25,
+                BorderSizePixel = 0,
+                ZIndex = 6,
+                Parent = grip,
+            })
+            corner(dot, UDim.new(1, 0))
+        end
+        grip.InputBegan:Connect(function(input)
+            if not isPress(input) or not panel or collapsed then
+                return
+            end
+            resizing = true
+            resizeStart = input.Position.X
+            resizeWidth = panel.Size.X.Offset
+            resizeLeft = panel.Position.X.Offset - panel.Size.X.Offset / 2
+            raise()
+            closeInner()
+            window:_closePopups()
+        end)
 
         -- Lifts off the column: a spring up and out to its float spot, with
         -- the shadow deepening under it.
@@ -11421,6 +11469,7 @@ function Tab:Groupbox(opts, icon)
                 thisPanel.Size = UDim2.fromOffset(thisPanel.Size.X.Offset, boxHeight)
             end
             thisPanel.Visible = box.Visible
+            grip.Visible = not collapsed and box.Visible
             if slot then
                 slot.Visible = box.Visible
             end
@@ -11442,6 +11491,7 @@ function Tab:Groupbox(opts, icon)
         group._popped = false
         popGeneration += 1
         dragStart, dragMoved, suppressClick = nil, false, false
+        resizing = false
         closeInner()
         window:_closePopups()
         local oldPanel, oldSlot, oldStop, oldScale, oldShadow = panel, slot, stopPanel, panelScale, panelShadow
@@ -11514,6 +11564,7 @@ function Tab:Groupbox(opts, icon)
         if not popped or not isPress(input) or not panel then
             return
         end
+        raise()
         dragStart = Vector2.new(input.Position.X, input.Position.Y)
         dragOrigin = Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
         dragMoved = false
@@ -11547,6 +11598,29 @@ function Tab:Groupbox(opts, icon)
             dragMoved = false
             tween(panelScale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
             tween(panelShadow, { ImageTransparency = 0.35 }, 0.3)
+            group._popSpot = Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
+        end
+    end, group)
+    -- Dragging the corner grip of a floating box widens or narrows it, on the screen.
+    window:_listen("Changed", function(input)
+        if not resizing or not panel or not isMove(input) then
+            return
+        end
+        local scale = layerScale()
+        local view = window._popLayer.AbsoluteSize / scale
+        local margin = 8
+        local width = math.clamp(resizeWidth + (input.Position.X - resizeStart) / scale, minWidth, math.max(view.X - margin * 2, minWidth))
+        local left = math.clamp(resizeLeft, margin, math.max(view.X - margin - width, margin))
+        panel.Size = UDim2.fromOffset(width, panel.Size.Y.Offset)
+        panel.Position = UDim2.fromOffset(left + width / 2, panel.Position.Y.Offset)
+    end, group)
+    window:_listen("Ended", function(input)
+        if not resizing or not isPress(input) then
+            return
+        end
+        resizing = false
+        if panel then
+            group._popWidth = panel.Size.X.Offset
             group._popSpot = Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
         end
     end, group)

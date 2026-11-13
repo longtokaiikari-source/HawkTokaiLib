@@ -31,6 +31,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Popped-out preview**: a 3D preview inside a popped-out group box has a grip in its bottom-right corner; drag it to resize the preview.
 - **UNC cache**: a passing executor check is kept for six hours (`UNC = { Cache = false }` turns that off). A failing card lists the missing features.
 - **Check progress**: the executor check shows a progress bar with the number of tests done.
+- **Floating group boxes**: a popped-out box has a grip in its bottom-right corner that changes its width, kept for the next pop-out. Pressing a floating box brings it to the front of the others.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 
