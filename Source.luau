@@ -13495,13 +13495,15 @@ Tab.AddStatusList = Tab.StatusList
 -- shows a 3D model or the player's avatar, turning slowly; drag it to spin it
 -- by hand.
 
-function Tab:_mediaCard(opts, defaultHeight)
+function Tab:_mediaCard(opts, defaultHeight, options)
+    options = type(options) == "table" and options or {}
     opts = normalize(opts, { Title = "Name", Description = "Desc" })
     local metrics = metricsOf(self)
     local compact = metrics.Compact
     local mediaHeight = math.clamp(tonumber(opts.Height) or defaultHeight, 40, 600)
     local inset = compact and 14 or 8
-    local hasHead = type(opts.Name) == "string" and opts.Name ~= ""
+    local hasHead = (type(opts.Name) == "string" and opts.Name ~= "") or options.Head == true
+    local rightInset = tonumber(options.RightInset) or 0
     local titleTop = compact and 4 or 10
     local mediaTop = hasHead and (titleTop + (opts.Desc and 38 or 22)) or (compact and 4 or inset)
     local height = mediaTop + mediaHeight + (compact and 6 or inset)
@@ -13511,15 +13513,15 @@ function Tab:_mediaCard(opts, defaultHeight)
     if hasHead then
         title = label({
             Position = UDim2.fromOffset(14, titleTop),
-            Size = UDim2.new(1, -28, 0, metrics.TitleHeight),
-            Text = opts.Name,
+            Size = UDim2.new(1, -28 - rightInset, 0, metrics.TitleHeight),
+            Text = opts.Name or "",
             TextSize = metrics.TextSize,
             Parent = frame,
         })
         if opts.Desc then
             descLabel = label({
                 Position = UDim2.fromOffset(14, titleTop + metrics.TitleHeight + 1),
-                Size = UDim2.new(1, -28, 0, metrics.DescLine),
+                Size = UDim2.new(1, -28 - rightInset, 0, metrics.DescLine),
                 Text = opts.Desc,
                 TextSize = metrics.DescSize,
                 FontFace = Fonts.Regular,
@@ -13582,6 +13584,8 @@ function Tab:_mediaCard(opts, defaultHeight)
     setCaption(opts.Caption)
     return opts, {
         Frame = frame,
+        HeadCenter = titleTop + metrics.TitleHeight / 2,
+        HeadHeight = mediaTop,
         Stroke = frameStroke,
         Media = media,
         Placeholder = placeholder,
@@ -13707,7 +13711,8 @@ Library.ViewportLightOrder = { "Studio", "Warm", "Cool", "Night" }
 
 function Tab:Viewport(opts)
     local parts
-    opts, parts = self:_mediaCard(opts, 180)
+    local canPop = not (type(opts) == "table" and opts.PopOut == false)
+    opts, parts = self:_mediaCard(opts, 180, canPop and { Head = true, RightInset = 34 } or nil)
     local window = self.Window
     local media = parts.Media
     applyIcon(parts.Placeholder, "box")
@@ -13770,6 +13775,11 @@ function Tab:Viewport(opts)
     local targetAngle, targetPitch, targetDistance = angle, pitch, distance
     local spinIcon
     local toolbar
+    -- A floating preview lives on the pop-out layer. Its header drags it, and the pop-out button (or the
+    -- slot it leaves in the column) docks it back, the same as a group box.
+    local previewPanel, previewSlot, previewStop, previewScale, previewShadow
+    local previewDragStart, previewDragOrigin, previewDragMoved, previewSpot, previewWidth
+    local previewAnimating, previewFlying = false, false
 
     local function place()
         if not center then
@@ -14106,11 +14116,12 @@ function Tab:Viewport(opts)
         end)
     end
 
-    -- A grip in the bottom-right corner, shown only while the group box is popped out. Dragging
-    -- it resizes the preview, and the card grows and shrinks with it.
+    -- The grip in the bottom-right corner resizes the preview: taller or shorter, and wider too while
+    -- the preview is floating. It shows while the preview is popped out or its group box is.
+    local host = self
     local cardFrame = parts.Frame
     local baseCard, baseMedia = cardFrame.Size.Y.Offset, media.Size.Y.Offset
-    local resizing, resizeStart, resizeHeight = false, 0, baseMedia
+    local resizing, resizeStart, resizeStartX, resizeHeight, resizeWidth = false, 0, 0, baseMedia, 0
     local grip = create("Frame", {
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -5, 1, -5),
@@ -14136,7 +14147,9 @@ function Tab:Viewport(opts)
         if isPress(input) then
             resizing = true
             resizeStart = input.Position.Y
+            resizeStartX = input.Position.X
             resizeHeight = media.Size.Y.Offset
+            resizeWidth = previewPanel and previewPanel.Size.X.Offset or 0
         end
     end)
     window:_listen("Changed", function(input)
@@ -14145,16 +14158,357 @@ function Tab:Viewport(opts)
             media.Size = UDim2.new(media.Size.X.Scale, media.Size.X.Offset, 0, height)
             cardFrame.Size = UDim2.new(cardFrame.Size.X.Scale, cardFrame.Size.X.Offset, 0, baseCard + (height - baseMedia))
             handle.Height = height
+            if previewPanel then
+                local scale = math.max(window.Scale.Scale, 0.05)
+                local view = window._popLayer.AbsoluteSize / scale
+                local width = math.clamp(resizeWidth + (input.Position.X - resizeStartX) / scale, 220, math.max(view.X - 16, 220))
+                previewPanel.Size = UDim2.fromOffset(width, cardFrame.Size.Y.Offset)
+            end
         end
     end, handle)
     window:_listen("Ended", function(input)
         if resizing and isPress(input) then
             resizing = false
+            if previewPanel then
+                previewWidth = previewPanel.Size.X.Offset
+            end
         end
     end, handle)
     window:_listen("Render", function()
-        grip.Visible = self._popped == true
+        if grip.Parent then
+            grip.Visible = host._popped == true or previewPanel ~= nil
+        end
     end, handle)
+
+    -- Keeps a floating preview on screen, with its header always reachable.
+    local function clampPreview(x, y, width, height)
+        local scale = math.max(window.Scale.Scale, 0.05)
+        local view = window._popLayer.AbsoluteSize / scale
+        local margin = 8
+        x = math.clamp(x, margin, math.max(view.X - width - margin, margin))
+        y = math.clamp(y, margin, math.max(view.Y - math.min(height, 40) - margin, margin))
+        return x, y
+    end
+    local function raisePreview()
+        if previewPanel then
+            window._popTop = (window._popTop or 1) + 1
+            previewPanel.ZIndex = window._popTop
+        end
+    end
+
+    -- The pop-out button sits in the header, the same as a group box's: a 24px square beside the title,
+    -- muted until it is hovered, and it turns into "minimize" while the preview is floating. The header
+    -- is the drag handle of a floating preview, like a group box's header.
+    local popButton, popIcon
+    if canPop then
+        popButton = create("TextButton", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0, parts.HeadCenter),
+            Size = UDim2.fromOffset(24, 24),
+            BackgroundColor3 = Theme.Surface2,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            ZIndex = 5,
+            Parent = cardFrame,
+        })
+        corner(popButton, UDim.new(0, 6))
+        popIcon = create("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(13, 13),
+            BackgroundTransparency = 1,
+            ImageColor3 = Theme.Muted,
+            ImageTransparency = TOUCH and 0 or 0.45,
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = 5,
+            Parent = popButton,
+        })
+        applyIcon(popIcon, "picture-in-picture-2")
+        popButton.MouseEnter:Connect(function()
+            tween(popButton, { BackgroundTransparency = 0 }, 0.15)
+            tween(popIcon, { ImageColor3 = Theme.Text, ImageTransparency = 0 }, 0.15)
+        end)
+        popButton.MouseLeave:Connect(function()
+            tween(popButton, { BackgroundTransparency = 1 }, 0.25)
+            tween(popIcon, { ImageColor3 = Theme.Muted, ImageTransparency = TOUCH and 0 or 0.45 }, 0.25)
+        end)
+        popButton.MouseButton1Click:Connect(function()
+            if handle:IsPoppedOut() then
+                handle:Dock()
+            else
+                handle:PopOut()
+            end
+        end)
+        local headZone = create("TextButton", {
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(1, -44, 0, parts.HeadHeight),
+            BackgroundTransparency = 1,
+            Text = "",
+            AutoButtonColor = false,
+            ZIndex = 4,
+            Parent = cardFrame,
+        })
+        headZone.MouseEnter:Connect(function()
+            if not TOUCH then
+                tween(popIcon, { ImageTransparency = 0 }, 0.15)
+            end
+        end)
+        headZone.MouseLeave:Connect(function()
+            if not TOUCH then
+                tween(popIcon, { ImageTransparency = 0.45 }, 0.25)
+            end
+        end)
+        headZone.InputBegan:Connect(function(input)
+            if previewPanel and not previewFlying and isPress(input) then
+                previewDragStart = Vector2.new(input.Position.X, input.Position.Y)
+                previewDragOrigin = Vector2.new(previewPanel.Position.X.Offset, previewPanel.Position.Y.Offset)
+                previewDragMoved = false
+                raisePreview()
+            end
+        end)
+    end
+
+    -- A floating preview is dragged by its header, once the pointer has moved a little.
+    window:_listen("Changed", function(input)
+        if not previewDragStart or not previewPanel or not isMove(input) then
+            return
+        end
+        local delta = Vector2.new(input.Position.X, input.Position.Y) - previewDragStart
+        if not previewDragMoved then
+            if delta.Magnitude < (TOUCH and 8 or 5) then
+                return
+            end
+            previewDragMoved = true
+            previewAnimating = false
+            if previewScale then
+                tween(previewScale, { Scale = 1.025 }, 0.18, Enum.EasingStyle.Quint)
+            end
+            if previewShadow then
+                tween(previewShadow, { ImageTransparency = 0.15 }, 0.18)
+            end
+        end
+        local scale = math.max(window.Scale.Scale, 0.05)
+        local x, y = clampPreview(previewDragOrigin.X + delta.X / scale, previewDragOrigin.Y + delta.Y / scale, previewPanel.Size.X.Offset, previewPanel.Size.Y.Offset)
+        previewPanel.Position = UDim2.fromOffset(x, y)
+    end, handle)
+    window:_listen("Ended", function(input)
+        if not previewDragStart or not isPress(input) then
+            return
+        end
+        previewDragStart = nil
+        if previewDragMoved and previewPanel then
+            previewDragMoved = false
+            if previewScale then
+                tween(previewScale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
+            end
+            if previewShadow then
+                tween(previewShadow, { ImageTransparency = 0.35 }, 0.3)
+            end
+            previewSpot = Vector2.new(previewPanel.Position.X.Offset, previewPanel.Position.Y.Offset)
+        end
+    end, handle)
+
+    -- Lifts the preview off its column into a floating panel, the same way a group box pops out: a slot
+    -- stays behind, the panel springs up and to the right of its spot, and the shadow deepens under it.
+    function handle:PopOut()
+        if previewPanel or previewFlying or not cardFrame.Parent or cardFrame.AbsoluteSize.X <= 0 then
+            return
+        end
+        local layer = window:_popoutLayer()
+        local scale = math.max(window.Scale.Scale, 0.05)
+        local cardHeight = cardFrame.Size.Y.Offset
+        local from = (cardFrame.AbsolutePosition - layer.AbsolutePosition) / scale
+        local view = layer.AbsoluteSize / scale
+        local width = math.clamp(previewWidth or cardFrame.AbsoluteSize.X / scale, 220, math.max(view.X - 16, 220))
+        local spot = previewSpot or (from + Vector2.new(22, -14))
+        local x, y = clampPreview(spot.X, spot.Y, width, cardHeight)
+        local panelTitle = type(opts.Name) == "string" and opts.Name ~= "" and opts.Name or "3D preview"
+
+        local slot = create("TextButton", {
+            Size = UDim2.new(1, 0, 0, cardHeight),
+            BackgroundColor3 = Theme.Surface2,
+            BackgroundTransparency = 0.6,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            ClipsDescendants = true,
+            LayoutOrder = cardFrame.LayoutOrder,
+            Parent = cardFrame.Parent,
+        })
+        slot:SetAttribute("NoDrag", true)
+        corner(slot, UDim.new(0, 10))
+        stroke(slot, Theme.Stroke, 1).Transparency = 0.3
+        local slotLabel = label({
+            Size = UDim2.new(1, -24, 0, 40),
+            Position = UDim2.fromOffset(12, 0),
+            Text = Library._rich(panelTitle) .. '<font transparency="0.4">  ·  popped out, click to dock</font>',
+            TextSize = 12,
+            FontFace = Fonts.Regular,
+            TextColor3 = Theme.Muted,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            RichText = true,
+            TextTransparency = 1,
+            Parent = slot,
+        })
+        slot.MouseEnter:Connect(function()
+            tween(slot, { BackgroundTransparency = 0.35 }, 0.15)
+        end)
+        slot.MouseLeave:Connect(function()
+            tween(slot, { BackgroundTransparency = 0.6 }, 0.25)
+        end)
+        slot.MouseButton1Click:Connect(function()
+            handle:Dock()
+        end)
+        tween(slot, { Size = UDim2.new(1, 0, 0, 40) }, 0.42, Enum.EasingStyle.Quint)
+        tween(slotLabel, { TextTransparency = 0 }, 0.3)
+        previewSlot = slot
+
+        local panel = create("Frame", {
+            Name = "PreviewPopOut",
+            Position = UDim2.fromOffset(from.X, from.Y),
+            Size = UDim2.fromOffset(width, cardHeight),
+            BackgroundTransparency = 1,
+            Parent = layer,
+        })
+        panel:SetAttribute("NoDrag", true)
+        previewPanel = panel
+        table.insert(window._popPanels, panel)
+        local panelScale = create("UIScale", { Parent = panel })
+        local shadow = create("ImageLabel", {
+            Position = UDim2.fromOffset(-24, -18),
+            Size = UDim2.new(1, 48, 1, 44),
+            BackgroundTransparency = 1,
+            Image = Assets.Shadow,
+            ImageColor3 = Color3.new(0, 0, 0),
+            ImageTransparency = 1,
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            ZIndex = 0,
+            Parent = panel,
+        })
+        previewScale, previewShadow = panelScale, shadow
+
+        -- The card moves into the panel with its header on top; the grip stays in its corner.
+        cardFrame.Parent = panel
+        cardFrame.LayoutOrder = 0
+        cardFrame.Position = UDim2.new()
+        cardFrame.Size = UDim2.new(1, 0, 0, cardHeight)
+        if popIcon then
+            applyIcon(popIcon, "minimize-2")
+        end
+        raisePreview()
+        window._controlsDirty = true
+
+        previewAnimating = true
+        panelScale.Scale = 0.97
+        tween(panel, { Position = UDim2.fromOffset(x, y) }, 0.5, Enum.EasingStyle.Quint)
+        tween(panelScale, { Scale = 1 }, 0.55, Enum.EasingStyle.Back)
+        tween(shadow, { ImageTransparency = 0.35 }, 0.4)
+        task.delay(0.5, function()
+            if previewPanel == panel then
+                previewAnimating = false
+            end
+        end)
+
+        -- Each frame: the panel follows the card's height, follows its group box's visibility, and stays
+        -- on screen. A group box that is destroyed takes its preview with it.
+        previewStop = window:_listen("Render", function()
+            if previewPanel ~= panel or not panel.Parent then
+                return
+            end
+            if host._destroyed then
+                handle:Dock(true)
+                return
+            end
+            local owner = host._groupbox and host._frame or nil
+            panel.Visible = owner == nil or owner.Visible == true
+            local wanted = cardFrame.Size.Y.Offset
+            if math.abs(panel.Size.Y.Offset - wanted) > 0.5 then
+                panel.Size = UDim2.fromOffset(panel.Size.X.Offset, wanted)
+            end
+            if not previewAnimating and not previewDragStart and not previewFlying then
+                local px, py = clampPreview(panel.Position.X.Offset, panel.Position.Y.Offset, panel.Size.X.Offset, panel.Size.Y.Offset)
+                if math.abs(px - panel.Position.X.Offset) > 0.5 or math.abs(py - panel.Position.Y.Offset) > 0.5 then
+                    panel.Position = UDim2.fromOffset(px, py)
+                end
+            end
+        end, handle)
+    end
+
+    -- Docks the preview back: it flies to its slot the way a group box does, then the card moves back into
+    -- the column and the slot and the panel go. instant skips the flight.
+    function handle:Dock(instant)
+        local panel, slot = previewPanel, previewSlot
+        if not panel or previewFlying then
+            return
+        end
+        previewFlying = true
+        previewDragStart = nil
+        previewAnimating = false
+        local layer = window._popLayer
+        local scale = math.max(window.Scale.Scale, 0.05)
+        local settled = false
+        local function settle()
+            if settled then
+                return
+            end
+            settled = true
+            if previewStop then
+                previewStop()
+                previewStop = nil
+            end
+            local index = table.find(window._popPanels, panel)
+            if index then
+                table.remove(window._popPanels, index)
+            end
+            previewWidth = panel.Size.X.Offset
+            if slot and slot.Parent and not host._destroyed then
+                cardFrame.Parent = slot.Parent
+                cardFrame.LayoutOrder = slot.LayoutOrder
+                cardFrame.Position = UDim2.new()
+                cardFrame.Size = UDim2.new(1, 0, 0, baseCard + (media.Size.Y.Offset - baseMedia))
+            end
+            if slot then
+                slot:Destroy()
+            end
+            panel:Destroy()
+            previewPanel, previewSlot, previewScale, previewShadow = nil, nil, nil, nil
+            previewFlying = false
+            if popIcon then
+                applyIcon(popIcon, "picture-in-picture-2")
+            end
+            window._controlsDirty = true
+        end
+        local canFly = not instant and slot and slot.Parent and layer and window.Root.Visible and panel.Visible
+            and slot.AbsoluteSize.X > 0 and isShown(slot, window.Body, slot.AbsolutePosition + slot.AbsoluteSize / 2)
+        if not canFly then
+            settle()
+            return
+        end
+        previewAnimating = true
+        local target = (slot.AbsolutePosition - layer.AbsolutePosition) / scale
+        local width = slot.AbsoluteSize.X / scale
+        local height = cardFrame.Size.Y.Offset
+        tween(slot, { Size = UDim2.new(1, 0, 0, height) }, 0.36, Enum.EasingStyle.Quint)
+        local slotLabel = slot:FindFirstChildWhichIsA("TextLabel")
+        if slotLabel then
+            tween(slotLabel, { TextTransparency = 1 }, 0.12)
+        end
+        tween(panel, { Position = UDim2.fromOffset(target.X, target.Y), Size = UDim2.fromOffset(width, height) }, 0.36, Enum.EasingStyle.Quint)
+        if previewScale then
+            tween(previewScale, { Scale = 1 }, 0.2)
+        end
+        if previewShadow then
+            tween(previewShadow, { ImageTransparency = 1 }, 0.3)
+        end
+        task.delay(0.37, settle)
+    end
+
+    function handle:IsPoppedOut()
+        return previewPanel ~= nil
+    end
 
     -- Drag sideways to spin and up or down to tilt; a quick flick keeps it turning. Two quick
     -- presses reset the view. A press on the toolbar does not start a drag.

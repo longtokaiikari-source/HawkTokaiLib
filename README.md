@@ -1405,7 +1405,7 @@ Preview:SetModel(workspace.Sword)
 Preview:Zoom(0.8) -- below 1 zooms in
 ```
 
-The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to spin it and up or down to tilt it. A quick flick keeps it turning, and the spin resumes a moment after you let go. Two quick presses reset the view, and zoom and reset ease in. When a group box is popped out, the preview has a grip in its bottom-right corner: drag it to make the preview taller or shorter.
+The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to spin it and up or down to tilt it. A quick flick keeps it turning, and the spin resumes a moment after you let go. Two quick presses reset the view, and zoom and reset ease in. When a group box is popped out, the preview has a grip in its bottom-right corner: drag it to make the preview taller or shorter. The pop-out button sits in the preview's header, the same as a group box's. It floats the preview in its own panel: the header drags it, and the button or the slot docks it back. A floating preview's grip changes its width as well as its height. `PopOut = false` hides the button.
 
 ### Toolbar
 
@@ -1447,6 +1447,7 @@ Five buttons along the bottom right: reset the view, pause or play the spin, zoo
 | `SetAngle(degrees)` / `SetPitch(degrees)` | Set the turn, and the camera height. |
 | `Zoom(factor)` | Multiply the camera distance. Below 1 zooms in, above 1 zooms out. The distance stays between 30% and 250% of the framed distance. |
 | `ResetView()` | Back to the starting angle, pitch and distance. |
+| `PopOut()` / `Dock()` / `IsPoppedOut()` | Float the preview in its own panel, or dock it back. |
 | `SetLighting(name)` | Switch to a preset. Returns `false` for an unknown name. |
 | `SetGlow(enabled)` / `SetShadow(enabled)` | Show or hide the glow or the shadow. |
 | `GetInfo()` | `{ Parts = count, Size = Vector3 }` of the model on show. |
