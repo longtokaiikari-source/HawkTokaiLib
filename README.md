@@ -1405,7 +1405,7 @@ Preview:SetModel(workspace.Sword)
 Preview:Zoom(0.8) -- below 1 zooms in
 ```
 
-The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card to spin it; the spin resumes a moment after you let go.
+The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to spin it and up or down to tilt it. A quick flick keeps it turning, and the spin resumes a moment after you let go. Two quick presses reset the view, and zoom and reset ease in.
 
 ### Toolbar
 

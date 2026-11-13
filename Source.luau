@@ -1023,8 +1023,8 @@ local ripplePool = {}
 
 -- The pointer in the same space as an object's AbsolutePosition. GetMouseLocation counts the top
 -- bar inset, and only a ScreenGui that does not ignore the inset has to take it off.
-function Library._pointerIn(object)
-    local mouse = UserInputService:GetMouseLocation()
+function Library._pointerIn(object, point)
+    local mouse = point or UserInputService:GetMouseLocation()
     local gui = object:FindFirstAncestorWhichIsA("ScreenGui")
     if gui and not gui.IgnoreGuiInset then
         local inset = GuiService:GetGuiInset()
@@ -1033,8 +1033,8 @@ function Library._pointerIn(object)
     return mouse
 end
 
-local function ripple(button)
-    local mouse = Library._pointerIn(button)
+local function ripple(button, point)
+    local mouse = Library._pointerIn(button, point)
     local origin = button.AbsolutePosition
     local width = math.max(button.AbsoluteSize.X, 1)
     local height = math.max(button.AbsoluteSize.Y, 1)
@@ -1880,7 +1880,13 @@ function Library._attachPress(button)
     Library._attachSheen(button)
     button.MouseButton1Down:Connect(function()
         tween(scale, { Scale = 0.965 }, 0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        ripple(button)
+    end)
+    -- The wave starts where the press really happened: the input's own position, which is right
+    -- for a mouse and for a finger alike.
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            ripple(button, Vector2.new(input.Position.X, input.Position.Y))
+        end
     end)
     button.MouseButton1Up:Connect(function()
         tween(scale, { Scale = 1 }, 0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -13559,6 +13565,9 @@ function Tab:Viewport(opts)
     local source = nil
     local generation = 0
     local dragging, lastX, resumeAt = false, 0, 0
+    local lastY, lastDragTime, flick, lastClick = 0, 0, 0, 0
+    -- The camera eases toward these targets; the frame loop moves the real values toward them.
+    local targetAngle, targetPitch, targetDistance = angle, pitch, distance
     local spinIcon
     local toolbar
 
@@ -13607,25 +13616,25 @@ function Tab:Viewport(opts)
         local radius = math.max(size.Magnitude / 2, 0.5)
         distance = radius / math.tan(math.rad(camera.FieldOfView / 2)) * distanceScale
         baseDistance = distance
+        targetDistance = distance
         place()
         return true
     end
 
-    -- Moves the camera in or out. Below 1 zooms in, above 1 zooms out.
+    -- Zoom and reset set a target; the frame loop eases the camera toward it.
     local function zoomBy(factor)
         if not center then
             return
         end
-        distance = math.clamp(distance * factor, baseDistance * 0.3, baseDistance * 2.5)
-        place()
+        targetDistance = math.clamp(targetDistance * factor, baseDistance * 0.3, baseDistance * 2.5)
     end
 
     local function resetView()
-        angle = math.rad(tonumber(opts.Angle) or 0)
-        pitch = math.rad(math.clamp(tonumber(opts.Pitch) or 12, -80, 80))
-        distance = baseDistance
+        targetAngle = math.rad(tonumber(opts.Angle) or 0)
+        targetPitch = math.rad(math.clamp(tonumber(opts.Pitch) or 12, -80, 80))
+        targetDistance = baseDistance
+        flick = 0
         resumeAt = 0
-        place()
     end
 
     local function setLighting(name)
@@ -13768,12 +13777,14 @@ function Tab:Viewport(opts)
     end
 
     function handle:SetAngle(degrees)
-        angle = math.rad(tonumber(degrees) or 0)
+        targetAngle = math.rad(tonumber(degrees) or 0)
+        angle = targetAngle
         place()
     end
 
     function handle:SetPitch(degrees)
-        pitch = math.rad(math.clamp(tonumber(degrees) or 12, -80, 80))
+        targetPitch = math.rad(math.clamp(tonumber(degrees) or 12, -80, 80))
+        pitch = targetPitch
         place()
     end
 
@@ -13895,17 +13906,48 @@ function Tab:Viewport(opts)
         end)
     end
 
+    -- Drag sideways to spin and up or down to tilt; a quick flick keeps it turning. Two quick
+    -- presses reset the view. A press on the toolbar does not start a drag.
     media.InputBegan:Connect(function(input)
-        if isPress(input) and handle.Model and not (toolbar and overGui(toolbar, pointerPosition())) then
-            dragging = true
-            lastX = pointerPosition().X
+        if not isPress(input) or not handle.Model then
+            return
         end
+        if toolbar and overGui(toolbar, pointerPosition()) then
+            return
+        end
+        local now = os.clock()
+        if now - lastClick < 0.35 then
+            resetView()
+            lastClick = 0
+        else
+            lastClick = now
+        end
+        dragging = true
+        local pointer = pointerPosition()
+        lastX, lastY, lastDragTime = pointer.X, pointer.Y, now
+        flick = 0
+    end)
+    media.MouseEnter:Connect(function()
+        if glowImage.Visible then
+            tween(glowImage, { ImageTransparency = 0.7 }, 0.3)
+        end
+    end)
+    media.MouseLeave:Connect(function()
+        tween(glowImage, { ImageTransparency = 0.8 }, 0.3)
     end)
     window:_listen("Changed", function(input)
         if dragging and isMove(input) then
-            local x = pointerPosition().X
-            angle -= (x - lastX) * 0.012
-            lastX = x
+            local now = os.clock()
+            local pointer = pointerPosition()
+            local dt = math.max(now - lastDragTime, 1 / 240)
+            local dxRad = (pointer.X - lastX) * 0.012
+            local dyRad = (pointer.Y - lastY) * 0.008
+            targetAngle -= dxRad
+            angle = targetAngle
+            targetPitch = math.clamp(targetPitch + dyRad, math.rad(-80), math.rad(80))
+            pitch = targetPitch
+            flick = math.clamp(0.6 * flick - 0.4 * dxRad / dt, -12, 12)
+            lastX, lastY, lastDragTime = pointer.X, pointer.Y, now
             place()
         end
     end, handle)
@@ -13920,12 +13962,25 @@ function Tab:Viewport(opts)
             resumeAt = os.clock() + 1.5
         end
     end, handle)
+    -- Every frame: a flick slows down, the spin carries on when idle, and the camera eases
+    -- toward its target for zoom, reset and tilt.
     window:_listen("Render", function(deltaTime)
-        if handle.Spin and center and not dragging and os.clock() >= resumeAt and window.Open and not window.Minimized
-            and parts.Frame.Visible then
-            angle += math.rad(handle.SpinSpeed) * deltaTime
-            place()
+        if not center or not window.Open or window.Minimized or not parts.Frame.Visible then
+            return
         end
+        if not dragging then
+            if math.abs(flick) > 0.001 then
+                targetAngle += flick * deltaTime
+                flick *= math.exp(-deltaTime * 3.2)
+            elseif handle.Spin and os.clock() >= resumeAt then
+                targetAngle += math.rad(handle.SpinSpeed) * deltaTime
+            end
+        end
+        local alpha = 1 - math.exp(-deltaTime * 10)
+        angle += (targetAngle - angle) * alpha
+        pitch += (targetPitch - pitch) * alpha
+        distance += (targetDistance - distance) * alpha
+        place()
     end, handle)
 
     if opts.Model ~= nil then

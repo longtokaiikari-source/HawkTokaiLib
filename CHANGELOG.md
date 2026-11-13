@@ -27,6 +27,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Button wave**: the press ripple is a wave of light from the press point that spreads toward the corners and fades as it goes.
 - **Keybind ring**: while a keybind waits for a key, a soft ring breathes around the box.
 - **Input underline**: an accent line grows out from the middle while the field has focus.
+- **3D preview**: zoom and reset ease in; a flick keeps the model turning; drag up or down to tilt; two quick presses reset the view; the glow brightens on hover.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 
@@ -41,6 +42,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- Button wave now starts where the mouse or finger really pressed. Before, a touch screen could show it in a fixed spot.
 - Button wave: presses on the right side of a button no longer show the wave toward the middle when the window is scaled down. The wave is now placed in the button's own units.
 - Sliders jumped to the pointer when pressed in the empty space above or below the bar. The press catcher now hugs the bar, so only the bar and the knob start a drag.
 - Bold text fell back to BuilderSans when the chosen font family had no bold face. It now falls back to that family's regular face.
