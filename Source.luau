@@ -1023,40 +1023,51 @@ local ripplePool = {}
 
 local function ripple(button)
     local mouse = pointerPosition()
-    local diameter = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 2.2
-    local circle = table.remove(ripplePool)
-    -- A pooled circle can't be reparented if it was destroyed along the way.
-    if circle and not pcall(function()
-        circle.Parent = nil
-    end) then
-        circle = nil
-    end
-    if not circle then
-        circle = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundColor3 = Theme.Accent,
-            BorderSizePixel = 0,
-        })
-        corner(circle, UDim.new(1, 0))
-    end
-    circle.Position = UDim2.fromOffset(mouse.X - button.AbsolutePosition.X, mouse.Y - button.AbsolutePosition.Y)
-    circle.Size = UDim2.fromOffset(0, 0)
-    circle.BackgroundColor3 = Theme.Accent
-    circle.BackgroundTransparency = 0.82
-    circle.ZIndex = button.ZIndex + 1
-    circle.Parent = button
-    tween(circle, { Size = UDim2.fromOffset(diameter, diameter), BackgroundTransparency = 1 }, 0.55)
-    task.delay(0.55, function()
-        -- A button destroyed mid-ripple takes the circle with it: drop it.
-        if circle.Parent ~= button or not button.Parent then
-            pcall(circle.Destroy, circle)
-            return
+    local origin = button.AbsolutePosition
+    local width, height = button.AbsoluteSize.X, button.AbsoluteSize.Y
+    local x, y = mouse.X - origin.X, mouse.Y - origin.Y
+    -- The wave must reach the farthest corner. A press in the middle spreads out to every corner,
+    -- and a press at a corner crosses the button and fades out before the far side.
+    local far = 0
+    for _, cx in ipairs({ 0, width }) do
+        for _, cy in ipairs({ 0, height }) do
+            far = math.max(far, math.sqrt((cx - x) ^ 2 + (cy - y) ^ 2))
         end
-        circle.Parent = nil
-        if #ripplePool < 4 then
-            table.insert(ripplePool, circle)
-        else
-            circle:Destroy()
+    end
+    local holder = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+        ZIndex = button.ZIndex + 1,
+        Parent = button,
+    })
+    local radius = button:FindFirstChildOfClass("UICorner")
+    if radius then
+        corner(holder, radius.CornerRadius)
+    end
+    -- Two soft waves, the second a little behind the first.
+    for index, delay in ipairs({ 0, 0.12 }) do
+        task.delay(delay, function()
+            if not holder.Parent then
+                return
+            end
+            local wave = create("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromOffset(x, y),
+                Size = UDim2.fromOffset(6, 6),
+                BackgroundTransparency = 1,
+                Image = Assets.Glow,
+                ImageColor3 = Theme.Accent,
+                ImageTransparency = index == 1 and 0.2 or 0.45,
+                Parent = holder,
+            })
+            local diameter = math.max(far, 1) * 2.1
+            tween(wave, { Size = UDim2.fromOffset(diameter, diameter), ImageTransparency = 1 }, index == 1 and 0.8 or 1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        end)
+    end
+    task.delay(1.2, function()
+        if holder.Parent then
+            holder:Destroy()
         end
     end)
 end
@@ -3509,6 +3520,7 @@ function Tab:Keybind(opts)
             return
         end
         dotsRunning = true
+        local restStroke = chipStroke.Transparency
         task.spawn(function()
             local t = 0
             while dotsRunning and chip.Parent do
@@ -3517,7 +3529,10 @@ function Tab:Keybind(opts)
                     local lift = math.max(0, math.sin(t * 6 - (index - 1) * 0.9)) * 4
                     dot.Position = UDim2.new(0.5, DOT_X[index], 0.5, -lift)
                 end
+                -- A soft ring breathes around the box while the key is waited for.
+                chipStroke.Transparency = restStroke * 0.6 + 0.12 * (0.5 + 0.5 * math.sin(t * 3))
             end
+            chipStroke.Transparency = restStroke
             for index, dot in ipairs(dots) do
                 dot.Position = UDim2.new(0.5, DOT_X[index], 0.5, 0)
             end
@@ -11595,11 +11610,23 @@ local function actionInput(tab, placeholder, buttonText, callback)
         ClearTextOnFocus = false,
         Parent = holder,
     })
+    -- An accent line grows out from the middle of the field while it has focus.
+    local underline = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -1),
+        Size = UDim2.new(0, 0, 0, 2),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        ZIndex = holder.ZIndex + 1,
+        Parent = holder,
+    })
     box.Focused:Connect(function()
         tween(holderStroke, { Color = Theme.StrokeHover }, 0.15)
+        tween(underline, { Size = UDim2.new(1, -12, 0, 2) }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
     box.FocusLost:Connect(function(enterPressed)
         tween(holderStroke, { Color = Theme.Stroke }, 0.2)
+        tween(underline, { Size = UDim2.new(0, 0, 0, 2) }, 0.2)
         if enterPressed and box.Text ~= "" then
             safeCall(callback, box.Text)
         end

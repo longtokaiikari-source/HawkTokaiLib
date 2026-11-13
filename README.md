@@ -885,7 +885,7 @@ Tab:CreateCode({
 
 ## Button
 
-Pressing it squeezes it a little, and a ripple starts at the press point. Letting go springs it back. Hovering sweeps a soft band of light across it.
+Pressing it squeezes it a little, and a wave of light starts at the press point and spreads toward the corners, fading as it goes. Letting go springs it back. Hovering sweeps a soft band of light across it.
 
 > A full-width card that ripples on click.
 
@@ -1260,7 +1260,7 @@ Input:Set("HawkTokaiLib")
 
 ## Keybind
 
-While it waits for a key, three dots rise and fall in the box. Escape cancels.
+While it waits for a key, three dots rise and fall in the box, and a soft ring breathes around it. Escape cancels.
 
 > Bind an action to a key.
 
