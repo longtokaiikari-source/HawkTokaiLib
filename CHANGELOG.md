@@ -41,6 +41,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- Button wave: presses on the right side of a button no longer show the wave toward the middle when the window is scaled down. The wave is now placed in the button's own units.
 - Sliders jumped to the pointer when pressed in the empty space above or below the bar. The press catcher now hugs the bar, so only the bar and the knob start a drag.
 - Bold text fell back to BuilderSans when the chosen font family had no bold face. It now falls back to that family's regular face.
 - The egg no longer needs a Roblox video upload.

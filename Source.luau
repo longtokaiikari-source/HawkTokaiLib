@@ -1021,10 +1021,23 @@ end
 
 local ripplePool = {}
 
+-- The pointer in the same space as an object's AbsolutePosition. GetMouseLocation counts the top
+-- bar inset, and only a ScreenGui that does not ignore the inset has to take it off.
+function Library._pointerIn(object)
+    local mouse = UserInputService:GetMouseLocation()
+    local gui = object:FindFirstAncestorWhichIsA("ScreenGui")
+    if gui and not gui.IgnoreGuiInset then
+        local inset = GuiService:GetGuiInset()
+        mouse = mouse - Vector2.new(inset.X, inset.Y)
+    end
+    return mouse
+end
+
 local function ripple(button)
-    local mouse = pointerPosition()
+    local mouse = Library._pointerIn(button)
     local origin = button.AbsolutePosition
-    local width, height = button.AbsoluteSize.X, button.AbsoluteSize.Y
+    local width = math.max(button.AbsoluteSize.X, 1)
+    local height = math.max(button.AbsoluteSize.Y, 1)
     local x, y = mouse.X - origin.X, mouse.Y - origin.Y
     -- The wave must reach the farthest corner. A press in the middle spreads out to every corner,
     -- and a press at a corner crosses the button and fades out before the far side.
@@ -1045,7 +1058,8 @@ local function ripple(button)
     if radius then
         corner(holder, radius.CornerRadius)
     end
-    -- Two soft waves, the second a little behind the first.
+    -- Two soft waves, the second a little behind the first. Positions and sizes are in scale units
+    -- of the button, so a scaled-down window (UIScale) still puts the wave under the pointer.
     for index, delay in ipairs({ 0, 0.12 }) do
         task.delay(delay, function()
             if not holder.Parent then
@@ -1053,8 +1067,8 @@ local function ripple(button)
             end
             local wave = create("ImageLabel", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
-                Position = UDim2.fromOffset(x, y),
-                Size = UDim2.fromOffset(6, 6),
+                Position = UDim2.fromScale(x / width, y / height),
+                Size = UDim2.fromScale(6 / width, 6 / height),
                 BackgroundTransparency = 1,
                 Image = Assets.Glow,
                 ImageColor3 = Theme.Accent,
@@ -1062,7 +1076,7 @@ local function ripple(button)
                 Parent = holder,
             })
             local diameter = math.max(far, 1) * 2.1
-            tween(wave, { Size = UDim2.fromOffset(diameter, diameter), ImageTransparency = 1 }, index == 1 and 0.8 or 1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            tween(wave, { Size = UDim2.fromScale(diameter / width, diameter / height), ImageTransparency = 1 }, index == 1 and 0.8 or 1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         end)
     end
     task.delay(1.2, function()
