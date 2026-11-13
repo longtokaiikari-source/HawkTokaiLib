@@ -5804,6 +5804,9 @@ local passes, fails, undefined = 0, 0, 0
 local running = 0
 local skipped = 0
 local characterReady = false
+local failedNames = {}
+Library._uncTotal = 106
+Library._uncDone = 0
 local print = function(...) end
 local warn = function(...) end
 -- These tests read the player's Animate script, so they are skipped when it never loads.
@@ -5834,6 +5837,7 @@ local function test(name, aliases, callback)
 			print("⏺️ " .. name)
 		elseif not getGlobal(name) then
 			fails += 1
+			table.insert(failedNames, name)
 			warn("⛔ " .. name)
 		else
 			local success, message = pcall(callback)
@@ -5843,6 +5847,7 @@ local function test(name, aliases, callback)
 				print("✅ " .. name .. (message and " • " .. message or ""))
 			else
 				fails += 1
+				table.insert(failedNames, name)
 				warn("⛔ " .. name .. " failed: " .. message)
 			end
 		end
@@ -5872,7 +5877,7 @@ do
 		return player ~= nil and player.Character ~= nil and player.Character:FindFirstChild("Animate") ~= nil
 	end
 	local waited = 0
-	while not hasAnimate() and waited < 8 do
+	while not hasAnimate() and waited < 4 do
 		task.wait(0.2)
 		waited += 0.2
 	end
@@ -6690,8 +6695,9 @@ local waitedTests = 0
 repeat
 	task.wait(0.1)
 	waitedTests += 0.1
-until running == 0 or waitedTests >= 20
-return passes, fails, undefined, skipped
+	Library._uncDone = 106 - running
+until running == 0 or waitedTests >= 12
+return passes, fails, undefined, skipped, failedNames
 end
 
 -- Where the player goes when the executor is below the minimum.
@@ -6728,7 +6734,7 @@ function Library._showStatusCard(title, detail)
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = panel,
     })
-    label({
+    local detailLabel = label({
         Position = UDim2.new(0, 16, 0, 98),
         Size = UDim2.new(1, -32, 0, 16),
         Text = detail,
@@ -6755,16 +6761,31 @@ function Library._showStatusCard(title, detail)
         Parent = track,
     })
     corner(bar, UDim.new(1, 0))
-    local running = true
+    local running, progressMode = true, false
+    -- Until the work reports a fraction, the bar sweeps back and forth.
     task.spawn(function()
-        while running do
-            bar.Position = UDim2.fromScale(-0.3, 0)
-            tween(bar, { Position = UDim2.fromScale(1, 0) }, 1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-            task.wait(1.2)
+        local t = 0
+        while running and not progressMode do
+            t += task.wait()
+            local phase = (t % 1.6) / 1.6
+            bar.Position = UDim2.fromScale(-0.3 + 1.3 * phase, 0)
         end
     end)
+    -- Shows the work as a fraction of the bar, with a line of detail under the title.
+    Library._statusSet = function(fraction, text)
+        if not gui.Parent then
+            return
+        end
+        progressMode = true
+        bar.Position = UDim2.fromScale(0, 0)
+        tween(bar, { Size = UDim2.new(math.clamp(fraction, 0, 1), 0, 1, 0) }, 0.2)
+        if text then
+            detailLabel.Text = text
+        end
+    end
     Library._statusHide = function()
         running = false
+        Library._statusSet = nil
         gui:Destroy()
     end
 end
@@ -6777,11 +6798,71 @@ function Library._hideStatus()
     end
 end
 
--- Executor check, run before the key gate: the UNC tests give a score. Below Fail the
--- executor card is shown and loading stops. From Fail up to Warn the script loads with
--- a banner. At Warn and above it loads normally. UNC = false skips the check. If the
--- check itself breaks, the script loads anyway, so a bug in the check cannot lock
--- players out.
+-- A key for the executor a UNC result belongs to. A new executor build gets a new check. With no
+-- identifyexecutor there is no key, so nothing is kept: one unnamed executor must not pass for another.
+function Library._uncKey()
+    if typeof(identifyexecutor) ~= "function" then
+        return nil
+    end
+    local ok, name, version = pcall(identifyexecutor)
+    if not ok or type(name) ~= "string" then
+        return nil
+    end
+    return name .. "|" .. tostring(version or "")
+end
+
+-- A passing UNC result is kept for six hours, so the check is not repeated on every load.
+-- Failing results are never kept: a fixed executor is checked again at once.
+function Library._readUNCCache()
+    local key = Library._uncKey()
+    if not key or typeof(isfile) ~= "function" or typeof(readfile) ~= "function" then
+        return nil
+    end
+    local path = "HawkTokaiLibUI/unc_cache.json"
+    local ok, data = pcall(function()
+        if not isfile(path) then
+            return nil
+        end
+        return HttpService:JSONDecode(readfile(path))
+    end)
+    if not ok or type(data) ~= "table" then
+        return nil
+    end
+    if data.key ~= key or type(data.at) ~= "number" or os.time() - data.at > 6 * 3600 then
+        return nil
+    end
+    return {
+        score = tonumber(data.score) or 0,
+        passes = tonumber(data.passes) or 0,
+        fails = tonumber(data.fails) or 0,
+        missing = type(data.missing) == "table" and data.missing or {},
+        cached = true,
+    }
+end
+
+function Library._writeUNCCache(result)
+    local key = Library._uncKey()
+    if not key or typeof(writefile) ~= "function" then
+        return
+    end
+    pcall(function()
+        if typeof(isfolder) == "function" and typeof(makefolder) == "function" and not isfolder("HawkTokaiLibUI") then
+            makefolder("HawkTokaiLibUI")
+        end
+        writefile("HawkTokaiLibUI/unc_cache.json", HttpService:JSONEncode({
+            key = key,
+            at = os.time(),
+            score = result.score,
+            passes = result.passes,
+            fails = result.fails,
+            missing = result.missing,
+        }))
+    end)
+end
+
+-- The executor check, run before the key gate. Below Fail the card is shown and loading stops;
+-- from Fail up to Warn the script loads with a banner; at Warn and above it loads normally.
+-- UNC = false skips the check, and UNC = { Cache = false } runs it every time.
 function Library:CheckExecutor(opts)
     if opts == false then
         return true
@@ -6790,15 +6871,46 @@ function Library:CheckExecutor(opts)
     local minimum = tonumber(opts.Fail) or 70
     local warnAt = tonumber(opts.Warn) or 80
     if Library._unc == nil then
-        Library._showStatusCard("Checking your executor", "Running the UNC tests.")
-        local ok, passes, fails = pcall(Library._runUNC)
-        Library._hideStatus()
-        if ok then
-            local total = passes + fails
-            Library._unc = { score = total > 0 and math.round(passes / total * 100) or 0, passes = passes, fails = fails }
+        local cached = opts.Cache ~= false and Library._readUNCCache() or nil
+        if cached then
+            Library._unc = cached
         else
-            warn("[HawkTokaiLib] The executor check broke, so loading goes on: " .. tostring(passes))
-            Library._unc = false
+            Library._showStatusCard("Checking your executor", "Running the UNC tests.")
+            -- The card follows the tests as they finish.
+            local watching = true
+            task.spawn(function()
+                while watching do
+                    local total = math.max(Library._uncTotal or 1, 1)
+                    local done = math.min(Library._uncDone or 0, total)
+                    if Library._statusSet then
+                        Library._statusSet(done / total, "Tests done: " .. done .. " of " .. total)
+                    end
+                    task.wait(0.1)
+                end
+            end)
+            local ok, passes, fails, _, _, failedNames = pcall(Library._runUNC)
+            watching = false
+            Library._hideStatus()
+            if ok then
+                local total = passes + fails
+                local missing = {}
+                for index = 1, math.min(#(failedNames or {}), 8) do
+                    missing[index] = failedNames[index]
+                end
+                local result = {
+                    score = total > 0 and math.round(passes / total * 100) or 0,
+                    passes = passes,
+                    fails = fails,
+                    missing = missing,
+                }
+                Library._unc = result
+                if result.score >= minimum then
+                    Library._writeUNCCache(result)
+                end
+            else
+                warn("[HawkTokaiLib] The executor check broke, so loading goes on: " .. tostring(passes))
+                Library._unc = false
+            end
         end
     end
     local result = Library._unc
@@ -6806,7 +6918,7 @@ function Library:CheckExecutor(opts)
         return true
     end
     if result.score < minimum then
-        Library._showExecutorCard(result.score, minimum)
+        Library._showExecutorCard(result.score, minimum, result.missing)
         return false
     end
     if result.score < warnAt then
@@ -6822,7 +6934,7 @@ function Library:GetExecutorScore()
 end
 
 -- The card for an executor below the minimum. The button copies the invite link.
-function Library._showExecutorCard(score, minimum)
+function Library._showExecutorCard(score, minimum, missing)
     local gui = create("ScreenGui", {
         Name = "HawkTokaiLibExecutor",
         ResetOnSpawn = false,
@@ -6840,7 +6952,7 @@ function Library._showExecutorCard(score, minimum)
     local panel = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(340, 244),
+        Size = UDim2.fromOffset(340, 282),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
         Parent = gui,
@@ -6879,6 +6991,20 @@ function Library._showExecutorCard(score, minimum)
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = panel,
     })
+    if type(missing) == "table" and #missing > 0 then
+        label({
+            Position = UDim2.new(0, 16, 0, 176),
+            Size = UDim2.new(1, -32, 0, 44),
+            Text = "Missing: " .. table.concat(missing, ", "),
+            TextSize = 11,
+            FontFace = Fonts.Regular,
+            TextColor3 = Theme.Muted,
+            TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            Parent = panel,
+        })
+    end
     local copy = create("TextButton", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 16, 1, -16),
@@ -13906,13 +14032,63 @@ function Tab:Viewport(opts)
         end)
     end
 
+    -- A grip in the bottom-right corner, shown only while the group box is popped out. Dragging
+    -- it resizes the preview, and the card grows and shrinks with it.
+    local cardFrame = parts.Frame
+    local baseCard, baseMedia = cardFrame.Size.Y.Offset, media.Size.Y.Offset
+    local resizing, resizeStart, resizeHeight = false, 0, baseMedia
+    local grip = create("Frame", {
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -5, 1, -5),
+        Size = UDim2.fromOffset(16, 16),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ZIndex = 9,
+        Parent = cardFrame,
+    })
+    for index = 0, 2 do
+        local dot = create("Frame", {
+            AnchorPoint = Vector2.new(1, 1),
+            Position = UDim2.new(1, -index * 4, 1, -index * 4),
+            Size = UDim2.fromOffset(3, 3),
+            BackgroundColor3 = Theme.Muted,
+            BorderSizePixel = 0,
+            ZIndex = 10,
+            Parent = grip,
+        })
+        corner(dot, UDim.new(1, 0))
+    end
+    grip.InputBegan:Connect(function(input)
+        if isPress(input) then
+            resizing = true
+            resizeStart = input.Position.Y
+            resizeHeight = media.Size.Y.Offset
+        end
+    end)
+    window:_listen("Changed", function(input)
+        if resizing and isMove(input) then
+            local height = math.clamp(resizeHeight + (input.Position.Y - resizeStart), 80, 600)
+            media.Size = UDim2.new(media.Size.X.Scale, media.Size.X.Offset, 0, height)
+            cardFrame.Size = UDim2.new(cardFrame.Size.X.Scale, cardFrame.Size.X.Offset, 0, baseCard + (height - baseMedia))
+            handle.Height = height
+        end
+    end, handle)
+    window:_listen("Ended", function(input)
+        if resizing and isPress(input) then
+            resizing = false
+        end
+    end, handle)
+    window:_listen("Render", function()
+        grip.Visible = self._popped == true
+    end, handle)
+
     -- Drag sideways to spin and up or down to tilt; a quick flick keeps it turning. Two quick
     -- presses reset the view. A press on the toolbar does not start a drag.
     media.InputBegan:Connect(function(input)
         if not isPress(input) or not handle.Model then
             return
         end
-        if toolbar and overGui(toolbar, pointerPosition()) then
+        if toolbar and overGui(toolbar, Library._pointerIn(toolbar, Vector2.new(input.Position.X, input.Position.Y))) then
             return
         end
         local now = os.clock()
@@ -13923,7 +14099,7 @@ function Tab:Viewport(opts)
             lastClick = now
         end
         dragging = true
-        local pointer = pointerPosition()
+        local pointer = input.Position
         lastX, lastY, lastDragTime = pointer.X, pointer.Y, now
         flick = 0
     end)
@@ -13938,7 +14114,7 @@ function Tab:Viewport(opts)
     window:_listen("Changed", function(input)
         if dragging and isMove(input) then
             local now = os.clock()
-            local pointer = pointerPosition()
+            local pointer = input.Position
             local dt = math.max(now - lastDragTime, 1 / 240)
             local dxRad = (pointer.X - lastX) * 0.012
             local dyRad = (pointer.Y - lastY) * 0.008

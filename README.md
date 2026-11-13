@@ -335,7 +335,7 @@ Saved keys: `Save` writes the key as plain text to `File`, and each run checks i
 
 ### Protected script
 
-`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite, and a small card shows its progress while it runs, and while the protected script loads. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score. The key gate has a Close button: it closes the gate and the protected script is not loaded.
+`RunProtected` runs the executor check, then checks the key and `load_script` downloads your script from Junkie's Original Code and runs it. That script runs only after Junkie authenticates it, and it can read the runtime variables: `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON`. Pass them to `Home.KeyInfo` to show the time left in the profile card. The executor check runs the UNC test suite, and a small card shows its progress while it runs, and while the protected script loads. A passing result is kept for six hours, so the check is not repeated on every load (`UNC = { Cache = false }` turns that off). A failing card lists the features that are missing. Each counted test is about one point, and two of them reach outside the game: `request` to httpbin.org and a WebSocket echo server, so if one of those is down the score drops. Four tests need the player's Animate script; if it never loads, they are left out of the score. The key gate has a Close button: it closes the gate and the protected script is not loaded.
 
 ```lua
 -- Loader.luau, run in the executor
@@ -1405,7 +1405,7 @@ Preview:SetModel(workspace.Sword)
 Preview:Zoom(0.8) -- below 1 zooms in
 ```
 
-The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to spin it and up or down to tilt it. A quick flick keeps it turning, and the spin resumes a moment after you let go. Two quick presses reset the view, and zoom and reset ease in.
+The model is copied into the card with its scripts and sounds stripped and every part anchored, so the original is never touched. The camera frames the whole model and faces its front. Drag the card sideways to spin it and up or down to tilt it. A quick flick keeps it turning, and the spin resumes a moment after you let go. Two quick presses reset the view, and zoom and reset ease in. When a group box is popped out, the preview has a grip in its bottom-right corner: drag it to make the preview taller or shorter.
 
 ### Toolbar
 

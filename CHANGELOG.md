@@ -28,11 +28,15 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Keybind ring**: while a keybind waits for a key, a soft ring breathes around the box.
 - **Input underline**: an accent line grows out from the middle while the field has focus.
 - **3D preview**: zoom and reset ease in; a flick keeps the model turning; drag up or down to tilt; two quick presses reset the view; the glow brightens on hover.
+- **Popped-out preview**: a 3D preview inside a popped-out group box has a grip in its bottom-right corner; drag it to resize the preview.
+- **UNC cache**: a passing executor check is kept for six hours (`UNC = { Cache = false }` turns that off). A failing card lists the missing features.
+- **Check progress**: the executor check shows a progress bar with the number of tests done.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 
 ### Changed
 
+- The executor check waits at most four seconds for a character, and stops waiting for slow tests after twelve seconds.
 - Key gate redesign: wider panel, brand badge, a "Secured with Junkie" chip, a focus ring on the key input, and hover and press feel on its buttons.
 - Keybind waiting state shows dots instead of `...`.
 - Button ripple starts on press instead of on release.
@@ -42,6 +46,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- 3D preview drag on touch screens follows the finger, so dragging right turns the model right.
 - Button wave now starts where the mouse or finger really pressed. Before, a touch screen could show it in a fixed spot.
 - Button wave: presses on the right side of a button no longer show the wave toward the middle when the window is scaled down. The wave is now placed in the button's own units.
 - Sliders jumped to the pointer when pressed in the empty space above or below the bar. The press catcher now hugs the bar, so only the bar and the knob start a drag.
