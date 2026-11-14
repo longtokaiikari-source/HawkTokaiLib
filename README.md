@@ -2009,5 +2009,10 @@ Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`,
 
 ### Testing without Roblox
 
-`tests/run_esp_mock.py` runs the ESP block of `Source.luau` against a mock of the Roblox API (`tests/mock.lua`) and a scenario (`tests/scenario.lua`). It needs Lua 5.3 or newer (`texlua`, `lua5.4`, `lua5.3` or `lua` on the PATH). It checks the geometry, the rules, the components, the callbacks and the cleanup. It does not render, so run it in a real executor before you trust a build.
+`tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:
 
+```
+lua tests/esp_test.lua
+```
+
+It checks the geometry, the rules, the components, the callbacks and the cleanup. It does not render, so run it in a real executor before you trust a build.

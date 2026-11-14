@@ -165,5 +165,5 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Library.ESP.GlobalConfig: IgnoreCharacter, Rainbow, Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font.
 - Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
 - Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(sub, window) makes the ESP tab.
-- tests/run_esp_mock.py runs the block against a Roblox API mock (Lua 5.3+). Geometry, rules and property counts only, no rendering.
+- tests/esp_test.lua: plain Lua 5.3+ test of the ESP block in Source.luau against a Roblox API mock. Geometry, rules, components and cleanup only, no rendering.
 
