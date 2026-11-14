@@ -160,9 +160,10 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
 
 ## ESP (Library.ESP)
-- Library.ESP.Build(sub, window): ESP groupboxes and a preview on a sub tab. Starts the game overlay and hooks Shutdown to window unload.
-- Library.ESP.Config: settings read every frame (Enabled, HideTeammates, MaxDistance, Box2D, Box3D, Skeleton, Tracer, TracerFrom, Name, Distance, Health, Highlight, Rainbow, Color, AllyColor, Thickness, TextSize).
-- Library.ESP.Start() / Stop(): the game overlay on the other players. Shutdown() stops it and takes every preview off.
-- Library.ESP.Attach(viewportHandle) returns an attachment; Library.ESP.Detach(attachment) removes it.
-- A viewport handle exposes Window, Media and Camera for overlays.
-- tests/run_esp_mock.py: runs the ESP block against a Roblox API mock (Lua 5.3+). Logic and property counts only, no rendering.
+- Library.ESP:Add(settings) returns an object with Hide, Show, ToggleVisibility, SetEveryColor and Destroy. The settings and callbacks are the original msesp v2.1.4 ones.
+- Library.ESP:Clear() and Library.ESP:Destroy().
+- Library.ESP.GlobalConfig: IgnoreCharacter, Rainbow, Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font.
+- Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
+- Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(sub, window) makes the ESP tab.
+- tests/run_esp_mock.py runs the block against a Roblox API mock (Lua 5.3+). Geometry, rules and property counts only, no rendering.
+

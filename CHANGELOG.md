@@ -33,16 +33,17 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Check progress**: the executor check shows a progress bar with the number of tests done.
 - **Floating group boxes**: a popped-out box has a grip in its bottom-right corner that changes its width, kept for the next pop-out. Pressing a floating box brings it to the front of the others.
 - **Preview pop-out**: the 3D preview has a pop-out button in its header, like a group box's. It floats the preview in its own panel, which the header drags; the button or the slot docks it back with the same flight as a group box. A floating preview's grip changes its width and height.
-- **ESP**: `Library.ESP` draws 2D and 3D boxes, skeleton, tracer, name, distance, health and highlight over the game, with a tab built from the library's own controls. The feature set follows mstudio45/msesp (MIT).
-- **ESP preview**: the same ESP draws over the 3D preview, so the settings can be checked on a model before a game.
-- **Viewport handles**: a viewport handle now exposes `Window`, `Media` and `Camera`, so an overlay can draw on it.
-- **ESP tests**: `tests/run_esp_mock.py` runs the ESP against a mock of the Roblox API and checks the projection, the player rules, the toggles, the preview and the cleanup. It does not render.
+- **ESP port**: `Library.ESP` now has the original's objects and settings: `Add`, `Clear`, `Destroy`, per-object settings, the Highlight, SelectionBox and adornment types, the Tracer `Top` origin, the Arrow, the filled 2D box, the 3D box, the skeleton, the four callbacks and the global names. A health bar is added. The port follows mstudio45/msesp v2.1.4 (MIT).
+- **ESP preview**: `Library.ESP:AttachPreview(handle)` draws the ESP over a 3D preview with the same settings and components as the game, without the highlight.
+- **Viewport handles**: a viewport handle now exposes `Window`, `Media`, `Camera` and `World`, so an overlay can draw on it.
+- **ESP tests**: `tests/run_esp_mock.py` runs the ESP against a mock of the Roblox API and checks geometry, rules, components, callbacks and cleanup. It does not render.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 
 ### Changed
 
-- The ESP engine is rewritten for speed. Measured on the mock run, with every feature on it writes 279 properties per frame instead of 701, and with the default settings 82 instead of 376. Steady-state frames create no new frames. A frame that errors is caught and reported once, and nothing is drawn while ESP is off.
+- The example's ESP tab shows the automatic players, ESP for one model with `Library.ESP:Add`, and the show, remove and clear buttons.
+- The ESP API is replaced by the port's: `Add`, `Clear`, `Destroy`, `AttachPreview`, `Players`, `Settings` and `GlobalConfig`. The old `Start`, `Stop`, `Attach`, `Detach`, `Shutdown` and `Config` are gone. The tab is still `Library.ESP:Build(sub, Window)`.
 - The executor check waits at most four seconds for a character, and stops waiting for slow tests after twelve seconds.
 - Key gate redesign: wider panel, brand badge, a "Secured with Junkie" chip, a focus ring on the key input, and hover and press feel on its buttons.
 - Keybind waiting state shows dots instead of `...`.
@@ -53,6 +54,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- The SelectionBox border colour has a default now. The original reads a `BorderColor` it never sets, which errors for the `SelectionBox` type.
 - 3D preview drag on touch screens follows the finger, so dragging right turns the model right.
 - Button wave now starts where the mouse or finger really pressed. Before, a touch screen could show it in a fixed spot.
 - Button wave: presses on the right side of a button no longer show the wave toward the middle when the window is scaled down. The wave is now placed in the button's own units.

@@ -1986,28 +1986,28 @@ Whole-value colours take the same forms everywhere: a theme key string, a `Color
 
 ## ESP
 
-`Library.ESP` draws ESP over the game and over a 3D preview. Both use the same drawing and the same settings, so the preview shows what the game will show. The feature set follows [mstudio45/msesp](https://github.com/mstudio45/msesp), which declares the MIT license in its `wally.toml`.
+`Library.ESP` is a port of [mstudio45/msesp](https://github.com/mstudio45/msesp) v2.1.4, which declares the MIT license in its `wally.toml`. The objects, settings, callbacks and components are the same. The drawing uses Frames, so one code path draws over the game and over a 3D preview.
 
 ```lua
-Library.ESP.Build(sub, Window)                          -- the ESP groupboxes and a preview, on a sub tab
-Library.ESP.Config.Box2D = true                         -- every setting is read each frame
-local attachment = Library.ESP.Attach(viewportHandle)   -- ESP over any viewport from Tab:Viewport
-Library.ESP.Detach(attachment)
-Library.ESP.Start()                                     -- the game overlay (Build starts it)
-Library.ESP.Stop()                                      -- removes it (Shutdown does, on window unload)
+local object = Library.ESP:Add({ Model = character, ESPType = "Highlight", Box2D = { Enabled = true } })
+object:Hide()                              -- or :Show(), :ToggleVisibility(), :SetEveryColor(color, true)
+object:Destroy()
+Library.ESP:Clear()                        -- removes every object
+Library.ESP:Destroy()                      -- removes everything, the preview too
+
+Library.ESP.GlobalConfig.Rainbow = true    -- also Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font, IgnoreCharacter
+Library.ESP.Players.Enabled = true         -- one ESP per player, with HideTeammates and AllyColor
+Library.ESP.Settings.Box2D.Enabled = true  -- the template for the players and the preview
+Library.ESP:ApplyTemplate()                -- pushes the template to the objects that exist
+Library.ESP:AttachPreview(viewportHandle)  -- the ESP over a Tab:Viewport
+Library.ESP:Build(sub, Window)             -- the ESP tab: players, drawing, colours and a preview
 ```
 
-Settings: `Enabled`, `HideTeammates`, `MaxDistance`, `Box2D`, `Box3D`, `Skeleton`, `Tracer`, `TracerFrom` (`Bottom`, `Center` or `Mouse`), `Name`, `Distance`, `Health`, `Highlight`, `Rainbow`, `Color`, `AllyColor`, `Thickness`, `TextSize`.
+Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`, `Color`, `MaxDistance` (default 5000), `StudsOffset`, `TextSize`, `ESPType` (`Highlight`, `SelectionBox`, `SphereAdornment`, `CylinderAdornment`, `Adornment`, `Text`), `Thickness`, `Transparency`, `SurfaceColor`, `BorderColor`, `FillColor`, `OutlineColor`, `FillTransparency`, `OutlineTransparency`. The components are `Tracer` (`From`: `Top`, `Bottom`, `Center`, `Mouse`), `Arrow` (`CenterOffset`), `Box2D` (`Filled`), `Box3D` and `Skeleton`, plus `Health`, which the original does not have. The callbacks are `OnDestroy`, `OnDestroyFunc`, `BeforeUpdate` and `AfterUpdate`.
 
-The preview ignores `Enabled`, `HideTeammates` and `MaxDistance`, because those only apply to players. The highlight is only drawn in the game, since it needs a CoreGui parent. The 3D box and the skeleton cost more frames per player than the 2D box.
+`Highlight`, `SelectionBox` and the handle adornments need the world, so they are drawn in the game only. The preview draws the boxes, the skeleton, the tracer, the arrow, the names and the health bar. The name is a Frame label, so `Font` takes a Font object, not an `Enum.Font`.
 
-### Testing the ESP without Roblox
+### Testing without Roblox
 
-`tests/run_esp_mock.py` runs the ESP block of `Source.luau` against a small mock of the Roblox API (`tests/mock.lua`) and a scenario (`tests/scenario.lua`). It needs Lua 5.3 or newer (`texlua`, `lua5.4`, `lua5.3` or `lua` on the PATH).
-
-```
-python3 tests/run_esp_mock.py
-```
-
-It checks the projection maths, the player rules (distance, teammates, dead, leaving), the toggles, the preview, the cleanup and the number of property writes per frame. It does not render, so it cannot prove what the ESP looks like in a game. Run it in a real executor before you trust a build.
+`tests/run_esp_mock.py` runs the ESP block of `Source.luau` against a mock of the Roblox API (`tests/mock.lua`) and a scenario (`tests/scenario.lua`). It needs Lua 5.3 or newer (`texlua`, `lua5.4`, `lua5.3` or `lua` on the PATH). It checks the geometry, the rules, the components, the callbacks and the cleanup. It does not render, so run it in a real executor before you trust a build.
 

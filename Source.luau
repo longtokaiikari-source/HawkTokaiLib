@@ -14593,6 +14593,7 @@ function Tab:Viewport(opts)
     handle.Window = window
     handle.Media = media
     handle.Camera = camera
+    handle.World = world
     return finishElement(self, opts, handle, parts.Frame, "Viewport")
 end
 
@@ -24435,750 +24436,1267 @@ for _, class in ipairs({ Library, Window, Tab }) do
 end
 
 -- // ESP // --
--- One drawing path for the game and for the 3D preview. Every piece is a Frame, so the same code draws in a
--- ScreenGui over the game and in an overlay on a ViewportFrame. The feature set follows mstudio45/msesp (MIT).
--- Optimised: the camera is read once per frame, the rig's parts are found once per character, a frame is only
--- written when its value changes, and nothing is drawn while ESP is off.
+-- Ported from mstudio45/msesp v2.1.4 (MIT): the same objects, settings, callbacks and components. The drawing is
+-- Frames, so one code path draws over the game and over a 3D preview. Highlight, SelectionBox and the handle
+-- adornments need the world, so they are drawn in the game only.
 Library.ESP = Library.ESP or {}
 do
-    local ESP = Library.ESP
+	local ESP = Library.ESP
+	local P = {}
 
-    ESP.Config = ESP.Config or {
-        Enabled = false,
-        HideTeammates = true,
-        MaxDistance = 1500,
-        Box2D = true,
-        Box3D = false,
-        Skeleton = true,
-        Tracer = false,
-        TracerFrom = "Bottom",
-        Name = true,
-        Distance = true,
-        Health = true,
-        Highlight = false,
-        Rainbow = false,
-        Color = Color3.fromRGB(255, 255, 255),
-        AllyColor = Color3.fromRGB(90, 200, 255),
-        Thickness = 1.5,
-        TextSize = 13,
-    }
-    ESP.Corners = {
-        Vector3.new(-1, -1, -1), Vector3.new(-1, -1, 1), Vector3.new(-1, 1, -1), Vector3.new(-1, 1, 1),
-        Vector3.new(1, -1, -1), Vector3.new(1, -1, 1), Vector3.new(1, 1, -1), Vector3.new(1, 1, 1),
-    }
-    ESP.Edges = {
-        { 1, 2 }, { 1, 3 }, { 1, 5 }, { 2, 4 }, { 2, 6 }, { 3, 4 },
-        { 3, 7 }, { 4, 8 }, { 5, 6 }, { 5, 7 }, { 6, 8 }, { 7, 8 },
-    }
-    ESP.R15 = {
-        { "Head", "UpperTorso" }, { "UpperTorso", "LowerTorso" },
-        { "UpperTorso", "LeftUpperArm" }, { "LeftUpperArm", "LeftLowerArm" }, { "LeftLowerArm", "LeftHand" },
-        { "UpperTorso", "RightUpperArm" }, { "RightUpperArm", "RightLowerArm" }, { "RightLowerArm", "RightHand" },
-        { "LowerTorso", "LeftUpperLeg" }, { "LeftUpperLeg", "LeftLowerLeg" }, { "LeftLowerLeg", "LeftFoot" },
-        { "LowerTorso", "RightUpperLeg" }, { "RightUpperLeg", "RightLowerLeg" }, { "RightLowerLeg", "RightFoot" },
-    }
-    ESP.R6 = {
-        { "Head", "Torso" }, { "Torso", "Left Arm" }, { "Torso", "Right Arm" },
-        { "Torso", "Left Leg" }, { "Torso", "Right Leg" },
-    }
-    ESP.Previews = ESP.Previews or {}
+	ESP.Destroyed = false
+	ESP.Objects = ESP.Objects or {}
+	ESP.PlayerObjects = ESP.PlayerObjects or {}
+	ESP.Attachments = ESP.Attachments or {}
+	ESP.Scenes = ESP.Scenes or {}
+	ESP.Counter = ESP.Counter or 0
+	ESP.RainbowColor = ESP.RainbowColor or Color3.new(1, 0, 0)
+	ESP.RainbowStep = ESP.RainbowStep or 0
+	ESP.RainbowHue = ESP.RainbowHue or 0
 
-    -- Reads the camera once per frame. Every projection after this is a few dot products.
-    function ESP.Basis(scene, camera, width, height)
-        local cf = camera.CFrame
-        local cfg = scene.Config
-        scene.Camera = camera
-        scene.Origin = cf.Position
-        scene.Right = cf.RightVector
-        scene.Up = cf.UpVector
-        scene.Look = cf.LookVector
-        scene.Half = math.tan(math.rad(camera.FieldOfView) * 0.5)
-        scene.Width = width
-        scene.Height = height
-        scene.Aspect = width / math.max(height, 1)
-        scene.Tint = Color3.fromHSV((os.clock() * 0.2) % 1, 0.8, 1)
-        if cfg.Tracer == true and cfg.TracerFrom == "Mouse" and scene.Game then
-            local mouse = UserInputService:GetMouseLocation()
-            scene.TracerOrigin = Vector2.new(mouse.X, mouse.Y)
-        elseif cfg.TracerFrom == "Center" then
-            scene.TracerOrigin = Vector2.new(width * 0.5, height * 0.5)
-        else
-            scene.TracerOrigin = Vector2.new(width * 0.5, height)
-        end
-    end
+	-- The original's GlobalConfig names, plus Health. Font is a Font object, or nil for the library font.
+	ESP.GlobalConfig = ESP.GlobalConfig or {
+		IgnoreCharacter = false,
+		Rainbow = false,
+		Billboards = true,
+		Distance = true,
+		Highlighters = true,
+		Tracers = true,
+		Arrows = true,
+		Boxes2D = true,
+		Boxes3D = true,
+		Skeleton = true,
+		Health = true,
+		Font = nil,
+	}
+	-- Automatic players: one object per character while Enabled. AllyColor is used for teammates.
+	ESP.Players = ESP.Players or { Enabled = false, HideTeammates = true, AllyColor = Color3.fromRGB(90, 200, 255) }
+	-- The template for the automatic players and for the preview. ApplyTemplate pushes it to the objects that exist.
+	ESP.Settings = ESP.Settings or {}
 
-    -- Screen position of a world point, or nil when the point is behind the camera.
-    function ESP.Project(scene, point)
-        local d = point - scene.Origin
-        local depth = d:Dot(scene.Look)
-        if depth <= 0.05 then
-            return nil
-        end
-        local x = d:Dot(scene.Right) / (depth * scene.Half * scene.Aspect)
-        local y = d:Dot(scene.Up) / (depth * scene.Half)
-        return Vector2.new((x * 0.5 + 0.5) * scene.Width, (0.5 - y * 0.5) * scene.Height)
-    end
+	P.ESPTypes = { text = true, sphereadornment = true, cylinderadornment = true, adornment = true, selectionbox = true, highlight = true }
+	P.TracerFrom = { top = true, bottom = true, center = true, mouse = true }
+	-- The eight corners are numbered like the original: 1-4 the back face at +Z, 5-8 the front face at -Z.
+	P.Edges = { { 1, 2 }, { 2, 4 }, { 4, 3 }, { 3, 1 }, { 1, 5 }, { 5, 6 }, { 6, 8 }, { 8, 7 }, { 7, 5 }, { 2, 6 }, { 4, 8 }, { 3, 7 } }
+	P.R15 = {
+		"LowerTorso", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "LeftLowerLeg", "LeftUpperLeg", "LowerTorso",
+		"RightUpperLeg", "RightLowerLeg", "RightFoot", "RightLowerLeg", "RightUpperLeg", "LowerTorso",
+		"UpperTorso", "LeftUpperArm", "LeftLowerArm", "LeftHand", "LeftLowerArm", "LeftUpperArm", "UpperTorso",
+		"RightUpperArm", "RightLowerArm", "RightHand", "RightLowerArm", "RightUpperArm", "UpperTorso", "Head",
+	}
+	P.R6 = { "Torso", "Left Arm", "Torso", "Right Arm", "Torso", "Left Leg", "Torso", "Right Leg", "Torso", "Head" }
+	P.ArrowImage = "http://www.roblox.com/asset/?id=16368985219"
+	P.Defaults = {
+		Visible = true,
+		Color = Color3.new(1, 1, 1),
+		MaxDistance = 5000,
+		StudsOffset = Vector3.new(),
+		TextSize = 16,
+		ESPType = "Highlight",
+		Thickness = 0.1,
+		Transparency = 0.65,
+		SurfaceColor = Color3.new(1, 1, 1),
+		BorderColor = Color3.new(1, 1, 1),
+		FillColor = Color3.new(1, 1, 1),
+		OutlineColor = Color3.new(1, 1, 1),
+		FillTransparency = 0.65,
+		OutlineTransparency = 0,
+		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom" },
+		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300 },
+		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false },
+		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
+		Skeleton = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
+		Health = { Enabled = false },
+		OnDestroy = nil,
+		OnDestroyFunc = nil,
+		BeforeUpdate = nil,
+		AfterUpdate = nil,
+	}
 
-    -- The frames of one target, plus what was last written to each of them, so a frame is only touched when
-    -- its value changes.
-    function ESP.NewDrawer(container)
-        local drawer = {
-            Container = container,
-            Name = "",
-            Team = nil,
-            Model = nil,
-            Root = nil,
-            Humanoid = nil,
-            Rig = nil,
-            Joints = {},
-            Points = {},
-            Lines = {},
-            Used = 0,
-            Shown = 0,
-            BoxShown = false,
-            StrokeColor = nil,
-            StrokeWidth = nil,
-            LabelShown = false,
-            LabelText = "",
-            LabelColor = nil,
-            LabelSize = nil,
-            HealthShown = false,
-            FillFraction = nil,
-            Highlight = nil,
-            HighlightOn = false,
-            HighlightModel = nil,
-            HighlightColor = nil,
-        }
-        drawer.Box = create("Frame", {
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Visible = false,
-            ZIndex = 3,
-            Parent = container,
-        })
-        drawer.BoxStroke = create("UIStroke", {
-            Thickness = ESP.Config.Thickness,
-            Color = ESP.Config.Color,
-            Parent = drawer.Box,
-        })
-        drawer.Label = create("TextLabel", {
-            AnchorPoint = Vector2.new(0.5, 1),
-            BackgroundTransparency = 1,
-            Size = UDim2.fromOffset(280, 18),
-            FontFace = Library.Fonts.Regular,
-            TextSize = ESP.Config.TextSize,
-            TextColor3 = ESP.Config.Color,
-            TextStrokeTransparency = 0,
-            Visible = false,
-            ZIndex = 5,
-            Parent = container,
-        })
-        drawer.HealthBack = create("Frame", {
-            BackgroundColor3 = Color3.new(0, 0, 0),
-            BackgroundTransparency = 0.45,
-            BorderSizePixel = 0,
-            Visible = false,
-            ZIndex = 4,
-            Parent = container,
-        })
-        drawer.HealthFill = create("Frame", {
-            AnchorPoint = Vector2.new(0, 1),
-            Position = UDim2.fromScale(0, 1),
-            Size = UDim2.fromScale(1, 1),
-            BackgroundColor3 = Color3.fromRGB(80, 220, 90),
-            BorderSizePixel = 0,
-            ZIndex = 5,
-            Parent = drawer.HealthBack,
-        })
-        return drawer
-    end
+	-- // Helpers // --
+	function P.Copy(value)
+		if typeof(value) ~= "table" then
+			return value
+		end
+		local out = {}
+		for key, item in value do
+			out[key] = P.Copy(item)
+		end
+		return out
+	end
 
-    -- Remembers the parts a target is drawn from, so they are not searched for on every frame.
-    function ESP.Bind(drawer, model)
-        drawer.Model = nil
-        drawer.Root = nil
-        drawer.Humanoid = nil
-        if typeof(model) ~= "Instance" then
-            return
-        end
-        if model:IsA("Model") then
-            drawer.Humanoid = model:FindFirstChildOfClass("Humanoid")
-            drawer.Root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
-        elseif model:IsA("BasePart") then
-            drawer.Root = model
-        end
-        if drawer.Root then
-            drawer.Model = model
-        end
-    end
+	-- Fills the keys the data does not have from the template, the same as the original's Validate.
+	function P.Validate(data, template)
+		if typeof(data) ~= "table" then
+			return P.Copy(template)
+		end
+		for key, value in template do
+			if typeof(value) == "table" then
+				data[key] = P.Validate(data[key], value)
+			elseif data[key] == nil then
+				data[key] = value
+			end
+		end
+		return data
+	end
 
-    -- The bone pairs of a rig, or nil when the model has no rig the skeleton knows.
-    function ESP.BoneSet(model)
-        local humanoid = model:FindFirstChildOfClass("Humanoid")
-        if (humanoid and humanoid.RigType == Enum.HumanoidRigType.R15) or (not humanoid and model:FindFirstChild("UpperTorso")) then
-            return ESP.R15
-        end
-        if model:FindFirstChild("Torso") then
-            return ESP.R6
-        end
-        return nil
-    end
+	function P.Safe(func, ...)
+		if typeof(func) ~= "function" then
+			return nil
+		end
+		local ok, result = pcall(func, ...)
+		if ok then
+			return result
+		end
+		warn("[HawkTokai ESP] callback error: " .. tostring(result))
+		return nil
+	end
 
-    -- Finds both ends of every bone once per character. The skeleton reads this flat list on every frame.
-    function ESP.ResolveJoints(drawer, model)
-        drawer.Rig = model
-        local list = {}
-        local bones = ESP.BoneSet(model)
-        if bones then
-            for _, pair in bones do
-                local partA = model:FindFirstChild(pair[1])
-                local partB = model:FindFirstChild(pair[2])
-                if partA and partB then
-                    table.insert(list, partA)
-                    table.insert(list, partB)
-                end
-            end
-        end
-        drawer.Joints = list
-    end
+	function P.Pivot(instance)
+		if instance.ClassName == "Camera" then
+			return instance.CFrame
+		end
+		return instance:GetPivot()
+	end
 
-    -- One line between two screen points, from the drawer's pool of frames.
-    function ESP.Line(drawer, a, b, color, thickness)
-        local index = drawer.Used + 1
-        drawer.Used = index
-        local slot = drawer.Lines[index]
-        if not slot then
-            slot = {
-                Frame = create("Frame", {
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    BorderSizePixel = 0,
-                    ZIndex = 4,
-                    Parent = drawer.Container,
-                }),
-                Shown = false,
-            }
-            drawer.Lines[index] = slot
-        end
-        local delta = b - a
-        local length = delta.Magnitude
-        if length < 0.5 then
-            if slot.Shown then
-                slot.Frame.Visible = false
-                slot.Shown = false
-            end
-            return
-        end
-        local frame = slot.Frame
-        local mid = (a + b) * 0.5
-        frame.Position = UDim2.fromOffset(mid.X, mid.Y)
-        if slot.Length ~= length or slot.Width ~= thickness then
-            frame.Size = UDim2.fromOffset(length, thickness)
-            slot.Length = length
-            slot.Width = thickness
-        end
-        local angle = math.deg(math.atan2(delta.Y, delta.X))
-        if slot.Angle ~= angle then
-            frame.Rotation = angle
-            slot.Angle = angle
-        end
-        if slot.Color ~= color then
-            frame.BackgroundColor3 = color
-            slot.Color = color
-        end
-        if not slot.Shown then
-            frame.Visible = true
-            slot.Shown = true
-        end
-    end
+	function P.PrimaryPart(instance)
+		if typeof(instance) ~= "Instance" then
+			return nil
+		end
+		if instance:IsA("Model") and instance.PrimaryPart then
+			return instance.PrimaryPart
+		end
+		return instance:FindFirstChildWhichIsA("BasePart") or instance
+	end
 
-    -- Hides what a target drew. Only what is shown gets written.
-    function ESP.Hide(drawer)
-        if drawer.BoxShown then
-            drawer.Box.Visible = false
-            drawer.BoxShown = false
-        end
-        if drawer.LabelShown then
-            drawer.Label.Visible = false
-            drawer.LabelShown = false
-        end
-        if drawer.HealthShown then
-            drawer.HealthBack.Visible = false
-            drawer.HealthShown = false
-        end
-        if drawer.HighlightOn then
-            drawer.Highlight.Enabled = false
-            drawer.HighlightOn = false
-        end
-        for index = 1, drawer.Shown do
-            local slot = drawer.Lines[index]
-            if slot and slot.Shown then
-                slot.Frame.Visible = false
-                slot.Shown = false
-            end
-        end
-        drawer.Used = 0
-        drawer.Shown = 0
-    end
+	function P.DistanceFrom(inst, from)
+		if not inst or not from then
+			return 9e9
+		end
+		local position = inst
+		if typeof(inst) == "Instance" then
+			position = P.Pivot(inst).Position
+		end
+		local origin = from
+		if typeof(from) == "Instance" then
+			origin = P.Pivot(from).Position
+		end
+		return (origin - position).Magnitude
+	end
 
-    function ESP.Destroy(drawer)
-        for _, slot in drawer.Lines do
-            slot.Frame:Destroy()
-        end
-        drawer.Lines = {}
-        drawer.Used = 0
-        drawer.Shown = 0
-        drawer.Box:Destroy()
-        drawer.Label:Destroy()
-        drawer.HealthBack:Destroy()
-        if drawer.Highlight then
-            drawer.Highlight:Destroy()
-            drawer.Highlight = nil
-        end
-    end
+	function P.ColorOf(color)
+		if ESP.GlobalConfig.Rainbow == true then
+			return ESP.RainbowColor
+		end
+		return color
+	end
 
-    -- The centre frame and the size of a model's bounding box, or nil when it has none.
-    function ESP.Bounds(model)
-        if model:IsA("Model") then
-            local ok, cf, size = pcall(model.GetBoundingBox, model)
-            if ok and cf then
-                return cf, size
-            end
-            return nil
-        end
-        return model.CFrame, model.Size
-    end
+	function P.Rainbow(delta)
+		ESP.RainbowStep = ESP.RainbowStep + delta
+		if ESP.RainbowStep >= 1 / 60 then
+			ESP.RainbowStep = 0
+			ESP.RainbowHue = ESP.RainbowHue + 1 / 400
+			if ESP.RainbowHue > 1 then
+				ESP.RainbowHue = 0
+			end
+			ESP.RainbowColor = Color3.fromHSV(ESP.RainbowHue, 0.8, 1)
+		end
+	end
 
-    -- Draws one target. scene holds the camera, the drawing size and the config. Game is set for the
-    -- overlay on the players, where the distance and team rules apply.
-    function ESP.Draw(drawer, scene)
-        local cfg = scene.Config
-        local model, root, humanoid = drawer.Model, drawer.Root, drawer.Humanoid
-        if not model or not root or not model.Parent or not root.Parent or scene.Width <= 0 or scene.Height <= 0 then
-            ESP.Hide(drawer)
-            return
-        end
-        if humanoid and humanoid.Health <= 0 then
-            ESP.Hide(drawer)
-            return
-        end
-        local distance = (root.Position - scene.Origin).Magnitude
-        local isAlly = scene.Game and drawer.Team ~= nil and drawer.Team == scene.LocalTeam
-        if scene.Game and (distance > cfg.MaxDistance or (cfg.HideTeammates == true and isAlly)) then
-            ESP.Hide(drawer)
-            return
-        end
-        local boxCf, boxSize = ESP.Bounds(model)
-        if not boxCf then
-            ESP.Hide(drawer)
-            return
-        end
+	-- // Scenes // --
+	-- A scene says where objects are drawn: the game (the world camera, a ScreenGui) or a preview (the viewport camera,
+	-- an overlay). Camera, Size and Reference are functions, so they are read on every frame.
+	function P.Reference()
+		local camera = workspace.CurrentCamera
+		if ESP.GlobalConfig.IgnoreCharacter == true then
+			return camera
+		end
+		local localPlayer = Players.LocalPlayer
+		local subject = camera and camera.CameraSubject
+		if subject and subject:IsA("Humanoid") then
+			if subject.Health <= 0 then
+				return camera
+			end
+			if subject.Parent and subject.Parent ~= localPlayer.Character then
+				return camera
+			end
+		end
+		local character = localPlayer and localPlayer.Character
+		local root = character and (character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso"))
+		return root or camera
+	end
 
-        local half = boxSize * 0.5
-        local points = drawer.Points
-        local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-        for index = 1, 8 do
-            local offset = ESP.Corners[index]
-            local screen = ESP.Project(scene, boxCf * Vector3.new(offset.X * half.X, offset.Y * half.Y, offset.Z * half.Z))
-            points[index] = screen
-            if screen then
-                minX = math.min(minX, screen.X)
-                minY = math.min(minY, screen.Y)
-                maxX = math.max(maxX, screen.X)
-                maxY = math.max(maxY, screen.Y)
-            end
-        end
-        if minX == math.huge then
-            ESP.Hide(drawer)
-            return
-        end
+	function P.EnsureGameScene()
+		if ESP.GameScene then
+			return ESP.GameScene
+		end
+		local folder = create("Folder", { Name = "HawkTokaiESP", Parent = defaultParent() })
+		local container = create("ScreenGui", {
+			Name = "HawkTokaiESP",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			DisplayOrder = 900,
+			Parent = defaultParent(),
+		})
+		ESP.GameScene = {
+			Kind = "game",
+			World = workspace,
+			Container = container,
+			Folder = folder,
+			Camera = function()
+				return workspace.CurrentCamera
+			end,
+			Size = function()
+				local camera = workspace.CurrentCamera
+				if camera then
+					return camera.ViewportSize
+				end
+				return Vector2.new(0, 0)
+			end,
+			Reference = P.Reference,
+		}
+		return ESP.GameScene
+	end
 
-        local color = cfg.Color
-        if isAlly then
-            color = cfg.AllyColor
-        end
-        if cfg.Rainbow == true then
-            color = scene.Tint
-        end
+	function P.ResolveScene(model)
+		if ESP.GameScene and model:IsDescendantOf(workspace) then
+			return ESP.GameScene
+		end
+		for _, scene in ESP.Scenes do
+			if model:IsDescendantOf(scene.World) then
+				return scene
+			end
+		end
+		return nil
+	end
 
-        drawer.Used = 0
+	-- Projects a world point into the scene. Returns Vector3(x, y, depth) and whether it is in front of the camera.
+	function P.Project(scene, point)
+		local camera = scene.Camera()
+		if not camera then
+			return Vector3.new(0, 0, 0), false
+		end
+		local cf = camera.CFrame
+		local offset = point - cf.Position
+		local depth = offset:Dot(cf.LookVector)
+		if depth <= 0 then
+			return Vector3.new(0, 0, depth), false
+		end
+		local size = scene.Size()
+		local half = math.tan(math.rad(camera.FieldOfView) * 0.5)
+		local aspect = size.X / math.max(size.Y, 1)
+		local x = offset:Dot(cf.RightVector) / (depth * half * aspect)
+		local y = offset:Dot(cf.UpVector) / (depth * half)
+		return Vector3.new((x * 0.5 + 0.5) * size.X, (0.5 - y * 0.5) * size.Y, depth), true
+	end
 
-        if cfg.Box2D == true then
-            if not drawer.BoxShown then
-                drawer.Box.Visible = true
-                drawer.BoxShown = true
-            end
-            drawer.Box.Position = UDim2.fromOffset(minX, minY)
-            drawer.Box.Size = UDim2.fromOffset(maxX - minX, maxY - minY)
-            if drawer.StrokeColor ~= color then
-                drawer.BoxStroke.Color = color
-                drawer.StrokeColor = color
-            end
-            if drawer.StrokeWidth ~= cfg.Thickness then
-                drawer.BoxStroke.Thickness = cfg.Thickness
-                drawer.StrokeWidth = cfg.Thickness
-            end
-        elseif drawer.BoxShown then
-            drawer.Box.Visible = false
-            drawer.BoxShown = false
-        end
+	-- The eight corners of the model's bounding box, the same as the original's GetModelCorners.
+	function P.Corners(scene, model)
+		local cframe, size
+		if model:IsA("Model") then
+			local ok, boxCf, boxSize = pcall(model.GetBoundingBox, model)
+			if ok then
+				cframe, size = boxCf, boxSize
+			end
+		end
+		if not (cframe and size) then
+			local primary = P.PrimaryPart(model)
+			if primary and primary:IsA("BasePart") then
+				cframe, size = primary.CFrame, primary.Size
+			end
+		end
+		if not (cframe and size) then
+			return false, {}, {}, 0, 0, 0, 0
+		end
+		local sx, sy, sz = size.X / 2, size.Y / 2, size.Z / 2
+		local world = {
+			cframe * Vector3.new(sx, sy, sz), cframe * Vector3.new(sx, sy, -sz),
+			cframe * Vector3.new(sx, -sy, sz), cframe * Vector3.new(sx, -sy, -sz),
+			cframe * Vector3.new(-sx, sy, sz), cframe * Vector3.new(-sx, sy, -sz),
+			cframe * Vector3.new(-sx, -sy, sz), cframe * Vector3.new(-sx, -sy, -sz),
+		}
+		local screen = {}
+		local visible = 0
+		local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+		for index, point in world do
+			local pos, inFront = P.Project(scene, point)
+			screen[index] = pos
+			if inFront then
+				visible = visible + 1
+				minX = math.min(minX, pos.X)
+				minY = math.min(minY, pos.Y)
+				maxX = math.max(maxX, pos.X)
+				maxY = math.max(maxY, pos.Y)
+			end
+		end
+		return visible > 0, world, screen, minX, minY, maxX, maxY
+	end
 
-        if cfg.Box3D == true then
-            for _, edge in ESP.Edges do
-                local a, b = points[edge[1]], points[edge[2]]
-                if a and b then
-                    ESP.Line(drawer, a, b, color, cfg.Thickness)
-                end
-            end
-        end
+	-- // Components // --
+	-- A pool of line Frames. Begin, then Line for each line, then End hides the ones that were not used.
+	function P.LinePool(container)
+		local pool = { Items = {}, Used = 0, Shown = 0 }
+		function pool.Begin()
+			pool.Used = 0
+		end
+		function pool.Line(a, b, color, thickness, transparency)
+			pool.Used += 1
+			local item = pool.Items[pool.Used]
+			if not item then
+				item = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = container })
+				pool.Items[pool.Used] = item
+			end
+			local delta = b - a
+			local length = delta.Magnitude
+			if length < 0.5 then
+				item.Visible = false
+				return
+			end
+			local mid = (a + b) * 0.5
+			item.Position = UDim2.fromOffset(mid.X, mid.Y)
+			item.Size = UDim2.fromOffset(length, thickness)
+			item.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+			item.BackgroundColor3 = color
+			item.BackgroundTransparency = transparency
+			item.Visible = true
+		end
+		function pool.End()
+			for index = pool.Used + 1, pool.Shown do
+				pool.Items[index].Visible = false
+			end
+			pool.Shown = pool.Used
+		end
+		function pool.Hide()
+			for index = 1, pool.Shown do
+				pool.Items[index].Visible = false
+			end
+			pool.Used = 0
+			pool.Shown = 0
+		end
+		function pool.Destroy()
+			for _, item in pool.Items do
+				item:Destroy()
+			end
+			pool.Items = {}
+			pool.Used = 0
+			pool.Shown = 0
+		end
+		return pool
+	end
 
-        if cfg.Skeleton == true then
-            if drawer.Rig ~= model then
-                ESP.ResolveJoints(drawer, model)
-            end
-            local joints = drawer.Joints
-            for index = 1, #joints, 2 do
-                local partA, partB = joints[index], joints[index + 1]
-                if partA.Parent and partB.Parent then
-                    local a = ESP.Project(scene, partA.Position)
-                    local b = ESP.Project(scene, partB.Position)
-                    if a and b then
-                        ESP.Line(drawer, a, b, color, cfg.Thickness)
-                    end
-                end
-            end
-        end
+	-- A component has Update, Show, Hide and Destroy. Hide clears what it drew until Show; Update decides each frame.
+	function P.NewComponent(frames, pools, instances)
+		local component = { Visible = true, Frames = frames or {}, Pools = pools or {}, Instances = instances or {} }
+		function component.Show()
+			component.Visible = true
+		end
+		function component.Hide()
+			component.Visible = false
+			for _, frame in component.Frames do
+				frame.Visible = false
+			end
+			for _, pool in component.Pools do
+				pool.Hide()
+			end
+			for _, instance in component.Instances do
+				instance.Adornee = nil
+			end
+		end
+		function component.Destroy()
+			for _, frame in component.Frames do
+				frame:Destroy()
+			end
+			for _, pool in component.Pools do
+				pool.Destroy()
+			end
+			for _, instance in component.Instances do
+				instance:Destroy()
+			end
+			component.Frames = {}
+			component.Pools = {}
+			component.Instances = {}
+		end
+		return component
+	end
 
-        if cfg.Tracer == true then
-            local feet = ESP.Project(scene, boxCf * Vector3.new(0, -half.Y, 0))
-            if feet then
-                ESP.Line(drawer, scene.TracerOrigin, feet, color, cfg.Thickness)
-            end
-        end
+	-- The name and the distance, above the TextModel (plus StudsOffset).
+	function P.Billboard(object, scene)
+		local label = create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(200, 50),
+			BackgroundTransparency = 1,
+			FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
+			TextWrapped = true,
+			RichText = true,
+			TextStrokeTransparency = 0,
+			Visible = false,
+			ZIndex = 5,
+			Parent = scene.Container,
+		})
+		create("UIStroke", { Parent = label })
+		local component = P.NewComponent({ label })
+		local lastText = nil
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local textPos, inFront = P.Project(scene, P.Pivot(settings.TextModel).Position + settings.StudsOffset)
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Billboards == true and inFront
+			label.Visible = shown == true
+			if not shown then
+				return
+			end
+			label.Position = UDim2.fromOffset(textPos.X, textPos.Y)
+			local text = settings.Name
+			if ESP.GlobalConfig.Distance == true then
+				text = string.format('%s\n<font size="%d">[%s]</font>', settings.Name, math.max(settings.TextSize - 3, 1), tostring(math.floor(object._LastDistance or 0)))
+			end
+			if text ~= lastText then
+				label.Text = text
+				lastText = text
+			end
+			label.TextSize = settings.TextSize
+			label.TextColor3 = P.ColorOf(settings.Color)
+		end
+		return component
+	end
 
-        local text = ""
-        if cfg.Name == true then
-            text = drawer.Name
-        end
-        if cfg.Distance == true then
-            local meters = "[" .. math.floor(distance) .. "m]"
-            if text == "" then
-                text = meters
-            else
-                text = text .. " " .. meters
-            end
-        end
-        if text ~= "" then
-            if not drawer.LabelShown then
-                drawer.Label.Visible = true
-                drawer.LabelShown = true
-            end
-            if drawer.LabelText ~= text then
-                drawer.Label.Text = text
-                drawer.LabelText = text
-            end
-            if drawer.LabelColor ~= color then
-                drawer.Label.TextColor3 = color
-                drawer.LabelColor = color
-            end
-            if drawer.LabelSize ~= cfg.TextSize then
-                drawer.Label.TextSize = cfg.TextSize
-                drawer.LabelSize = cfg.TextSize
-            end
-            drawer.Label.Position = UDim2.fromOffset((minX + maxX) * 0.5, minY - 4)
-        elseif drawer.LabelShown then
-            drawer.Label.Visible = false
-            drawer.LabelShown = false
-        end
+	-- The highlight of the game: Highlight, SelectionBox or a handle adornment, parented to the game folder.
+	function P.Highlighter(object, scene)
+		local settings = object.CurrentSettings
+		local kind = settings.ESPType
+		if kind == "text" or scene.Kind ~= "game" then
+			return nil
+		end
+		local model = settings.Model
+		local instance
+		if kind == "sphereadornment" or kind == "cylinderadornment" or kind == "adornment" then
+			local size = Vector3.new(4, 4, 4)
+			if model:IsA("Model") then
+				local ok, _, boxSize = pcall(model.GetBoundingBox, model)
+				if ok and boxSize then
+					size = boxSize
+				end
+			elseif model:IsA("BasePart") then
+				size = model.Size
+			end
+			if kind == "sphereadornment" then
+				instance = create("SphereHandleAdornment", {
+					Name = object.Index, AlwaysOnTop = true, ZIndex = 10, Radius = size.X * 1.085,
+					CFrame = CFrame.Angles(math.rad(90), 0, 0), Color3 = settings.Color, Transparency = settings.Transparency,
+					Parent = scene.Folder,
+				})
+			elseif kind == "cylinderadornment" then
+				instance = create("CylinderHandleAdornment", {
+					Name = object.Index, AlwaysOnTop = true, ZIndex = 10, Height = size.Y * 2, Radius = size.X * 1.085,
+					CFrame = CFrame.Angles(math.rad(90), 0, 0), Color3 = settings.Color, Transparency = settings.Transparency,
+					Parent = scene.Folder,
+				})
+			else
+				instance = create("BoxHandleAdornment", {
+					Name = object.Index, AlwaysOnTop = true, ZIndex = 10, Size = size,
+					Color3 = settings.Color, Transparency = settings.Transparency, Parent = scene.Folder,
+				})
+			end
+		elseif kind == "selectionbox" then
+			instance = create("SelectionBox", {
+				Name = object.Index, Color3 = settings.BorderColor, LineThickness = settings.Thickness,
+				SurfaceColor3 = settings.SurfaceColor, SurfaceTransparency = settings.Transparency, Parent = scene.Folder,
+			})
+		else
+			instance = create("Highlight", {
+				Name = object.Index, FillColor = settings.FillColor, OutlineColor = settings.OutlineColor,
+				FillTransparency = settings.FillTransparency, OutlineTransparency = settings.OutlineTransparency,
+				Parent = scene.Folder,
+			})
+		end
+		local component = P.NewComponent({}, {}, { instance })
+		function component.Update()
+			local current = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Highlighters == true
+			if not shown then
+				instance.Adornee = nil
+				return
+			end
+			instance.Adornee = current.Model
+			if kind == "selectionbox" then
+				instance.Color3 = P.ColorOf(current.BorderColor)
+				instance.LineThickness = current.Thickness
+				instance.SurfaceColor3 = P.ColorOf(current.SurfaceColor)
+				instance.SurfaceTransparency = current.Transparency
+			elseif kind == "highlight" then
+				instance.FillColor = P.ColorOf(current.FillColor)
+				instance.OutlineColor = P.ColorOf(current.OutlineColor)
+				instance.FillTransparency = current.FillTransparency
+				instance.OutlineTransparency = current.OutlineTransparency
+			else
+				instance.Color3 = P.ColorOf(current.Color)
+				instance.Transparency = current.Transparency
+			end
+		end
+		return component
+	end
 
-        if cfg.Health == true and humanoid and humanoid.MaxHealth > 0 then
-            if not drawer.HealthShown then
-                drawer.HealthBack.Visible = true
-                drawer.HealthShown = true
-            end
-            drawer.HealthBack.Position = UDim2.fromOffset(minX - 5, minY)
-            drawer.HealthBack.Size = UDim2.fromOffset(3, maxY - minY)
-            local fraction = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-            if drawer.FillFraction ~= fraction then
-                drawer.HealthFill.Size = UDim2.fromScale(1, fraction)
-                drawer.HealthFill.BackgroundColor3 = Color3.fromHSV(fraction * 0.33, 0.9, 1)
-                drawer.FillFraction = fraction
-            end
-        elseif drawer.HealthShown then
-            drawer.HealthBack.Visible = false
-            drawer.HealthShown = false
-        end
+	-- The line from the chosen point of the screen to the model: Top, Bottom, Center or Mouse.
+	function P.TracerOrigin(scene, from)
+		local size = scene.Size()
+		if from == "top" then
+			return Vector2.new(size.X / 2, 0)
+		elseif from == "center" then
+			return Vector2.new(size.X / 2, size.Y / 2)
+		elseif from == "mouse" and scene.Kind == "game" then
+			local mouse = UserInputService:GetMouseLocation()
+			return Vector2.new(mouse.X, mouse.Y)
+		end
+		return Vector2.new(size.X / 2, size.Y)
+	end
 
-        -- The highlight needs a CoreGui parent to render, so it is only drawn in the game.
-        if scene.Game and cfg.Highlight == true and scene.Folder then
-            if not drawer.Highlight then
-                drawer.Highlight = create("Highlight", {
-                    DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-                    FillTransparency = 0.6,
-                    OutlineTransparency = 0,
-                    Parent = scene.Folder,
-                })
-            end
-            if drawer.HighlightModel ~= model then
-                drawer.Highlight.Adornee = model
-                drawer.HighlightModel = model
-            end
-            if drawer.HighlightColor ~= color then
-                drawer.Highlight.FillColor = color
-                drawer.Highlight.OutlineColor = color
-                drawer.HighlightColor = color
-            end
-            if not drawer.HighlightOn then
-                drawer.Highlight.Enabled = true
-                drawer.HighlightOn = true
-            end
-        elseif drawer.HighlightOn then
-            drawer.Highlight.Enabled = false
-            drawer.HighlightOn = false
-        end
+	function P.Tracer(object, scene)
+		local pool = P.LinePool(scene.Container)
+		local component = P.NewComponent({}, { pool })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Tracers == true and settings.Tracer.Enabled == true
+			pool.Begin()
+			if shown then
+				local from = P.TracerOrigin(scene, string.lower(tostring(settings.Tracer.From)))
+				local target = Vector2.new(screen[1].X, screen[1].Y)
+				pool.Line(from, target, P.ColorOf(settings.Tracer.Color), settings.Tracer.Thickness, settings.Tracer.Transparency)
+			end
+			pool.End()
+		end
+		return component
+	end
 
-        for index = drawer.Used + 1, drawer.Shown do
-            local slot = drawer.Lines[index]
-            if slot and slot.Shown then
-                slot.Frame.Visible = false
-                slot.Shown = false
-            end
-        end
-        drawer.Shown = drawer.Used
-    end
+	-- A screen-edge arrow for a target behind the camera, the same geometry as the original's Arrow.
+	function P.Arrow(object, scene)
+		local arrow = create("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(48, 48),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Image = P.ArrowImage,
+			ImageColor3 = Color3.new(1, 1, 1),
+			Visible = false,
+			ZIndex = 6,
+			Parent = scene.Container,
+		})
+		local component = P.NewComponent({ arrow })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == false and ESP.GlobalConfig.Arrows == true and settings.Arrow.Enabled == true
+			arrow.Visible = shown == true
+			if not shown then
+				return
+			end
+			local size = scene.Size()
+			local center = Vector2.new(size.X / 2, size.Y / 2)
+			local point = screen[1]
+			local inverted = point.Z <= 0
+			local invert = 1
+			local turn = 180
+			if inverted then
+				invert = -1
+				turn = 0
+			end
+			local direction = Vector2.new(point.X, point.Y) - center
+			local arctan = math.atan2(direction.Y, direction.X)
+			local angle = math.deg(arctan) + 90
+			local distance = (settings.Arrow.CenterOffset * 0.001) * size.Y
+			arrow.Rotation = angle + turn
+			arrow.Position = UDim2.fromOffset(center.X + distance * math.cos(arctan) * invert, center.Y + distance * math.sin(arctan) * invert)
+			arrow.ImageColor3 = P.ColorOf(settings.Arrow.Color)
+		end
+		return component
+	end
 
-    -- Keeps the set of players up to date from events, so a frame never has to build that list.
-    function ESP.TrackPlayers(state)
-        local localPlayer = Players.LocalPlayer
-        for _, player in Players:GetPlayers() do
-            if player ~= localPlayer then
-                state.Players[player] = true
-            end
-        end
-        table.insert(state.Connections, Players.PlayerAdded:Connect(function(player)
-            if player ~= Players.LocalPlayer then
-                state.Players[player] = true
-            end
-        end))
-        table.insert(state.Connections, Players.PlayerRemoving:Connect(function(player)
-            state.Players[player] = nil
-            local drawer = state.Drawers[player]
-            if drawer then
-                ESP.Destroy(drawer)
-                state.Drawers[player] = nil
-            end
-        end))
-    end
+	function P.Box2D(object, scene)
+		local frame = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 2, Parent = scene.Container })
+		local stroke = create("UIStroke", { Parent = frame })
+		local component = P.NewComponent({ frame })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Boxes2D == true and settings.Box2D.Enabled == true and object._CornerOnScreen == true
+			frame.Visible = shown == true
+			if not shown then
+				return
+			end
+			frame.Position = UDim2.fromOffset(object._MinX, object._MinY)
+			frame.Size = UDim2.fromOffset(object._MaxX - object._MinX, object._MaxY - object._MinY)
+			local color = P.ColorOf(settings.Box2D.Color)
+			frame.BackgroundColor3 = color
+			if settings.Box2D.Filled == true then
+				frame.BackgroundTransparency = 0.5
+			else
+				frame.BackgroundTransparency = 1
+			end
+			stroke.Color = color
+			stroke.Thickness = settings.Box2D.Thickness
+			stroke.Transparency = settings.Box2D.Transparency
+		end
+		return component
+	end
 
-    -- One frame of the game overlay. While ESP is off, the frames are hidden once and nothing is drawn.
-    function ESP.Step()
-        local state = ESP.State
-        local camera = workspace.CurrentCamera
-        if not state or not camera then
-            return
-        end
-        if not ESP.Config.Enabled then
-            if state.Shown then
-                for _, drawer in state.Drawers do
-                    ESP.Hide(drawer)
-                end
-                state.Shown = false
-            end
-            return
-        end
-        state.Shown = true
-        local scene = state.Scene
-        ESP.Basis(scene, camera, camera.ViewportSize.X, camera.ViewportSize.Y)
-        scene.LocalTeam = Players.LocalPlayer.Team
-        for player in state.Players do
-            local drawer = state.Drawers[player]
-            if not drawer then
-                drawer = ESP.NewDrawer(state.Container)
-                drawer.Name = player.Name
-                state.Drawers[player] = drawer
-            end
-            drawer.Team = player.Team
-            local character = player.Character
-            if character ~= drawer.Model then
-                ESP.Bind(drawer, character)
-            end
-            ESP.Draw(drawer, scene)
-        end
-    end
+	function P.Box3D(object, scene)
+		local pool = P.LinePool(scene.Container)
+		local component = P.NewComponent({}, { pool })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local corners = object._ScreenCorners
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Boxes3D == true and settings.Box3D.Enabled == true and object._CornerOnScreen == true and corners ~= nil and corners[1] ~= nil
+			pool.Begin()
+			if shown then
+				local color = P.ColorOf(settings.Box3D.Color)
+				for _, edge in P.Edges do
+					local a, b = corners[edge[1]], corners[edge[2]]
+					if a and b and a.Z > 0 and b.Z > 0 then
+						pool.Line(Vector2.new(a.X, a.Y), Vector2.new(b.X, b.Y), color, settings.Box3D.Thickness, settings.Box3D.Transparency)
+					end
+				end
+			end
+			pool.End()
+		end
+		return component
+	end
 
-    -- Starts the game overlay. Build calls it; Stop undoes it.
-    function ESP.Start()
-        if ESP.State then
-            return
-        end
-        local folder = create("Folder", { Name = "HawkTokaiESP", Parent = defaultParent() })
-        local container = create("ScreenGui", {
-            Name = "HawkTokaiESP",
-            ResetOnSpawn = false,
-            IgnoreGuiInset = true,
-            DisplayOrder = 900,
-            Parent = defaultParent(),
-        })
-        local state = {
-            Container = container,
-            Folder = folder,
-            Drawers = {},
-            Players = {},
-            Connections = {},
-            Shown = false,
-            Scene = { Config = ESP.Config, Game = true, Folder = folder },
-        }
-        ESP.State = state
-        ESP.TrackPlayers(state)
-        state.Connection = RunService.RenderStepped:Connect(function()
-            local ok, err = pcall(ESP.Step)
-            if not ok and not state.Warned then
-                state.Warned = true
-                warn("[HawkTokaiLib] ESP stopped drawing after an error: " .. tostring(err))
-            end
-        end)
-    end
+	-- The skeleton follows the original's part sequence. A part that is missing or behind the camera breaks the line.
+	function P.Skeleton(object, scene)
+		local model = object.CurrentSettings.Model
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		local sequence = nil
+		if humanoid then
+			if humanoid.RigType == Enum.HumanoidRigType.R15 then
+				sequence = P.R15
+			else
+				sequence = P.R6
+			end
+		end
+		if not sequence then
+			warn("[HawkTokai ESP] could not detect the rig type for " .. tostring(object.CurrentSettings.Name))
+			return nil
+		end
+		local pool = P.LinePool(scene.Container)
+		local component = P.NewComponent({}, { pool })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Skeleton == true and settings.Skeleton.Enabled == true
+			pool.Begin()
+			if shown then
+				local color = P.ColorOf(settings.Skeleton.Color)
+				local previous = nil
+				for _, partName in sequence do
+					local part = settings.Model:FindFirstChild(partName)
+					local point, inFront = nil, false
+					if part then
+						point, inFront = P.Project(scene, part.Position)
+					end
+					if inFront then
+						local current = Vector2.new(point.X, point.Y)
+						if previous then
+							pool.Line(previous, current, color, settings.Skeleton.Thickness, settings.Skeleton.Transparency)
+						end
+						previous = current
+					else
+						previous = nil
+					end
+				end
+			end
+			pool.End()
+		end
+		return component
+	end
 
-    -- Removes the game overlay and every frame in it.
-    function ESP.Stop()
-        local state = ESP.State
-        if not state then
-            return
-        end
-        state.Connection:Disconnect()
-        for _, connection in state.Connections do
-            connection:Disconnect()
-        end
-        for _, drawer in state.Drawers do
-            ESP.Destroy(drawer)
-        end
-        state.Container:Destroy()
-        state.Folder:Destroy()
-        ESP.State = nil
-    end
+	-- A health bar beside the 2D box. It is an addition to the original, which has no health bar.
+	function P.Health(object, scene)
+		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
+		local fill = create("Frame", {
+			AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(80, 220, 90), BorderSizePixel = 0, ZIndex = 5, Parent = back,
+		})
+		local component = P.NewComponent({ back })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and object._CornerOnScreen == true and humanoid ~= nil and humanoid.MaxHealth > 0
+			back.Visible = shown == true
+			if not shown then
+				return
+			end
+			local fraction = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+			back.Position = UDim2.fromOffset(object._MinX - 5, object._MinY)
+			back.Size = UDim2.fromOffset(3, object._MaxY - object._MinY)
+			fill.Size = UDim2.fromScale(1, fraction)
+			fill.BackgroundColor3 = Color3.fromHSV(fraction * 0.33, 0.9, 1)
+		end
+		return component
+	end
 
-    -- Puts ESP over a 3D preview. handle is what Tab:Viewport returns: it carries the window, the media frame
-    -- and the camera. ESP.Detach(attachment) removes it again.
-    function ESP.Attach(handle)
-        if type(handle) ~= "table" or not handle.Media or not handle.Camera or not handle.Window then
-            return nil
-        end
-        local window = handle.Window
-        local overlay = create("Frame", {
-            Name = "ESPOverlay",
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            ClipsDescendants = true,
-            ZIndex = 3,
-            Parent = handle.Media,
-        })
-        local attachment = {
-            Handle = handle,
-            Overlay = overlay,
-            Drawer = ESP.NewDrawer(overlay),
-            Scene = { Config = ESP.Config, Game = false },
-        }
-        attachment.Stop = window:_listen("Render", function()
-            if attachment.Failed then
-                return
-            end
-            local scale = math.max(window.Scale.Scale, 0.05)
-            local width = overlay.AbsoluteSize.X / scale
-            local height = overlay.AbsoluteSize.Y / scale
-            if not window.Open or window.Minimized or not handle.Camera or width <= 0 or height <= 0 then
-                ESP.Hide(attachment.Drawer)
-                return
-            end
-            if handle.Model ~= attachment.Drawer.Model then
-                ESP.Bind(attachment.Drawer, handle.Model)
-                if attachment.Drawer.Model then
-                    attachment.Drawer.Name = attachment.Drawer.Model.Name
-                end
-            end
-            ESP.Basis(attachment.Scene, handle.Camera, width, height)
-            local ok, err = pcall(ESP.Draw, attachment.Drawer, attachment.Scene)
-            if not ok then
-                attachment.Failed = true
-                ESP.Hide(attachment.Drawer)
-                warn("[HawkTokaiLib] ESP preview stopped drawing after an error: " .. tostring(err))
-            end
-        end, handle)
-        table.insert(ESP.Previews, attachment)
-        return attachment
-    end
+	function P.BuildComponents(object)
+		local scene = object.Scene
+		object.Components.Billboard = P.Billboard(object, scene)
+		object.Components.Highlighter = P.Highlighter(object, scene)
+		object.Components.Tracer = P.Tracer(object, scene)
+		object.Components.Arrow = P.Arrow(object, scene)
+		object.Components.Box2D = P.Box2D(object, scene)
+		object.Components.Box3D = P.Box3D(object, scene)
+		object.Components.Skeleton = P.Skeleton(object, scene)
+		object.Components.Health = P.Health(object, scene)
+	end
 
-    function ESP.Detach(attachment)
-        if not attachment then
-            return
-        end
-        if attachment.Stop then
-            attachment.Stop()
-            attachment.Stop = nil
-        end
-        ESP.Destroy(attachment.Drawer)
-        if attachment.Overlay then
-            attachment.Overlay:Destroy()
-            attachment.Overlay = nil
-        end
-        for index, item in ESP.Previews do
-            if item == attachment then
-                table.remove(ESP.Previews, index)
-                break
-            end
-        end
-    end
+	function P.HideAll(object, force)
+		if force ~= true and object.Hidden then
+			return
+		end
+		object.Hidden = true
+		for _, component in object.Components do
+			component.Hide()
+		end
+	end
 
-    -- Stops the game overlay and takes every preview off. Build hooks it to the window's unload.
-    function ESP.Shutdown()
-        ESP.Stop()
-        local list = {}
-        for _, attachment in ESP.Previews do
-            table.insert(list, attachment)
-        end
-        for _, attachment in list do
-            ESP.Detach(attachment)
-        end
-    end
+	function P.ShowAll(object, force)
+		if force ~= true and not object.Hidden then
+			return
+		end
+		object.Hidden = false
+		for _, component in object.Components do
+			component.Show()
+		end
+	end
 
-    -- The ESP tab: switches and colours in the groupboxes, and a preview on a model with the same ESP.
-    function ESP.Build(sub, window)
-        local cfg = ESP.Config
-        ESP.Start()
-        if window and window.OnUnload then
-            window:OnUnload(ESP.Shutdown)
-        end
+	-- // Objects // --
+	function ESP:Add(settings)
+		assert(ESP.Destroyed ~= true, "ESP is destroyed, load it again.")
+		assert(typeof(settings) == "table", string.format("settings; expected table, got %s", typeof(settings)))
+		assert(typeof(settings.Model) == "Instance", string.format("settings.Model; expected Instance, got %s", typeof(settings.Model)))
+		if not settings.ESPType then
+			settings.ESPType = "Highlight"
+		end
+		assert(typeof(settings.ESPType) == "string", string.format("settings.ESPType; expected string, got %s", typeof(settings.ESPType)))
+		settings.ESPType = string.lower(settings.ESPType)
+		assert(P.ESPTypes[settings.ESPType] == true, "settings.ESPType; invalid ESPType, got " .. settings.ESPType)
+		if typeof(settings.Name) ~= "string" then
+			settings.Name = settings.Model.Name
+		end
+		if typeof(settings.TextModel) ~= "Instance" then
+			settings.TextModel = settings.Model
+		end
+		P.Init()
 
-        local players = sub:AddLeftGroupbox({ Name = "Players", Icon = "users" })
-        players:CreateToggle({ Name = "Enabled", Desc = "Draws ESP on the other players", CurrentValue = cfg.Enabled, Flag = "ESP_Enabled", Callback = function(value) cfg.Enabled = value == true end })
-        players:CreateToggle({ Name = "Hide teammates", CurrentValue = cfg.HideTeammates, Flag = "ESP_HideTeammates", Callback = function(value) cfg.HideTeammates = value == true end })
-        players:CreateSlider({ Name = "Max distance", Range = { 50, 5000 }, Increment = 50, Suffix = " studs", CurrentValue = cfg.MaxDistance, Flag = "ESP_MaxDistance", Callback = function(value) cfg.MaxDistance = value end })
-        players:CreateToggle({ Name = "Highlight", Desc = "Fills the character in the game", CurrentValue = cfg.Highlight, Flag = "ESP_Highlight", Callback = function(value) cfg.Highlight = value == true end })
-        players:CreateToggle({ Name = "Rainbow", CurrentValue = cfg.Rainbow, Flag = "ESP_Rainbow", Callback = function(value) cfg.Rainbow = value == true end })
+		local data = P.Validate(P.Copy(settings), P.Copy(P.Defaults))
+		data.Name = settings.Name
+		data.Model = settings.Model
+		data.TextModel = settings.TextModel
+		data.ESPType = settings.ESPType
+		if P.TracerFrom[string.lower(tostring(data.Tracer.From))] == nil then
+			warn("[HawkTokai ESP] invalid Tracer.From, defaulting to Bottom.")
+			data.Tracer.From = "Bottom"
+		end
 
-        local drawing = sub:AddLeftGroupbox({ Name = "Drawing", Icon = "box" })
-        drawing:CreateToggle({ Name = "2D box", CurrentValue = cfg.Box2D, Flag = "ESP_Box2D", Callback = function(value) cfg.Box2D = value == true end })
-        drawing:CreateToggle({ Name = "3D box", CurrentValue = cfg.Box3D, Flag = "ESP_Box3D", Callback = function(value) cfg.Box3D = value == true end })
-        drawing:CreateToggle({ Name = "Skeleton", CurrentValue = cfg.Skeleton, Flag = "ESP_Skeleton", Callback = function(value) cfg.Skeleton = value == true end })
-        drawing:CreateToggle({ Name = "Tracer", CurrentValue = cfg.Tracer, Flag = "ESP_Tracer", Callback = function(value) cfg.Tracer = value == true end })
-        drawing:CreateDropdown({ Name = "Tracer from", Options = { "Bottom", "Center", "Mouse" }, CurrentOption = cfg.TracerFrom, Flag = "ESP_TracerFrom", Callback = function(value)
-            if type(value) == "table" then
-                value = value[1]
-            end
-            cfg.TracerFrom = value or "Bottom"
-        end })
-        drawing:CreateToggle({ Name = "Name", CurrentValue = cfg.Name, Flag = "ESP_Name", Callback = function(value) cfg.Name = value == true end })
-        drawing:CreateToggle({ Name = "Distance", CurrentValue = cfg.Distance, Flag = "ESP_Distance", Callback = function(value) cfg.Distance = value == true end })
-        drawing:CreateToggle({ Name = "Health", CurrentValue = cfg.Health, Flag = "ESP_Health", Callback = function(value) cfg.Health = value == true end })
-        drawing:CreateSlider({ Name = "Line thickness", Range = { 1, 4 }, Increment = 0.5, CurrentValue = cfg.Thickness, Flag = "ESP_Thickness", Callback = function(value) cfg.Thickness = value end })
-        drawing:CreateSlider({ Name = "Text size", Range = { 10, 20 }, Increment = 1, CurrentValue = cfg.TextSize, Flag = "ESP_TextSize", Callback = function(value) cfg.TextSize = value end })
+		ESP.Counter = ESP.Counter + 1
+		local original = P.Copy(data)
+		local current = data
+		local object = {
+			Index = tostring(ESP.Counter),
+			Deleted = false,
+			Hidden = false,
+			Components = {},
+			Scene = nil,
+			Root = nil,
+			OriginalSettings = setmetatable({}, {
+				__index = function(_, key)
+					return original[key]
+				end,
+				__newindex = function() end,
+				__metatable = "The metatable is locked",
+			}),
+			CurrentSettings = setmetatable({}, {
+				__index = function(_, key)
+					return current[key]
+				end,
+				__newindex = function(_, key, value)
+					if key == "Model" or key == "TextModel" or key == "ESPType" then
+						error(string.format("%s cannot be changed, it is read-only.", key))
+					end
+					rawset(current, key, value)
+				end,
+				__metatable = "The metatable is locked",
+			}),
+		}
 
-        local colors = sub:AddRightGroupbox({ Name = "Colors", Icon = "box" })
-        colors:CreateColorPicker({ Name = "Enemy color", Color = cfg.Color, Flag = "ESP_Color", Callback = function(value) cfg.Color = value end })
-        colors:CreateColorPicker({ Name = "Ally color", Color = cfg.AllyColor, Flag = "ESP_AllyColor", Callback = function(value) cfg.AllyColor = value end })
+		function object:Destroy()
+			if object.Deleted then
+				return
+			end
+			object.Deleted = true
+			ESP.Objects[object.Index] = nil
+			for _, component in object.Components do
+				component.Destroy()
+			end
+			object.Components = {}
+			local callbacks = object.OriginalSettings
+			if callbacks.OnDestroy and callbacks.OnDestroy.Fire then
+				P.Safe(callbacks.OnDestroy.Fire, callbacks.OnDestroy)
+			end
+			if callbacks.OnDestroyFunc then
+				P.Safe(callbacks.OnDestroyFunc)
+			end
+		end
 
-        local preview = sub:AddRightGroupbox({ Name = "Preview", Icon = "box" })
-        local view = preview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
-        ESP.Attach(view)
-    end
+		function object:Show(force)
+			if object.Deleted then
+				return
+			end
+			current.Visible = true
+			P.ShowAll(object, force)
+		end
+
+		function object:Hide(force)
+			if object.Deleted then
+				return
+			end
+			current.Visible = false
+			P.HideAll(object, force)
+		end
+
+		function object:ToggleVisibility(force)
+			if object.Deleted then
+				return
+			end
+			current.Visible = not current.Visible
+			if current.Visible then
+				P.ShowAll(object, force)
+			else
+				P.HideAll(object, force)
+			end
+		end
+
+		function object:SetEveryColor(color, includeComponents)
+			if object.Deleted then
+				return
+			end
+			current.Color = color
+			current.SurfaceColor = color
+			current.BorderColor = color
+			current.FillColor = color
+			current.OutlineColor = color
+			if includeComponents == true then
+				for _, name in { "Tracer", "Arrow", "Box2D", "Box3D", "Skeleton" } do
+					if typeof(current[name]) == "table" then
+						current[name].Color = color
+					end
+				end
+			end
+		end
+
+		-- One frame for this object: the scene, the distance, the screen position, the corners, the callbacks and the
+		-- components. The order is the original's.
+		function object:Render()
+			if object.Deleted then
+				return
+			end
+			if not object.Scene then
+				object.Scene = P.ResolveScene(current.Model)
+				if not object.Scene then
+					P.HideAll(object, true)
+					return
+				end
+				P.BuildComponents(object)
+			end
+			local scene = object.Scene
+			local camera = scene.Camera()
+			local reference = scene.Reference()
+			if current.Visible == false or not (camera and reference) then
+				P.HideAll(object, true)
+				return
+			end
+			local root = object.Root
+			if not root or root.Parent == nil then
+				root = P.PrimaryPart(current.Model)
+				object.Root = root
+			end
+			local rootInstance = root or current.Model
+			local distance = P.DistanceFrom(rootInstance, reference)
+			object._LastDistance = distance
+			if distance > current.MaxDistance then
+				P.HideAll(object, true)
+				return
+			end
+			local screen, inFront = P.Project(scene, P.Pivot(rootInstance).Position)
+			object._LastScreenPos = { screen, inFront }
+
+			local gc = ESP.GlobalConfig
+			local wantCorners = inFront and ((gc.Boxes2D == true and current.Box2D.Enabled == true) or (gc.Boxes3D == true and current.Box3D.Enabled == true) or (gc.Health == true and current.Health.Enabled == true))
+			if wantCorners then
+				local onScreen, _, corners, minX, minY, maxX, maxY = P.Corners(scene, current.Model)
+				object._CornerOnScreen = onScreen
+				object._ScreenCorners = corners
+				object._MinX, object._MinY, object._MaxX, object._MaxY = minX, minY, maxX, maxY
+			else
+				object._CornerOnScreen = false
+				object._ScreenCorners = nil
+			end
+
+			if object.OriginalSettings.Visible == false then
+				P.HideAll(object)
+			else
+				P.ShowAll(object)
+			end
+			if current.BeforeUpdate then
+				P.Safe(current.BeforeUpdate, object)
+			end
+			for name, component in object.Components do
+				local ok, err = pcall(component.Update)
+				if not ok then
+					warn("[HawkTokai ESP] error updating " .. name .. ": " .. tostring(err))
+				end
+			end
+			if current.AfterUpdate then
+				P.Safe(current.AfterUpdate, object)
+			end
+		end
+
+		ESP.Objects[object.Index] = object
+		return object
+	end
+
+	-- // Automatic players and previews // --
+	function P.SyncPlayers()
+		local localPlayer = Players.LocalPlayer
+		local config = ESP.Players
+		local seen = {}
+		for _, player in Players:GetPlayers() do
+			if player ~= localPlayer then
+				seen[player] = true
+				local character = player.Character
+				local object = ESP.PlayerObjects[player]
+				if object and (object.Deleted or object.CurrentSettings.Model ~= character) then
+					object:Destroy()
+					object = nil
+					ESP.PlayerObjects[player] = nil
+				end
+				if config.Enabled == true and character and character:IsA("Model") and not object then
+					local settings = P.Copy(ESP.Settings)
+					settings.Model = character
+					settings.Name = player.Name
+					object = ESP:Add(settings)
+					ESP.PlayerObjects[player] = object
+				end
+				if object then
+					local humanoid = character:FindFirstChildOfClass("Humanoid")
+					local alive = humanoid ~= nil and humanoid.Health > 0
+					local teammate = player.Team ~= nil and player.Team == localPlayer.Team
+					object.CurrentSettings.Visible = config.Enabled == true and alive and not (config.HideTeammates == true and teammate)
+					if teammate then
+						object.CurrentSettings.Color = config.AllyColor
+					else
+						object.CurrentSettings.Color = ESP.Settings.Color or Color3.new(1, 1, 1)
+					end
+				end
+			end
+		end
+		for player, object in ESP.PlayerObjects do
+			if not seen[player] or config.Enabled ~= true then
+				object:Destroy()
+				ESP.PlayerObjects[player] = nil
+			end
+		end
+	end
+
+	function P.SyncPreview(attachment)
+		local handle = attachment.Handle
+		local model = handle.Model
+		local object = attachment.Object
+		if object and (object.Deleted or object.CurrentSettings.Model ~= model) then
+			object:Destroy()
+			object = nil
+			attachment.Object = nil
+		end
+		if not object and typeof(model) == "Instance" then
+			local settings = P.Copy(ESP.Settings)
+			settings.Model = model
+			attachment.Object = ESP:Add(settings)
+		end
+	end
+
+	function ESP:AttachPreview(handle)
+		assert(ESP.Destroyed ~= true, "ESP is destroyed, load it again.")
+		assert(typeof(handle) == "table" and handle.Window and handle.Media and handle.Camera and handle.World, "AttachPreview expects the handle of a Tab:Viewport.")
+		P.Init()
+		local window = handle.Window
+		local overlay = create("Frame", {
+			Name = "ESPOverlay", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+			ClipsDescendants = true, ZIndex = 3, Parent = handle.Media,
+		})
+		local scene = {
+			Kind = "preview",
+			World = handle.World,
+			Container = overlay,
+			Camera = function()
+				return handle.Camera
+			end,
+			Size = function()
+				local scale = math.max(window.Scale.Scale, 0.05)
+				return Vector2.new(overlay.AbsoluteSize.X / scale, overlay.AbsoluteSize.Y / scale)
+			end,
+			Reference = function()
+				return handle.Camera
+			end,
+		}
+		table.insert(ESP.Scenes, scene)
+		local attachment = { Handle = handle, Scene = scene, Overlay = overlay, Object = nil }
+		function attachment:Detach()
+			if attachment.Object then
+				attachment.Object:Destroy()
+				attachment.Object = nil
+			end
+			for index, item in ESP.Scenes do
+				if item == scene then
+					table.remove(ESP.Scenes, index)
+					break
+				end
+			end
+			for index, item in ESP.Attachments do
+				if item == attachment then
+					table.remove(ESP.Attachments, index)
+					break
+				end
+			end
+			if overlay.Parent then
+				overlay:Destroy()
+			end
+		end
+		table.insert(ESP.Attachments, attachment)
+		return attachment
+	end
+
+	-- // Frame loop // --
+	function P.Step(delta)
+		if ESP.Destroyed == true then
+			return
+		end
+		if ESP.GlobalConfig.Rainbow == true then
+			P.Rainbow(delta)
+		end
+		P.SyncPlayers()
+		for _, attachment in ESP.Attachments do
+			P.SyncPreview(attachment)
+		end
+		for _, object in ESP.Objects do
+			if not object.Deleted then
+				local current = object.CurrentSettings
+				if not (current.Model and current.Model.Parent) then
+					object:Destroy()
+				else
+					local ok, err = pcall(object.Render, object)
+					if not ok then
+						warn("[HawkTokai ESP] " .. tostring(err))
+					end
+				end
+			end
+		end
+	end
+
+	function P.Init()
+		if ESP.Connection then
+			return
+		end
+		P.EnsureGameScene()
+		ESP.Connection = RunService.RenderStepped:Connect(P.Step)
+	end
+
+	-- Removes every object. The automatic players and the previews make their objects again on the next frame.
+	function ESP:Clear()
+		local list = {}
+		for _, object in ESP.Objects do
+			table.insert(list, object)
+		end
+		for _, object in list do
+			object:Destroy()
+		end
+		for _, object in ESP.PlayerObjects do
+			object:Destroy()
+		end
+		ESP.PlayerObjects = {}
+		for _, attachment in ESP.Attachments do
+			attachment.Object = nil
+		end
+	end
+
+	-- Removes the automatic objects so that they are made again with the current ESPType.
+	function ESP:ResetAutomatic()
+		for _, object in ESP.PlayerObjects do
+			object:Destroy()
+		end
+		ESP.PlayerObjects = {}
+		for _, attachment in ESP.Attachments do
+			if attachment.Object then
+				attachment.Object:Destroy()
+				attachment.Object = nil
+			end
+		end
+	end
+
+	-- Pushes the template to every object that exists. ESPType and Model cannot change, so use ResetAutomatic.
+	function ESP:ApplyTemplate()
+		local skip = { Model = true, TextModel = true, ESPType = true, Name = true }
+		for _, object in ESP.Objects do
+			for key, value in ESP.Settings do
+				if not skip[key] then
+					object.CurrentSettings[key] = P.Copy(value)
+				end
+			end
+		end
+	end
+
+	function ESP:Destroy()
+		if ESP.Destroyed then
+			return
+		end
+		ESP:Clear()
+		local list = {}
+		for _, attachment in ESP.Attachments do
+			table.insert(list, attachment)
+		end
+		for _, attachment in list do
+			attachment:Detach()
+		end
+		if ESP.Connection then
+			ESP.Connection:Disconnect()
+			ESP.Connection = nil
+		end
+		if ESP.GameScene then
+			ESP.GameScene.Container:Destroy()
+			ESP.GameScene.Folder:Destroy()
+			ESP.GameScene = nil
+		end
+		ESP.Destroyed = true
+	end
+
+	-- // Tab // --
+	-- The ESP tab: the players and the drawing in the left groupboxes, the colours and the preview on the right.
+	function ESP:Build(sub, window)
+		P.Init()
+		if window and window.OnUnload then
+			window:OnUnload(function()
+				ESP:Destroy()
+			end)
+		end
+		P.Validate(ESP.Settings, P.Copy(P.Defaults))
+		if ESP.UiReady ~= true then
+			ESP.UiReady = true
+			ESP.Settings.Box2D.Enabled = true
+			ESP.Settings.Skeleton.Enabled = true
+		end
+		local settings = ESP.Settings
+		local config = ESP.GlobalConfig
+		local players = ESP.Players
+
+		local left = sub:AddLeftGroupbox({ Name = "Players", Icon = "users" })
+		left:CreateToggle({ Name = "Automatic players", Desc = "One ESP per player in the game", CurrentValue = players.Enabled, Flag = "ESP_Players", Callback = function(value)
+			players.Enabled = value == true
+		end })
+		left:CreateToggle({ Name = "Hide teammates", CurrentValue = players.HideTeammates, Flag = "ESP_HideTeammates", Callback = function(value)
+			players.HideTeammates = value == true
+		end })
+		left:CreateSlider({ Name = "Max distance", Range = { 50, 5000 }, Increment = 50, Suffix = " studs", CurrentValue = settings.MaxDistance, Flag = "ESP_MaxDistance", Callback = function(value)
+			settings.MaxDistance = value
+			ESP:ApplyTemplate()
+		end })
+		left:CreateToggle({ Name = "Names", CurrentValue = config.Billboards, Flag = "ESP_Names", Callback = function(value)
+			config.Billboards = value == true
+		end })
+		left:CreateToggle({ Name = "Distance", CurrentValue = config.Distance, Flag = "ESP_Distance", Callback = function(value)
+			config.Distance = value == true
+		end })
+		left:CreateToggle({ Name = "Rainbow", CurrentValue = config.Rainbow, Flag = "ESP_Rainbow", Callback = function(value)
+			config.Rainbow = value == true
+		end })
+		left:CreateToggle({ Name = "Ignore my character", Desc = "Measures distance from the camera", CurrentValue = config.IgnoreCharacter, Flag = "ESP_IgnoreCharacter", Callback = function(value)
+			config.IgnoreCharacter = value == true
+		end })
+
+		local drawing = sub:AddLeftGroupbox({ Name = "Drawing", Icon = "box" })
+		drawing:CreateDropdown({ Name = "Highlight", Options = { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }, CurrentOption = "Highlight", Flag = "ESP_Type", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.ESPType = string.lower(tostring(value))
+			ESP:ResetAutomatic()
+		end })
+		drawing:CreateToggle({ Name = "2D box", CurrentValue = settings.Box2D.Enabled, Flag = "ESP_Box2D", Callback = function(value)
+			settings.Box2D.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Filled box", CurrentValue = settings.Box2D.Filled, Flag = "ESP_Filled", Callback = function(value)
+			settings.Box2D.Filled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "3D box", CurrentValue = settings.Box3D.Enabled, Flag = "ESP_Box3D", Callback = function(value)
+			settings.Box3D.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Skeleton", CurrentValue = settings.Skeleton.Enabled, Flag = "ESP_Skeleton", Callback = function(value)
+			settings.Skeleton.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Tracer", CurrentValue = settings.Tracer.Enabled, Flag = "ESP_Tracer", Callback = function(value)
+			settings.Tracer.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateDropdown({ Name = "Tracer from", Options = { "Top", "Bottom", "Center", "Mouse" }, CurrentOption = "Bottom", Flag = "ESP_TracerFrom", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.Tracer.From = string.lower(tostring(value))
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Arrow", Desc = "Points at targets behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
+			settings.Arrow.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateSlider({ Name = "Arrow distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
+			settings.Arrow.CenterOffset = value
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Health bar", CurrentValue = settings.Health.Enabled, Flag = "ESP_Health", Callback = function(value)
+			settings.Health.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateSlider({ Name = "Line thickness", Range = { 1, 4 }, Increment = 0.5, CurrentValue = settings.Box2D.Thickness, Flag = "ESP_Thickness", Callback = function(value)
+			settings.Box2D.Thickness = value
+			settings.Box3D.Thickness = value
+			settings.Skeleton.Thickness = value
+			settings.Tracer.Thickness = value
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateSlider({ Name = "Text size", Range = { 10, 24 }, Increment = 1, CurrentValue = settings.TextSize, Flag = "ESP_TextSize", Callback = function(value)
+			settings.TextSize = value
+			ESP:ApplyTemplate()
+		end })
+
+		local colors = sub:AddRightGroupbox({ Name = "Colors", Icon = "box" })
+		colors:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
+			settings.Color = value
+			ESP:ApplyTemplate()
+		end })
+		colors:CreateColorPicker({ Name = "Ally color", Color = players.AllyColor, Flag = "ESP_AllyColor", Callback = function(value)
+			players.AllyColor = value
+		end })
+		colors:CreateColorPicker({ Name = "Tracer color", Color = settings.Tracer.Color, Flag = "ESP_TracerColor", Callback = function(value)
+			settings.Tracer.Color = value
+			ESP:ApplyTemplate()
+		end })
+
+		local preview = sub:AddRightGroupbox({ Name = "Preview", Icon = "box" })
+		local view = preview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
+		ESP:AttachPreview(view)
+	end
 end
 
 return Library

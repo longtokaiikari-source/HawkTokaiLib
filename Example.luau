@@ -27,6 +27,7 @@ end
       Status      live readouts: statuses, status lists and dependent controls
       Elements    one of every element as a full-width card
       Popups      notifications, confirms and dialogs
+      ESP         the automatic player ESP, ESP for one model you pick, and a preview
       Cloud       a shared config browser backed by an in-memory store
       Settings    interface options, config manager and theme manager
 ]]
@@ -551,10 +552,85 @@ end
 -- Settings
 --------------------------------------------------------------------------------
 
--- ESP: the switches for the game, and a 3D preview of the same ESP on a model.
+--------------------------------------------------------------------------------
+-- ESP
+--------------------------------------------------------------------------------
+
+-- Build makes the Players tab: automatic ESP for every other player, the drawing options and a preview on a model.
+-- Everything it sets is also in Library.ESP, so a script can change the same settings without the tab.
 local Esp = Window:CreateTab({ Name = "ESP", Desc = "Players, boxes and a preview", Icon = "users" })
 local EspPlayers = Esp:CreateSubTab({ Name = "Players" })
-Library.ESP.Build(EspPlayers, Window)
+Library.ESP:Build(EspPlayers, Window)
+
+-- Objects: ESP for one model you pick. Add takes any Model or Part. A setting you leave out keeps its default.
+-- The object draws until you Destroy it, the model leaves the game, or the window unloads (the Unload button).
+local EspObjects = Esp:CreateSubTab({ Name = "Objects" })
+local EspSingle = EspObjects:AddLeftGroupbox({ Name = "One model", Icon = "crosshair" })
+local EspTarget = nil -- the object Library.ESP:Add returned, or nil when there is none
+
+-- BeforeUpdate runs before the components draw the frame, so a color set here is the color that is drawn.
+local function colorByDistance(object)
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local near = root ~= nil and (object.CurrentSettings.Model:GetPivot().Position - root.Position).Magnitude < 50
+    object.CurrentSettings.Color = near and Color3.fromRGB(255, 70, 70) or Color3.fromRGB(255, 200, 0)
+end
+
+EspSingle:CreateButton({
+    Name = "ESP the model named Target",
+    Style = "Primary",
+    Callback = function()
+        if EspTarget and not EspTarget.Deleted then
+            Library:Notify({ Title = "ESP", Content = "Target already has ESP.", Duration = 2 })
+            return
+        end
+        local model = workspace:FindFirstChild("Target")
+        if not model then
+            Library:Notify({ Title = "ESP", Content = "There is no model named Target in the workspace.", Duration = 3 })
+            return
+        end
+        EspTarget = Library.ESP:Add({
+            Model = model,
+            Name = "Target",
+            ESPType = "Highlight", -- Highlight, SelectionBox, SphereAdornment, CylinderAdornment, Adornment or Text
+            MaxDistance = 2000,
+            Box2D = { Enabled = true, Color = Color3.fromRGB(255, 200, 0), Filled = false },
+            Tracer = { Enabled = true, From = "Bottom", Color = Color3.fromRGB(255, 200, 0) }, -- Top, Bottom, Center or Mouse
+            Health = { Enabled = true }, -- a health bar, added to the original settings
+            BeforeUpdate = colorByDistance,
+            OnDestroyFunc = function()
+                EspTarget = nil
+            end,
+        })
+        Library:Notify({ Title = "ESP", Content = "Target has ESP now.", Duration = 2 })
+    end,
+})
+
+EspSingle:CreateButton({
+    Name = "Show or hide it",
+    Callback = function()
+        if EspTarget and not EspTarget.Deleted then
+            EspTarget:ToggleVisibility()
+        end
+    end,
+})
+
+EspSingle:CreateButton({
+    Name = "Remove it",
+    Callback = function()
+        if EspTarget then
+            EspTarget:Destroy() -- OnDestroyFunc clears EspTarget
+        end
+    end,
+})
+
+EspSingle:CreateButton({
+    Name = "Clear every ESP object",
+    Callback = function()
+        -- Removes the objects you added. The Players tab and the preview make their own again on the next frame.
+        Library.ESP:Clear()
+    end,
+})
+
 
 local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
 
