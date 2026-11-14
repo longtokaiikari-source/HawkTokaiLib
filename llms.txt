@@ -158,3 +158,11 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - [README: Home](README.md#home): profile card, live stats (FPS, ping and memory tinted by health), a world clock with a saved GMT picker (`Clock = false` hides it), game and executor cards, feature list, changelog pages.
 - [README: Configs](README.md#configs): file format, share codes, autoload per account.
 - [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
+
+## ESP (Library.ESP)
+- Library.ESP.Build(sub, window): ESP groupboxes and a preview on a sub tab. Starts the game overlay and hooks Shutdown to window unload.
+- Library.ESP.Config: settings read every frame (Enabled, HideTeammates, MaxDistance, Box2D, Box3D, Skeleton, Tracer, TracerFrom, Name, Distance, Health, Highlight, Rainbow, Color, AllyColor, Thickness, TextSize).
+- Library.ESP.Start() / Stop(): the game overlay on the other players. Shutdown() stops it and takes every preview off.
+- Library.ESP.Attach(viewportHandle) returns an attachment; Library.ESP.Detach(attachment) removes it.
+- A viewport handle exposes Window, Media and Camera for overlays.
+- tests/run_esp_mock.py: runs the ESP block against a Roblox API mock (Lua 5.3+). Logic and property counts only, no rendering.

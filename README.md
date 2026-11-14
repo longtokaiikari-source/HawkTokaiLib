@@ -1983,3 +1983,31 @@ Whole-value colours take the same forms everywhere: a theme key string, a `Color
 | Member | Description |
 | --- | --- |
 | `HawkTokaiLib.Colorize(text, color)` | Wraps `text` in a colour. A theme key gives a tag that follows the theme; anything else is baked in. `HawkTokaiLib:Colorize(...)` works too. |
+
+## ESP
+
+`Library.ESP` draws ESP over the game and over a 3D preview. Both use the same drawing and the same settings, so the preview shows what the game will show. The feature set follows [mstudio45/msesp](https://github.com/mstudio45/msesp), which declares the MIT license in its `wally.toml`.
+
+```lua
+Library.ESP.Build(sub, Window)                          -- the ESP groupboxes and a preview, on a sub tab
+Library.ESP.Config.Box2D = true                         -- every setting is read each frame
+local attachment = Library.ESP.Attach(viewportHandle)   -- ESP over any viewport from Tab:Viewport
+Library.ESP.Detach(attachment)
+Library.ESP.Start()                                     -- the game overlay (Build starts it)
+Library.ESP.Stop()                                      -- removes it (Shutdown does, on window unload)
+```
+
+Settings: `Enabled`, `HideTeammates`, `MaxDistance`, `Box2D`, `Box3D`, `Skeleton`, `Tracer`, `TracerFrom` (`Bottom`, `Center` or `Mouse`), `Name`, `Distance`, `Health`, `Highlight`, `Rainbow`, `Color`, `AllyColor`, `Thickness`, `TextSize`.
+
+The preview ignores `Enabled`, `HideTeammates` and `MaxDistance`, because those only apply to players. The highlight is only drawn in the game, since it needs a CoreGui parent. The 3D box and the skeleton cost more frames per player than the 2D box.
+
+### Testing the ESP without Roblox
+
+`tests/run_esp_mock.py` runs the ESP block of `Source.luau` against a small mock of the Roblox API (`tests/mock.lua`) and a scenario (`tests/scenario.lua`). It needs Lua 5.3 or newer (`texlua`, `lua5.4`, `lua5.3` or `lua` on the PATH).
+
+```
+python3 tests/run_esp_mock.py
+```
+
+It checks the projection maths, the player rules (distance, teammates, dead, leaving), the toggles, the preview, the cleanup and the number of property writes per frame. It does not render, so it cannot prove what the ESP looks like in a game. Run it in a real executor before you trust a build.
+

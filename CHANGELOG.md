@@ -33,11 +33,16 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Check progress**: the executor check shows a progress bar with the number of tests done.
 - **Floating group boxes**: a popped-out box has a grip in its bottom-right corner that changes its width, kept for the next pop-out. Pressing a floating box brings it to the front of the others.
 - **Preview pop-out**: the 3D preview has a pop-out button in its header, like a group box's. It floats the preview in its own panel, which the header drags; the button or the slot docks it back with the same flight as a group box. A floating preview's grip changes its width and height.
+- **ESP**: `Library.ESP` draws 2D and 3D boxes, skeleton, tracer, name, distance, health and highlight over the game, with a tab built from the library's own controls. The feature set follows mstudio45/msesp (MIT).
+- **ESP preview**: the same ESP draws over the 3D preview, so the settings can be checked on a model before a game.
+- **Viewport handles**: a viewport handle now exposes `Window`, `Media` and `Camera`, so an overlay can draw on it.
+- **ESP tests**: `tests/run_esp_mock.py` runs the ESP against a mock of the Roblox API and checks the projection, the player rules, the toggles, the preview and the cleanup. It does not render.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 
 ### Changed
 
+- The ESP engine is rewritten for speed. Measured on the mock run, with every feature on it writes 279 properties per frame instead of 701, and with the default settings 82 instead of 376. Steady-state frames create no new frames. A frame that errors is caught and reported once, and nothing is drawn while ESP is off.
 - The executor check waits at most four seconds for a character, and stops waiting for slow tests after twelve seconds.
 - Key gate redesign: wider panel, brand badge, a "Secured with Junkie" chip, a focus ring on the key input, and hover and press feel on its buttons.
 - Keybind waiting state shows dots instead of `...`.
@@ -57,6 +62,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Removed
 
+- `tokaihub-esp.luau`, the standalone copy of mstudio45/msesp: `Library.ESP` replaces it. The copy had a second block after its final `return`, so it did not load, and its `SelectionBox` read a `BorderColor` it never set.
 - `assets/egg.mp4` is no longer used, so it is left out of the package. The video showed a black screen with no sound on the tested executor.
 - The hidden egg in the key gate, moved to Home.
 - The forced `Tahoma8` font in the Loader and the Example.

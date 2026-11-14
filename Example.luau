@@ -551,6 +551,11 @@ end
 -- Settings
 --------------------------------------------------------------------------------
 
+-- ESP: the switches for the game, and a 3D preview of the same ESP on a model.
+local Esp = Window:CreateTab({ Name = "ESP", Desc = "Players, boxes and a preview", Icon = "users" })
+local EspPlayers = Esp:CreateSubTab({ Name = "Players" })
+Library.ESP.Build(EspPlayers, Window)
+
 local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
 
 local Interface = Settings:AddLeftGroupbox({ Name = "Interface", Icon = "monitor" })
