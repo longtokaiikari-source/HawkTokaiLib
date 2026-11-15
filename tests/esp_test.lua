@@ -90,6 +90,8 @@ function C3.fromHSV(h, s, v)
 end
 
 UDim2 = {}
+UDim = { new = function(scale, offset) return { Scale = scale, Offset = offset } end }
+RaycastParams = { new = function() return {} end }
 function UDim2.fromOffset(x, y) return { XS = 0, XO = x, YS = 0, YO = y } end
 function UDim2.fromScale(x, y) return { XS = x, XO = 0, YS = y, YO = 0 } end
 
@@ -131,6 +133,7 @@ Color3 = C3
 Enum = {
 	HumanoidRigType = { R15 = "R15", R6 = "R6" },
 	HighlightDepthMode = { AlwaysOnTop = "AlwaysOnTop", Occluded = "Occluded" },
+	RaycastFilterType = { Exclude = "Exclude", Include = "Include" },
 }
 
 local InstMethods, InstMT, SignalMT, ConnMT = {}, {}, {}, { __index = {} }
@@ -242,6 +245,13 @@ function InstMethods.FindFirstChild(self, name, recursive)
 	return nil
 end
 
+function InstMethods.Raycast(self, origin, direction, params)
+	local override = self.RaycastOverride
+	if override then
+		return override(origin, direction, params)
+	end
+	return nil
+end
 function InstMethods.FindFirstChildOfClass(self, className)
 	for _, child in ipairs(self._children) do
 		if child._p.ClassName == className then
@@ -581,7 +591,7 @@ end
 
 -- 1. The tab is built from the library's own controls, and the preview is attached.
 ESP:Build(sub, previewWindow)
-check(controls["ESP_Players"] ~= nil and controls["ESP_Box2D"] ~= nil and controls["ESP_Skeleton"] ~= nil, "the tab is built with its flags")
+check(controls["ESP_Players"] ~= nil and controls["ESP_Box2DMode"] ~= nil and controls["ESP_Skeleton"] ~= nil, "the tab is built with its flags")
 check(controls["Preview"] ~= nil and #ESP.Attachments == 1, "the preview is attached to the viewport")
 check(#WARNINGS == 0, "no warnings while building")
 
@@ -612,13 +622,14 @@ check(objBehind._LastScreenPos[2] == false, "a player behind the camera is not i
 check(objBehind.Components.Billboard.Frames[1].Visible == false, "the name of a player behind the camera is hidden")
 set("ESP_Arrow", true)
 step(2)
-check(objBehind.Components.Arrow.Frames[1].Visible == true, "the arrow points at a player behind the camera")
-check(objNear.Components.Arrow.Frames[1].Visible == false, "the arrow stays hidden for a player in front")
+check(objBehind.Components.Arrow.Pools[1].Shown == 6, "the arrow draws six lines for a player behind the camera (" .. objBehind.Components.Arrow.Pools[1].Shown .. ")")
+check(objBehind.Components.Arrow.Pools[1].Items[1].Position.YO > 540, "a player straight behind points the arrow down the screen")
+check(objNear.Components.Arrow.Pools[1].Shown == 0, "the arrow stays hidden for a player in front")
 
 -- 5. 3D box, tracer, skeleton, health bar.
-set("ESP_Box3D", true)
+set("ESP_Box3DMode", "Full")
 set("ESP_Tracer", true)
-set("ESP_Health", true)
+set("ESP_HealthMode", "Left")
 step(2)
 check(objNear.Components.Box3D.Pools[1].Shown == 12, "the 3D box draws its twelve edges (" .. objNear.Components.Box3D.Pools[1].Shown .. ")")
 check(objNear.Components.Tracer.Pools[1].Shown == 1, "the tracer draws one line")
@@ -678,27 +689,128 @@ local six = addPlayer("Six", nil, makeCharacter("Six", Vector3.new(20, 10, -30),
 step(2)
 local objSix = objectOf(six)
 set("ESP_Skeleton", true)
-set("ESP_Box2D", true)
-set("ESP_Health", true)
+set("ESP_Box2DMode", "Full")
+set("ESP_HealthMode", "Left")
 set("ESP_Tracer", true)
 step(2)
 check(objSix.Components.Skeleton.Pools[1].Shown == 9, "the R6 skeleton draws its nine bones (" .. objSix.Components.Skeleton.Pools[1].Shown .. ")")
 check(objNear.Components.Skeleton.Pools[1].Shown == 26, "the R15 skeleton draws its 26 bones (" .. objNear.Components.Skeleton.Pools[1].Shown .. ")")
 check(objSix.Components.Box2D.Frames[1].Visible == true and objSix.Components.Box2D.Frames[2].Visible == true, "the full box of an R6 shows its black outline under the line")
-set("ESP_BoxStyle", "Corner")
+set("ESP_Box2DMode", "Corner")
 step(2)
 check(objSix.Components.Box2D.Pools[1].Shown == 8, "the corner box draws its eight corners (" .. objSix.Components.Box2D.Pools[1].Shown .. ")")
 check(objSix.Components.Box2D.Frames[1].Visible == false, "the corner box hides the full frame")
-set("ESP_BoxStyle", "Full")
-set("ESP_HealthSide", "Bottom")
+set("ESP_Box2DMode", "Full")
+set("ESP_HealthMode", "Bottom")
 step(2)
 check(objSix.Components.Health.Frames[1].Size.YO == 4, "the bottom health bar is four pixels tall")
-set("ESP_HealthSide", "Left")
+set("ESP_HealthMode", "Left")
 step(2)
 local nameLabel, distanceLabel = objSix.Components.Billboard.Frames[1], objSix.Components.Billboard.Frames[2]
 check(nameLabel.Position.YO < distanceLabel.Position.YO, "the name sits above the distance")
 check(distanceLabel.Text:match("^%[%d+m%]$") ~= nil, "the distance reads in metres: " .. tostring(distanceLabel.Text))
 check(#WARNINGS == 0, "no warnings for either rig")
+
+-- 7c. An arrow for a player off the right edge of the screen sits on the right of the centre.
+local edge = addPlayer("Edge", nil, makeCharacter("Edge", Vector3.new(400, 10, -40), nil, workspace))
+step(2)
+local objEdge = objectOf(edge)
+check(objEdge.Components.Arrow.Pools[1].Shown == 6, "an arrow draws for a player off the right edge (" .. objEdge.Components.Arrow.Pools[1].Shown .. ")")
+check(objEdge.Components.Arrow.Pools[1].Items[1].Position.XO > 960, "the arrow for a player on the right sits on the right")
+check(#WARNINGS == 0, "no warnings from the arrows")
+
+-- 7d. The dropdowns: each choice sets its box or bar, and the health bar's side moves it.
+set("ESP_Box3DMode", "Corner")
+step(2)
+check(objSix.Components.Box3D.Pools[1].Shown == 24, "the corner 3D box draws three short lines per corner (" .. objSix.Components.Box3D.Pools[1].Shown .. ")")
+set("ESP_Box3DMode", "Full")
+step(2)
+check(objSix.Components.Box3D.Pools[1].Shown == 12, "the full 3D box draws its twelve edges again (" .. objSix.Components.Box3D.Pools[1].Shown .. ")")
+set("ESP_Box2DMode", "Filled")
+step(2)
+check(objSix.Components.Box2D.Frames[1].BackgroundTransparency == 0.5, "the Filled choice tints the 2D box")
+set("ESP_Box2DMode", "Off")
+step(2)
+check(objSix.Components.Box2D.Frames[1].Visible == false and objSix.Components.Box2D.Pools[1].Shown == 0, "Off hides the 2D box")
+set("ESP_Box2DMode", "Full")
+set("ESP_HealthMode", "Left")
+step(2)
+local leftX = objSix.Components.Health.Frames[1].Position.XO
+set("ESP_HealthMode", "Right")
+step(2)
+local rightX = objSix.Components.Health.Frames[1].Position.XO
+check(rightX > leftX, "the right health bar sits right of the left one")
+set("ESP_HealthMode", "Off")
+step(2)
+check(objSix.Components.Health.Frames[1].Visible == false, "Off hides the health bar")
+set("ESP_HealthMode", "Left")
+step(2)
+check(#WARNINGS == 0, "no warnings from the dropdown choices")
+
+-- 7e. The new options: the highlight depth, the visible check, the health number, the head dot, the held item,
+-- the distance fade, the FOV ring and the crosshair.
+set("ESP_HighlightDepth", "Behind walls")
+step(2)
+check(objNear.Components.Highlighter.Instances[1].DepthMode == "Occluded", "a highlight behind walls is occluded")
+set("ESP_HighlightDepth", "Through walls")
+step(2)
+check(objNear.Components.Highlighter.Instances[1].DepthMode == "AlwaysOnTop", "a highlight through walls is always on top")
+set("ESP_HighlightFill", 0.3)
+step(2)
+check(math.abs(objNear.Components.Highlighter.Instances[1].FillTransparency - 0.3) < 0.001, "the highlight fill follows its slider")
+local wall = new_instance("Part")
+set("ESP_VisibleCheck", true)
+workspace.RaycastOverride = function() return { Instance = wall } end
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.HiddenColor, "a player behind a wall is drawn in the hidden colour")
+workspace.RaycastOverride = nil
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "a player in view is drawn in the visible colour")
+set("ESP_VisibleCheck", false)
+set("ESP_VisibleOnly", true)
+workspace.RaycastOverride = function() return { Instance = wall } end
+step(2)
+check(objNear.Components.Billboard.Frames[1].Visible == false and objNear.Components.Box2D.Frames[1].Visible == false, "only visible hides a player behind a wall")
+workspace.RaycastOverride = nil
+set("ESP_VisibleOnly", false)
+step(2)
+check(objNear.Components.Billboard.Frames[1].Visible == true, "the player comes back once the wall is gone")
+set("ESP_HealthText", true)
+step(2)
+check(objSix.Components.Health.Frames[2].Visible == true and objSix.Components.Health.Frames[2].Text == "100", "the health number shows the health (" .. tostring(objSix.Components.Health.Frames[2].Text) .. ")")
+set("ESP_HealthText", false)
+set("ESP_HeadDots", true)
+step(2)
+check(objNear.Components.HeadDot.Frames[1].Visible == true, "the head dot shows on a head in view")
+set("ESP_HeadDots", false)
+local rifle = new_instance("Tool")
+rifle.Name = "Rifle"
+rifle.Parent = six.Character
+set("ESP_ShowTool", true)
+step(2)
+check(string.find(objSix.Components.Billboard.Frames[1].Text, "Rifle", 1, true) ~= nil, "the held item shows after the name")
+set("ESP_ShowTool", false)
+local maxDistance = ESP.Settings.MaxDistance or 5000
+local dim = addPlayer("Dim", nil, makeCharacter("Dim", Vector3.new(0, 10, -maxDistance * 0.8), nil, workspace))
+step(2)
+local objDim = objectOf(dim)
+set("ESP_Fade", true)
+step(2)
+local fadeNow = objDim.Components.Billboard.Frames[1].TextTransparency
+check(fadeNow > 0.4 and fadeNow < 0.6, "a player at 80% of the max distance is about half faded (" .. tostring(fadeNow) .. ")")
+check(objNear.Components.Billboard.Frames[1].TextTransparency == 0, "a player up close is not faded")
+set("ESP_Fade", false)
+set("ESP_FOVRadius", 100)
+set("ESP_FOV", true)
+set("ESP_Crosshair", true)
+step(2)
+check(ESP.Overlay.Ring.Visible == true and ESP.Overlay.Ring.Size.XO == 200, "the FOV ring is drawn at its radius")
+check(ESP.Overlay.Cross.Shown == 4, "the crosshair draws four lines (" .. tostring(ESP.Overlay.Cross.Shown) .. ")")
+set("ESP_FOV", false)
+set("ESP_Crosshair", false)
+step(2)
+check(ESP.Overlay.Ring.Visible == false and ESP.Overlay.Cross.Shown == 0, "the overlay goes when it is turned off")
+check(#WARNINGS == 0, "no warnings from the new options")
 
 -- 12. Clear removes the objects, and the automatic players make theirs again on the next frame.
 ESP:Clear()
