@@ -488,7 +488,12 @@ local OFFSETS = {
 	LeftUpperLeg = Vector3.new(-0.5, -1.5, 0), LeftLowerLeg = Vector3.new(-0.5, -2.5, 0), LeftFoot = Vector3.new(-0.5, -3.5, 0),
 	RightUpperLeg = Vector3.new(0.5, -1.5, 0), RightLowerLeg = Vector3.new(0.5, -2.5, 0), RightFoot = Vector3.new(0.5, -3.5, 0),
 }
-local function makeCharacter(name, origin, health, parent)
+local OFFSETS_R6 = {
+	Head = Vector3.new(0, 2, 0), Torso = Vector3.new(0, 0, 0),
+	["Left Arm"] = Vector3.new(-1.5, 0, 0), ["Right Arm"] = Vector3.new(1.5, 0, 0),
+	["Left Leg"] = Vector3.new(-0.5, -2, 0), ["Right Leg"] = Vector3.new(0.5, -2, 0),
+}
+local function makeCharacter(name, origin, health, parent, rig)
 	local model = new_instance("Model")
 	model.Name = name
 	local root = new_instance("Part")
@@ -499,9 +504,9 @@ local function makeCharacter(name, origin, health, parent)
 	local humanoid = new_instance("Humanoid")
 	humanoid.Health = health or 100
 	humanoid.MaxHealth = 100
-	humanoid.RigType = Enum.HumanoidRigType.R15
+	humanoid.RigType = rig == "R6" and Enum.HumanoidRigType.R6 or Enum.HumanoidRigType.R15
 	humanoid.Parent = model
-	for partName, offset in pairs(OFFSETS) do
+	for partName, offset in pairs(rig == "R6" and OFFSETS_R6 or OFFSETS) do
 		local part = new_instance("Part")
 		part.Name = partName
 		part.CFrame = CFrame.new(origin + offset)
@@ -667,6 +672,33 @@ local before = ESP.RainbowColor
 step(10)
 check(ESP.RainbowColor ~= before, "the rainbow colour moves while Rainbow is on")
 set("ESP_Rainbow", false)
+
+-- 7b. R6 and R15: each rig gets its own skeleton, the box fits the body, and the text and bars follow the box.
+local six = addPlayer("Six", nil, makeCharacter("Six", Vector3.new(20, 10, -30), nil, workspace, "R6"))
+step(2)
+local objSix = objectOf(six)
+set("ESP_Skeleton", true)
+set("ESP_Box2D", true)
+set("ESP_Health", true)
+set("ESP_Tracer", true)
+step(2)
+check(objSix.Components.Skeleton.Pools[1].Shown == 9, "the R6 skeleton draws its nine bones (" .. objSix.Components.Skeleton.Pools[1].Shown .. ")")
+check(objNear.Components.Skeleton.Pools[1].Shown == 26, "the R15 skeleton draws its 26 bones (" .. objNear.Components.Skeleton.Pools[1].Shown .. ")")
+check(objSix.Components.Box2D.Frames[1].Visible == true and objSix.Components.Box2D.Frames[2].Visible == true, "the full box of an R6 shows its black outline under the line")
+set("ESP_BoxStyle", "Corner")
+step(2)
+check(objSix.Components.Box2D.Pools[1].Shown == 8, "the corner box draws its eight corners (" .. objSix.Components.Box2D.Pools[1].Shown .. ")")
+check(objSix.Components.Box2D.Frames[1].Visible == false, "the corner box hides the full frame")
+set("ESP_BoxStyle", "Full")
+set("ESP_HealthSide", "Bottom")
+step(2)
+check(objSix.Components.Health.Frames[1].Size.YO == 4, "the bottom health bar is four pixels tall")
+set("ESP_HealthSide", "Left")
+step(2)
+local nameLabel, distanceLabel = objSix.Components.Billboard.Frames[1], objSix.Components.Billboard.Frames[2]
+check(nameLabel.Position.YO < distanceLabel.Position.YO, "the name sits above the distance")
+check(distanceLabel.Text:match("^%[%d+m%]$") ~= nil, "the distance reads in metres: " .. tostring(distanceLabel.Text))
+check(#WARNINGS == 0, "no warnings for either rig")
 
 -- 12. Clear removes the objects, and the automatic players make theirs again on the next frame.
 ESP:Clear()
