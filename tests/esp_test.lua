@@ -590,14 +590,21 @@ local function objectOf(player)
 end
 
 -- 1. The tab is built from the library's own controls, and the preview is attached.
-ESP:Build(sub, previewWindow)
-check(controls["ESP_Players"] ~= nil and controls["ESP_Box2DMode"] ~= nil and controls["ESP_Skeleton"] ~= nil, "the tab is built with its flags")
+local tab = {}
+function tab.CreateSubTab(self, opts) return sub end
+ESP:Build(tab, previewWindow)
+check(controls["ESP_Highlighters"] ~= nil and controls["ESP_Box2DMode"] ~= nil and controls["ESP_Skeleton"] ~= nil and controls["ESP_Names"] ~= nil, "the pages are built with their flags")
 check(controls["Preview"] ~= nil and #ESP.Attachments == 1, "the preview is attached to the viewport")
 check(#WARNINGS == 0, "no warnings while building")
 
 -- 2. Automatic players: one object per character, the teammate hidden, the dead hidden.
-set("ESP_Players", true)
 step(3)
+check(ESP.GlobalConfig.Highlighters == false and ESP.GlobalConfig.Billboards == false, "the highlight and the names are off until their pages turn them on")
+set("ESP_Box2DMode", "Full")
+set("ESP_Skeleton", true)
+set("ESP_Names", true)
+set("ESP_Highlighters", true)
+step(2)
 check(objectOf(near) ~= nil and objectOf(rightSide) ~= nil and objectOf(behind) ~= nil, "every other player gets an object")
 check(objectOf(me) == nil, "the local player gets no object")
 local objNear = objectOf(near)
