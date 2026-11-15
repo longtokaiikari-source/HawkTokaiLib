@@ -2011,6 +2011,10 @@ Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`,
 
 `Box2D.Style` is `"Full"` (a box with a black outline) or `"Corner"` (eight corner lines). `Health.Side` is `"Left"`, `"Right"` or `"Bottom"`, and `Health.Gradient` colours it from red to green. `Tracer.To` is `"Feet"` (the default, the bottom middle of the box), `"Center"` or `"Head"`. The name sits above the box and the distance below it. `ESP.GlobalConfig.Meters` (on by default) reads distances in metres, and `ESP.GlobalConfig.DynamicText` scales the text with the box. R6 and R15 both get the box from the character's bounding box and their own skeleton.
 
+The arrow for a target off the screen or behind you is drawn with lines, like the box: a black outline under the coloured line, with the name and distance behind the tail. `Arrow.Size` sets its size (default 12), and `Arrow.CenterOffset` sets how far it sits from the centre at 1080p (default 300).
+
+The highlight can see through walls (`HighlightDepth = "Through walls"`, the default) or not (`"Behind walls"`). The visible check (`GlobalConfig.VisibleCheck`) colours players you can see and players behind a wall in two colours, and `GlobalConfig.VisibleOnly` hides the second kind. `GlobalConfig.HealthText`, `HeadDots`, `ShowTool`, `Fade`, `FOV`, `FOVRadius` and `Crosshair` turn on the health number, the head dot, the held item, the distance fade, the FOV ring and the crosshair. The Drawing tab has a control for each.
+
 ### Testing without Roblox
 
 `tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:

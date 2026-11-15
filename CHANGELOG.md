@@ -45,6 +45,13 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar from red to green.
 - **ESP tracer target**: `Tracer.To` is Feet (the default), Center or Head.
 - **R6 and R15 tests**: the test checks both rigs side by side, with the skeleton bones, the box, the health bar and the text.
+- **ESP highlight depth**: `HighlightDepth` is `"Through walls"` (the default, always on top) or `"Behind walls"` (occluded by walls). Adornments and selection boxes follow it too. The fill and outline transparency have sliders.
+- **ESP visible check**: `GlobalConfig.VisibleCheck` colours a player you can see and one behind a wall in two colours (`VisibleColor` and `HiddenColor`). `GlobalConfig.VisibleOnly` hides the players behind a wall. A ray from the camera to the head decides, and the local character and the player are not in the way.
+- **ESP health number**: `GlobalConfig.HealthText` writes the health beside the health bar.
+- **ESP head dot**: `GlobalConfig.HeadDots` draws a small dot on each head in view.
+- **ESP held item**: `GlobalConfig.ShowTool` adds the tool a character holds after its name.
+- **ESP distance fade**: `GlobalConfig.Fade` fades the name and the 2D box with the distance, from `FadeStart` of the max distance (default 0.6).
+- **FOV circle and crosshair**: `GlobalConfig.FOV` with `FOVRadius` draws a ring around the centre of the game view, and `GlobalConfig.Crosshair` draws a crosshair there.
 
 ### Changed
 
@@ -61,6 +68,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **FPS and ping history**: each bar keeps the colour it was read with. The newest bar is strongest, older bars fade, and empty slots are dim.
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 - **ESP measures every object in front of the camera**, so the text, the health bar and the tracer all have the box to work from.
+- **ESP arrow** is drawn with lines, in the box's style: a black outline under the coloured line, with the name and distance behind the tail. It reads the target's place in the camera's own frame, so it points the right way behind the camera too. `Arrow.Size` (default 12) sets its size, with a slider in the drawing tab. It used to be an image from the web.
 
 ### Fixed
 

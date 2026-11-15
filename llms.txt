@@ -171,3 +171,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 
 ## Player list
 - `Tab:PlayerList({ Name, Height, Actions })`: live list of the players in the server. Actions = { { Name, Callback(player) } }. Rows follow joins and leaves; distances refresh every 2 seconds. Returns a handle with Refresh().
+- Arrow: drawn with lines, not an image. Shows for a target off the screen or behind the camera; the direction comes from the camera's own frame. Arrow.Size (default 12), Arrow.CenterOffset (ring radius at 1080p, default 300).
+- Highlight: HighlightDepth = "Through walls" (default, AlwaysOnTop) or "Behind walls" (Occluded); FillTransparency and OutlineTransparency sliders.
+- Visible check: GlobalConfig.VisibleCheck (colours: VisibleColor, HiddenColor), GlobalConfig.VisibleOnly (hides the hidden). Ray from camera to head.
+- Extras, all off by default: GlobalConfig.HealthText, HeadDots, ShowTool, Fade (FadeStart 0.6 of max distance), FOV (FOVRadius), Crosshair.

@@ -24708,6 +24708,18 @@ do
 		Health = true,
 		DynamicText = true,
 		Meters = true,
+		VisibleCheck = false,
+		VisibleOnly = false,
+		VisibleColor = Color3.fromRGB(90, 255, 120),
+		HiddenColor = Color3.fromRGB(255, 80, 80),
+		HealthText = false,
+		HeadDots = false,
+		ShowTool = false,
+		Fade = false,
+		FadeStart = 0.6,
+		FOV = false,
+		FOVRadius = 120,
+		Crosshair = false,
 		Font = nil,
 	}
 	-- Automatic players: one object per character while Enabled. AllyColor is used for teammates.
@@ -24726,7 +24738,6 @@ do
 		"RightUpperArm", "RightLowerArm", "RightHand", "RightLowerArm", "RightUpperArm", "UpperTorso", "Head",
 	}
 	P.R6 = { "Torso", "Left Arm", "Torso", "Right Arm", "Torso", "Left Leg", "Torso", "Right Leg", "Torso", "Head" }
-	P.ArrowImage = "http://www.roblox.com/asset/?id=16368985219"
 	P.Defaults = {
 		Visible = true,
 		Color = Color3.new(1, 1, 1),
@@ -24742,10 +24753,11 @@ do
 		OutlineColor = Color3.new(1, 1, 1),
 		FillTransparency = 0.65,
 		OutlineTransparency = 0,
+		HighlightDepth = "Through walls",
 		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom", To = "Feet" },
-		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300 },
+		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300, Size = 12 },
 		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false, Style = "Full" },
-		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
+		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Style = "Full" },
 		Skeleton = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
 		Health = { Enabled = false, Side = "Left", Gradient = true },
 		OnDestroy = nil,
@@ -25077,7 +25089,30 @@ do
 		local height = minY and (maxY - minY) or 100
 		return math.max(math.floor(size * math.clamp(height * 0.016, 0.5, 1) + 0.5), 6)
 	end
-	-- The name sits above the box and the distance below it, as in the original. Without a box both sit over the
+	-- With the visible check on, a character you can see and one behind a wall are drawn in two colours.
+	function P.Tint(object, color)
+		if ESP.GlobalConfig.VisibleCheck ~= true or object._Visible == nil then
+			return color
+		end
+		if object._Visible then
+			return ESP.GlobalConfig.VisibleColor
+		end
+		return ESP.GlobalConfig.HiddenColor
+	end
+	-- How faded the text and the lines are: none up to a fraction of the max distance, then fully faded at the max.
+	function P.Fade(object)
+		if ESP.GlobalConfig.Fade ~= true then
+			return 0
+		end
+		local distance = object._LastDistance or 0
+		local maxDistance = object.CurrentSettings.MaxDistance or 1000
+		local start = maxDistance * (ESP.GlobalConfig.FadeStart or 0.6)
+		if distance <= start then
+			return 0
+		end
+		return math.clamp((distance - start) / math.max(maxDistance - start, 1), 0, 1)
+	end
+	-- The name sits above the box and the distance below it, as in the original. Without a box, both sit over the
 	-- head, so the character still gets its text.
 	function P.Billboard(object, scene)
 		local name = create("TextLabel", {
@@ -25131,12 +25166,22 @@ do
 			local nameSize = P.TextSizeFor(object, settings.TextSize)
 			name.TextSize = nameSize
 			distance.TextSize = math.max(nameSize - 3, 6)
-			local color = P.ColorOf(settings.Color)
+			local color = P.Tint(object, P.ColorOf(settings.Color))
 			name.TextColor3 = color
 			distance.TextColor3 = color
-			if settings.Name ~= lastName then
-				name.Text = settings.Name
-				lastName = settings.Name
+			local fade = P.Fade(object)
+			name.TextTransparency = fade
+			distance.TextTransparency = fade
+			local label = tostring(settings.Name)
+			if ESP.GlobalConfig.ShowTool == true and settings.Model then
+				local tool = settings.Model:FindFirstChildOfClass("Tool")
+				if tool then
+					label = label .. " [" .. tostring(tool.Name) .. "]"
+				end
+			end
+			if label ~= lastName then
+				name.Text = label
+				lastName = label
 			end
 			local studs = object._LastDistance or 0
 			local text = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
@@ -25147,6 +25192,7 @@ do
 		end
 		return component
 	end
+
 	-- The highlight of the game: Highlight, SelectionBox or a handle adornment, parented to the game folder.
 	function P.Highlighter(object, scene)
 		local settings = object.CurrentSettings
@@ -25206,6 +25252,12 @@ do
 				return
 			end
 			instance.Adornee = current.Model
+			local through = current.HighlightDepth ~= "Behind walls"
+			if instance.ClassName == "Highlight" then
+				instance.DepthMode = through and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+			else
+				instance.AlwaysOnTop = through
+			end
 			if kind == "selectionbox" then
 				instance.Color3 = P.ColorOf(current.BorderColor)
 				instance.LineThickness = current.Thickness
@@ -25249,7 +25301,7 @@ do
 			if shown then
 				local from = P.TracerOrigin(scene, string.lower(tostring(settings.Tracer.From)))
 				local target = P.TracerTarget(object, settings)
-				pool.Line(from, target, P.ColorOf(settings.Tracer.Color), settings.Tracer.Thickness, settings.Tracer.Transparency)
+				pool.Line(from, target, P.Tint(object, P.ColorOf(settings.Tracer.Color)), settings.Tracer.Thickness, settings.Tracer.Transparency)
 			end
 			pool.End()
 		end
@@ -25272,51 +25324,89 @@ do
 		end
 		return Vector2.new(x, maxY)
 	end
-	-- A screen-edge arrow for a target behind the camera, the same geometry as the original's Arrow.
+	-- A screen-edge arrow for a target that is off the screen or behind the camera. It is drawn with lines, in the
+	-- style of the rest of the ESP: a black outline under the coloured line, and the name and distance behind it.
+	-- The direction comes from where the target sits in the camera's own frame, so it is right behind the camera too.
 	function P.Arrow(object, scene)
-		local arrow = create("ImageLabel", {
+		local pool = P.LinePool(scene.Container)
+		local label = create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(48, 48),
+			Size = UDim2.fromOffset(240, 16),
 			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Image = P.ArrowImage,
-			ImageColor3 = Color3.new(1, 1, 1),
+			FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
+			TextSize = 13,
+			TextStrokeTransparency = 0,
 			Visible = false,
 			ZIndex = 6,
 			Parent = scene.Container,
 		})
-		local component = P.NewComponent({ arrow })
+		create("UIStroke", { Parent = label })
+		local component = P.NewComponent({ label }, { pool })
+		local lastText = nil
 		function component.Update()
 			local settings = object.CurrentSettings
+			local world = object._LastWorld
 			local screen = object._LastScreenPos
-			local shown = component.Visible and screen ~= nil and screen[2] == false and ESP.GlobalConfig.Arrows == true and settings.Arrow.Enabled == true
-			arrow.Visible = shown == true
+			local camera = scene.Camera()
+			local size = scene.Size()
+			local onScreen = screen ~= nil and screen[2] == true and screen[1].X >= 0 and screen[1].X <= size.X and screen[1].Y >= 0 and screen[1].Y <= size.Y
+			local shown = component.Visible and world ~= nil and camera ~= nil and not onScreen and ESP.GlobalConfig.Arrows == true and settings.Arrow.Enabled == true
+			pool.Begin()
+			label.Visible = false
 			if not shown then
+				pool.End()
 				return
 			end
-			local size = scene.Size()
-			local center = Vector2.new(size.X / 2, size.Y / 2)
-			local point = screen[1]
-			local inverted = point.Z <= 0
-			local invert = 1
-			local turn = 180
-			if inverted then
-				invert = -1
-				turn = 0
+			-- Where the target sits in the camera's frame: right is +X and up is +Y. The screen's Y grows downwards.
+			local cf = camera.CFrame
+			local offset = world - cf.Position
+			local right, up = offset:Dot(cf.RightVector), offset:Dot(cf.UpVector)
+			local length = math.sqrt(right * right + up * up)
+			local dx, dy = 0, 1
+			if length > 0.001 then
+				dx, dy = right / length, -up / length
 			end
-			local direction = Vector2.new(point.X, point.Y) - center
-			local arctan = math.atan2(direction.Y, direction.X)
-			local angle = math.deg(arctan) + 90
-			local distance = (settings.Arrow.CenterOffset * 0.001) * size.Y
-			arrow.Rotation = angle + turn
-			arrow.Position = UDim2.fromOffset(center.X + distance * math.cos(arctan) * invert, center.Y + distance * math.sin(arctan) * invert)
-			arrow.ImageColor3 = P.ColorOf(settings.Arrow.Color)
+			local center = Vector2.new(size.X / 2, size.Y / 2)
+			local ring = math.min((settings.Arrow.CenterOffset or 300) * size.Y / 1080, math.min(size.X, size.Y) / 2 - 40)
+			local pos = Vector2.new(center.X + dx * ring, center.Y + dy * ring)
+			local half = settings.Arrow.Size or 12
+			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
+			local tail = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
+			local base = Vector2.new(tip.X - dx * half * 0.9, tip.Y - dy * half * 0.9)
+			local wing = half * 0.6
+			local leftWing = Vector2.new(base.X - dy * wing, base.Y + dx * wing)
+			local rightWing = Vector2.new(base.X + dy * wing, base.Y - dx * wing)
+			local color = P.ColorOf(settings.Color)
+			local black = Color3.new(0, 0, 0)
+			-- The black outline first, then the coloured line over it, as the box does.
+			pool.Line(tail, tip, black, 3, 0)
+			pool.Line(tip, leftWing, black, 3, 0)
+			pool.Line(tip, rightWing, black, 3, 0)
+			pool.Line(tail, tip, color, 1.5, 0)
+			pool.Line(tip, leftWing, color, 1.5, 0)
+			pool.Line(tip, rightWing, color, 1.5, 0)
+			pool.End()
+			-- The name and the distance sit behind the tail, towards the centre, so they stay on the screen.
+			local text = tostring(settings.Name)
+			if ESP.GlobalConfig.Distance == true then
+				local studs = object._LastDistance or 0
+				local meters = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
+				text = text .. " " .. meters
+			end
+			if text ~= lastText then
+				label.Text = text
+				lastText = text
+			end
+			label.Position = UDim2.fromOffset(tail.X - dx * 14, tail.Y - dy * 14)
+			label.TextColor3 = color
+			label.Visible = ESP.GlobalConfig.Billboards == true
 		end
 		return component
 	end
 
 	-- The 2D box, as in the original. Full is a box with a black outline under the coloured line. Corner draws eight
-	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside.
+	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside. The colour follows
+	-- the visible check, and the lines fade with the distance when Distance fade is on.
 	function P.Box2D(object, scene)
 		local frame = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 2, Parent = scene.Container })
 		local stroke = create("UIStroke", { Parent = frame })
@@ -25335,9 +25425,9 @@ do
 				pool.End()
 				return
 			end
-			local color = P.ColorOf(settings.Box2D.Color)
+			local color = P.Tint(object, P.ColorOf(settings.Box2D.Color))
 			local thickness = settings.Box2D.Thickness
-			local transparency = settings.Box2D.Transparency
+			local transparency = math.max(settings.Box2D.Transparency, P.Fade(object))
 			if settings.Box2D.Style == "Corner" then
 				frame.Visible = false
 				outline.Visible = false
@@ -25375,6 +25465,7 @@ do
 		end
 		return component
 	end
+
 	function P.Box3D(object, scene)
 		local pool = P.LinePool(scene.Container)
 		local component = P.NewComponent({}, { pool })
@@ -25382,14 +25473,23 @@ do
 			local settings = object.CurrentSettings
 			local screen = object._LastScreenPos
 			local corners = object._ScreenCorners
-			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Boxes3D == true and settings.Box3D.Enabled == true and object._CornerOnScreen == true and corners ~= nil and corners[1] ~= nil
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Boxes3D == true and settings.Box3D.Enabled == true and corners ~= nil
 			pool.Begin()
 			if shown then
-				local color = P.ColorOf(settings.Box3D.Color)
+				local color = P.Tint(object, P.ColorOf(settings.Box3D.Color))
+				local thickness = settings.Box3D.Thickness
+				local transparency = settings.Box3D.Transparency
+				local cornersOnly = settings.Box3D.Style == "Corner"
 				for _, edge in P.Edges do
 					local a, b = corners[edge[1]], corners[edge[2]]
 					if a and b and a.Z > 0 and b.Z > 0 then
-						pool.Line(Vector2.new(a.X, a.Y), Vector2.new(b.X, b.Y), color, settings.Box3D.Thickness, settings.Box3D.Transparency)
+						local pa, pb = Vector2.new(a.X, a.Y), Vector2.new(b.X, b.Y)
+						if cornersOnly then
+							pool.Line(pa, pa + (pb - pa) * 0.25, color, thickness, transparency)
+							pool.Line(pb, pb + (pa - pb) * 0.25, color, thickness, transparency)
+						else
+							pool.Line(pa, pb, color, thickness, transparency)
+						end
 					end
 				end
 			end
@@ -25422,7 +25522,7 @@ do
 			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Skeleton == true and settings.Skeleton.Enabled == true
 			pool.Begin()
 			if shown then
-				local color = P.ColorOf(settings.Skeleton.Color)
+				local color = P.Tint(object, P.ColorOf(settings.Skeleton.Color))
 				local previous = nil
 				for _, partName in sequence do
 					local part = settings.Model:FindFirstChild(partName)
@@ -25448,19 +25548,34 @@ do
 
 	-- A health bar beside the 2D box. It is an addition to the original, which has no health bar.
 	-- The health bar: on the left, on the right, or under the box. Gradient colours it from red to green by health.
+	-- Health number writes the health beside the bar, so the number reads without a second look.
 	function P.Health(object, scene)
 		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
 		local fill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 1),
 			BackgroundColor3 = Color3.fromRGB(80, 220, 90), BorderSizePixel = 0, ZIndex = 5, Parent = back,
 		})
-		local component = P.NewComponent({ back })
+		local number = create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(44, 14),
+			BackgroundTransparency = 1,
+			FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
+			TextSize = 12,
+			TextStrokeTransparency = 0,
+			TextColor3 = Color3.new(1, 1, 1),
+			Visible = false,
+			ZIndex = 5,
+			Parent = scene.Container,
+		})
+		create("UIStroke", { Parent = number })
+		local component = P.NewComponent({ back, number })
 		function component.Update()
 			local settings = object.CurrentSettings
 			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
 			local minX, minY, maxX, maxY = P.Box(object)
 			local shown = component.Visible and minX ~= nil and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and humanoid ~= nil
 			back.Visible = shown == true
+			number.Visible = shown == true and ESP.GlobalConfig.HealthText == true
 			if not shown then
 				return
 			end
@@ -25471,14 +25586,18 @@ do
 				fill.AnchorPoint = Vector2.new(0, 0)
 				fill.Position = UDim2.fromScale(0, 0)
 				fill.Size = UDim2.fromScale(fraction, 1)
+				number.Position = UDim2.fromOffset(maxX + 18, maxY + 4)
 			else
-				local x = settings.Health.Side == "Right" and (maxX + 3) or (minX - 5)
+				local onLeft = settings.Health.Side ~= "Right"
+				local x = onLeft and (minX - 5) or (maxX + 3)
 				back.Position = UDim2.fromOffset(x, minY)
 				back.Size = UDim2.fromOffset(3, maxY - minY)
 				fill.AnchorPoint = Vector2.new(0, 1)
 				fill.Position = UDim2.fromScale(0, 1)
 				fill.Size = UDim2.fromScale(1, fraction)
+				number.Position = UDim2.fromOffset(onLeft and (x - 26) or (x + 26), (minY + maxY) / 2)
 			end
+			number.Text = tostring(math.floor(humanoid.Health))
 			if settings.Health.Gradient == false then
 				fill.BackgroundColor3 = Color3.fromRGB(80, 220, 90)
 			else
@@ -25487,6 +25606,90 @@ do
 		end
 		return component
 	end
+	-- Whether the character can be seen from the camera: a ray from the camera to its head meets nothing before it.
+	-- The local character and the character itself are not in the way.
+	function P.LineOfSight(scene, model)
+		local camera = scene.Camera()
+		local head = model:FindFirstChild("Head") or P.PrimaryPart(model)
+		if not (camera and head) then
+			return true
+		end
+		local origin = camera.CFrame.Position
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local ignore = { model }
+		if Players.LocalPlayer.Character then
+			table.insert(ignore, Players.LocalPlayer.Character)
+		end
+		params.FilterDescendantsInstances = ignore
+		return workspace:Raycast(origin, head.Position - origin, params) == nil
+	end
+	-- A small dot on the head, in the colour of the object, to see where the head is.
+	function P.HeadDot(object, scene)
+		local dot = create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(5, 5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 5,
+			Parent = scene.Container,
+		})
+		create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+		local component = P.NewComponent({ dot })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local head = settings.Model and settings.Model:FindFirstChild("Head")
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.HeadDots == true and head ~= nil
+			dot.Visible = shown == true
+			if not shown then
+				return
+			end
+			local point = P.Project(scene, head.Position)
+			dot.Position = UDim2.fromOffset(point.X, point.Y)
+			dot.BackgroundColor3 = P.Tint(object, P.ColorOf(settings.Color))
+		end
+		return component
+	end
+	-- The overlay of the game view: a field-of-view ring around the centre, and a crosshair at the centre.
+	function P.DrawOverlay(scene)
+		local overlay = ESP.Overlay
+		if not overlay then
+			local ring = create("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Visible = false,
+				ZIndex = 3,
+				Parent = scene.Container,
+			})
+			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ring })
+			create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0.3, Parent = ring })
+			overlay = { Ring = ring, Cross = P.LinePool(scene.Container) }
+			ESP.Overlay = overlay
+		end
+		local size = scene.Size()
+		local center = Vector2.new(size.X / 2, size.Y / 2)
+		overlay.Ring.Visible = ESP.GlobalConfig.FOV == true
+		if overlay.Ring.Visible then
+			local radius = ESP.GlobalConfig.FOVRadius or 120
+			overlay.Ring.Position = UDim2.fromOffset(center.X, center.Y)
+			overlay.Ring.Size = UDim2.fromOffset(radius * 2, radius * 2)
+		end
+		local cross = overlay.Cross
+		cross.Begin()
+		if ESP.GlobalConfig.Crosshair == true then
+			local gap, length = 4, 8
+			local white = Color3.new(1, 1, 1)
+			cross.Line(Vector2.new(center.X - gap - length, center.Y), Vector2.new(center.X - gap, center.Y), white, 1, 0)
+			cross.Line(Vector2.new(center.X + gap, center.Y), Vector2.new(center.X + gap + length, center.Y), white, 1, 0)
+			cross.Line(Vector2.new(center.X, center.Y - gap - length), Vector2.new(center.X, center.Y - gap), white, 1, 0)
+			cross.Line(Vector2.new(center.X, center.Y + gap), Vector2.new(center.X, center.Y + gap + length), white, 1, 0)
+		end
+		cross.End()
+	end
+
 	function P.BuildComponents(object)
 		local scene = object.Scene
 		object.Components.Billboard = P.Billboard(object, scene)
@@ -25497,6 +25700,7 @@ do
 		object.Components.Box3D = P.Box3D(object, scene)
 		object.Components.Skeleton = P.Skeleton(object, scene)
 		object.Components.Health = P.Health(object, scene)
+		object.Components.HeadDot = P.HeadDot(object, scene)
 	end
 
 	function P.HideAll(object, force)
@@ -25679,6 +25883,15 @@ do
 			end
 			local screen, inFront = P.Project(scene, P.Pivot(rootInstance).Position)
 			object._LastScreenPos = { screen, inFront }
+			object._LastWorld = P.Pivot(rootInstance).Position
+			object._Visible = nil
+			if inFront and (ESP.GlobalConfig.VisibleCheck == true or ESP.GlobalConfig.VisibleOnly == true) then
+				object._Visible = P.LineOfSight(scene, current.Model)
+			end
+			if ESP.GlobalConfig.VisibleOnly == true and object._Visible == false then
+				P.HideAll(object, true)
+				return
+			end
 
 			local gc = ESP.GlobalConfig
 			local wantCorners = inFront
@@ -25834,6 +26047,9 @@ do
 			P.Rainbow(delta)
 		end
 		P.SyncPlayers()
+		if ESP.GameScene then
+			P.DrawOverlay(ESP.GameScene)
+		end
 		for _, attachment in ESP.Attachments do
 			P.SyncPreview(attachment)
 		end
@@ -25979,16 +26195,32 @@ do
 			settings.ESPType = string.lower(tostring(value))
 			ESP:ResetAutomatic()
 		end })
-		drawing:CreateToggle({ Name = "2D box", CurrentValue = settings.Box2D.Enabled, Flag = "ESP_Box2D", Callback = function(value)
-			settings.Box2D.Enabled = value == true
+		drawing:CreateDropdown({ Name = "2D box", Options = { "Off", "Full", "Corner", "Filled" }, CurrentOption = settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full", Flag = "ESP_Box2DMode", Callback = function(value)
+			local choice = type(value) == "table" and value[1] or value
+			settings.Box2D.Enabled = choice ~= "Off"
+			settings.Box2D.Style = choice == "Corner" and "Corner" or "Full"
+			settings.Box2D.Filled = choice == "Filled"
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "Filled box", CurrentValue = settings.Box2D.Filled, Flag = "ESP_Filled", Callback = function(value)
-			settings.Box2D.Filled = value == true
+		drawing:CreateDropdown({ Name = "3D box", Options = { "Off", "Full", "Corner" }, CurrentOption = settings.Box3D.Enabled ~= true and "Off" or settings.Box3D.Style == "Corner" and "Corner" or "Full", Flag = "ESP_Box3DMode", Callback = function(value)
+			local choice = type(value) == "table" and value[1] or value
+			settings.Box3D.Enabled = choice ~= "Off"
+			settings.Box3D.Style = choice == "Corner" and "Corner" or "Full"
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "3D box", CurrentValue = settings.Box3D.Enabled, Flag = "ESP_Box3D", Callback = function(value)
-			settings.Box3D.Enabled = value == true
+		drawing:CreateDropdown({ Name = "Highlight depth", Options = { "Through walls", "Behind walls" }, CurrentOption = settings.HighlightDepth or "Through walls", Flag = "ESP_HighlightDepth", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.HighlightDepth = tostring(value)
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateSlider({ Name = "Highlight fill", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.FillTransparency, Flag = "ESP_HighlightFill", Callback = function(value)
+			settings.FillTransparency = value
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateSlider({ Name = "Highlight outline", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.OutlineTransparency, Flag = "ESP_HighlightOutline", Callback = function(value)
+			settings.OutlineTransparency = value
 			ESP:ApplyTemplate()
 		end })
 		drawing:CreateToggle({ Name = "Skeleton", CurrentValue = settings.Skeleton.Enabled, Flag = "ESP_Skeleton", Callback = function(value)
@@ -26006,23 +26238,16 @@ do
 			settings.Tracer.From = string.lower(tostring(value))
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "Arrow", Desc = "Points at targets behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
+		drawing:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
+			settings.Arrow.Size = value
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Arrow", Desc = "Points at targets off the screen or behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
 			settings.Arrow.Enabled = value == true
 			ESP:ApplyTemplate()
 		end })
 		drawing:CreateSlider({ Name = "Arrow distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
 			settings.Arrow.CenterOffset = value
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateToggle({ Name = "Health bar", CurrentValue = settings.Health.Enabled, Flag = "ESP_Health", Callback = function(value)
-			settings.Health.Enabled = value == true
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateDropdown({ Name = "Box style", Options = { "Full", "Corner" }, CurrentOption = settings.Box2D.Style or "Full", Flag = "ESP_BoxStyle", Callback = function(value)
-			if type(value) == "table" then
-				value = value[1]
-			end
-			settings.Box2D.Style = tostring(value)
 			ESP:ApplyTemplate()
 		end })
 		drawing:CreateDropdown({ Name = "Tracer to", Options = { "Feet", "Center", "Head" }, CurrentOption = settings.Tracer.To or "Feet", Flag = "ESP_TracerTo", Callback = function(value)
@@ -26032,16 +26257,44 @@ do
 			settings.Tracer.To = tostring(value)
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateDropdown({ Name = "Health side", Options = { "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Side or "Left", Flag = "ESP_HealthSide", Callback = function(value)
-			if type(value) == "table" then
-				value = value[1]
+		drawing:CreateDropdown({ Name = "Health bar", Options = { "Off", "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left", Flag = "ESP_HealthMode", Callback = function(value)
+			local choice = type(value) == "table" and value[1] or value
+			settings.Health.Enabled = choice ~= "Off"
+			if choice ~= "Off" then
+				settings.Health.Side = tostring(choice)
 			end
-			settings.Health.Side = tostring(value)
 			ESP:ApplyTemplate()
 		end })
 		drawing:CreateToggle({ Name = "Health gradient", CurrentValue = settings.Health.Gradient ~= false, Flag = "ESP_HealthGradient", Callback = function(value)
 			settings.Health.Gradient = value == true
 			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Visible check colours", Desc = "Players you can see and players behind a wall in two colours", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
+			ESP.GlobalConfig.VisibleCheck = value == true
+		end })
+		drawing:CreateToggle({ Name = "Only visible", Desc = "Hides the players behind a wall", CurrentValue = ESP.GlobalConfig.VisibleOnly == true, Flag = "ESP_VisibleOnly", Callback = function(value)
+			ESP.GlobalConfig.VisibleOnly = value == true
+		end })
+		drawing:CreateToggle({ Name = "Health number", CurrentValue = ESP.GlobalConfig.HealthText == true, Flag = "ESP_HealthText", Callback = function(value)
+			ESP.GlobalConfig.HealthText = value == true
+		end })
+		drawing:CreateToggle({ Name = "Head dot", CurrentValue = ESP.GlobalConfig.HeadDots == true, Flag = "ESP_HeadDots", Callback = function(value)
+			ESP.GlobalConfig.HeadDots = value == true
+		end })
+		drawing:CreateToggle({ Name = "Held item", Desc = "Shows the tool a character holds, after its name", CurrentValue = ESP.GlobalConfig.ShowTool == true, Flag = "ESP_ShowTool", Callback = function(value)
+			ESP.GlobalConfig.ShowTool = value == true
+		end })
+		drawing:CreateToggle({ Name = "Distance fade", Desc = "Text and lines fade out towards the max distance", CurrentValue = ESP.GlobalConfig.Fade == true, Flag = "ESP_Fade", Callback = function(value)
+			ESP.GlobalConfig.Fade = value == true
+		end })
+		drawing:CreateToggle({ Name = "FOV circle", CurrentValue = ESP.GlobalConfig.FOV == true, Flag = "ESP_FOV", Callback = function(value)
+			ESP.GlobalConfig.FOV = value == true
+		end })
+		drawing:CreateSlider({ Name = "FOV radius", Range = { 20, 400 }, Increment = 5, CurrentValue = ESP.GlobalConfig.FOVRadius or 120, Flag = "ESP_FOVRadius", Callback = function(value)
+			ESP.GlobalConfig.FOVRadius = value
+		end })
+		drawing:CreateToggle({ Name = "Crosshair", CurrentValue = ESP.GlobalConfig.Crosshair == true, Flag = "ESP_Crosshair", Callback = function(value)
+			ESP.GlobalConfig.Crosshair = value == true
 		end })
 		drawing:CreateToggle({ Name = "Scale text with distance", CurrentValue = ESP.GlobalConfig.DynamicText ~= false, Flag = "ESP_DynamicText", Callback = function(value)
 			ESP.GlobalConfig.DynamicText = value == true
@@ -26065,6 +26318,12 @@ do
 		colors:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
 			settings.Color = value
 			ESP:ApplyTemplate()
+		end })
+		colors:CreateColorPicker({ Name = "Visible colour", Color = ESP.GlobalConfig.VisibleColor, Flag = "ESP_VisibleColor", Callback = function(value)
+			ESP.GlobalConfig.VisibleColor = value
+		end })
+		colors:CreateColorPicker({ Name = "Hidden colour", Color = ESP.GlobalConfig.HiddenColor, Flag = "ESP_HiddenColor", Callback = function(value)
+			ESP.GlobalConfig.HiddenColor = value
 		end })
 		colors:CreateColorPicker({ Name = "Ally color", Color = players.AllyColor, Flag = "ESP_AllyColor", Callback = function(value)
 			players.AllyColor = value
