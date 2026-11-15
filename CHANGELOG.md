@@ -40,6 +40,11 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 - **Player list**: `Tab:PlayerList({ Name, Height, Actions })`, a live list of the players in the server. Each row has the avatar, the name, the team colour and the distance, and a small button for each action you give it. Rows follow players joining and leaving.
+- **ESP corner box**: `Box2D.Style = "Corner"` draws eight short corner lines. `"Full"` (the default) keeps the box with a black outline under the coloured line.
+- **ESP text like the original**: the name sits above the box and the distance below it. Distances read in metres by default (`ESP.GlobalConfig.Meters = false` for studs), and the text scales with the box (`ESP.GlobalConfig.DynamicText`).
+- **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar from red to green.
+- **ESP tracer target**: `Tracer.To` is Feet (the default), Center or Head.
+- **R6 and R15 tests**: the test checks both rigs side by side, with the skeleton bones, the box, the health bar and the text.
 
 ### Changed
 
@@ -55,6 +60,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Press feel on every small button**: a press squeezes the button to 97%, and the release eases back without overshooting. The light sweeps across the visible shape only. Settings button rows, home quick actions and the dropdown's Select all and Clear all use the same feel.
 - **FPS and ping history**: each bar keeps the colour it was read with. The newest bar is strongest, older bars fade, and empty slots are dim.
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
+- **ESP measures every object in front of the camera**, so the text, the health bar and the tracer all have the box to work from.
 
 ### Fixed
 
@@ -68,6 +74,9 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Preview spins again after it is popped out.** The window called its listeners one after another without protection, so one listener that errored stopped the rest, the preview's spin among them. Each listener now runs under `pcall`, and a failing one is reported once.
 - **Button wave no longer spills out.** Compact buttons drew the wave over the whole card, description included. The wave, the squeeze and the light now belong to the visible box.
 - **One wave per click.** Compact buttons, home quick actions and the dropdown no longer draw a second wave on click.
+- **Report popup**: the reasons sit in a grid inside the card. Before, four reasons ran past the card's left edge.
+- **Buttons that size themselves to their text** no longer stretch on press. They show a press as a colour change, because a button that follows its own text cannot hold a child sized by scale.
+- **A popped-out preview keeps spinning** while the main window is closed.
 
 ### Removed
 

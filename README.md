@@ -2007,6 +2007,10 @@ Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`,
 
 `Highlight`, `SelectionBox` and the handle adornments need the world, so they are drawn in the game only. The preview draws the boxes, the skeleton, the tracer, the arrow, the names and the health bar. The name is a Frame label, so `Font` takes a Font object, not an `Enum.Font`.
 
+### Looks: box, text, health and tracer
+
+`Box2D.Style` is `"Full"` (a box with a black outline) or `"Corner"` (eight corner lines). `Health.Side` is `"Left"`, `"Right"` or `"Bottom"`, and `Health.Gradient` colours it from red to green. `Tracer.To` is `"Feet"` (the default, the bottom middle of the box), `"Center"` or `"Head"`. The name sits above the box and the distance below it. `ESP.GlobalConfig.Meters` (on by default) reads distances in metres, and `ESP.GlobalConfig.DynamicText` scales the text with the box. R6 and R15 both get the box from the character's bounding box and their own skeleton.
+
 ### Testing without Roblox
 
 `tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:

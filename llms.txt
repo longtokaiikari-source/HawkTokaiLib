@@ -166,6 +166,8 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
 - Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(sub, window) makes the ESP tab.
 - tests/esp_test.lua: plain Lua 5.3+ test of the ESP block in Source.luau against a Roblox API mock. Geometry, rules, components and cleanup only, no rendering.
+- Box2D.Style: "Full" (default, black outline under the line) or "Corner" (eight corner lines). Tracer.To: "Feet" (default), "Center", "Head". Health.Side: "Left" (default), "Right", "Bottom"; Health.Gradient defaults on.
+- Name above the 2D box, distance below it; GlobalConfig.Meters (default on, studs x 0.28) and GlobalConfig.DynamicText (default on) scale the text with the box.
 
 ## Player list
 - `Tab:PlayerList({ Name, Height, Actions })`: live list of the players in the server. Actions = { { Name, Callback(player) } }. Rows follow joins and leaves; distances refresh every 2 seconds. Returns a handle with Refresh().

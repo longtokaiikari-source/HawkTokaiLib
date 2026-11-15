@@ -1875,11 +1875,39 @@ function Library._attachSheen(button, visual)
     end)
     return sheen
 end
--- The press feel of a button. The input is read on button, but the squeeze, the light and the ripple go on
--- visual, so they stay inside the shape the player sees. A press squeezes it a little, and the release eases
--- back without overshooting, so it reads as a press and not as a bounce.
+-- The press feel of a button. The input is read on button, but the squeeze, the light and the wave go on visual,
+-- so they stay inside the shape the player sees. A button whose size follows its text (AutomaticSize) keeps that
+-- size: a child sized by scale would make it grow on every press, so such a button only changes its colour, and
+-- the colour of its outline, on press.
 function Library._attachPress(button, visual)
     visual = visual or button
+    if visual.AutomaticSize ~= Enum.AutomaticSize.None then
+        local outline = visual:FindFirstChildOfClass("UIStroke")
+        local restBackground, restOutline = nil, nil
+        button.MouseButton1Down:Connect(function()
+            if restBackground == nil then
+                restBackground = visual.BackgroundTransparency
+                restOutline = outline and outline.Color
+            end
+            tween(visual, { BackgroundTransparency = math.min(restBackground + 0.25, 1) }, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            if outline then
+                tween(outline, { Color = Theme.Accent }, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            end
+        end)
+        local function release()
+            if restBackground == nil then
+                return
+            end
+            tween(visual, { BackgroundTransparency = restBackground }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            if outline and restOutline then
+                tween(outline, { Color = restOutline }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            end
+            restBackground = nil
+        end
+        button.MouseButton1Up:Connect(release)
+        button.MouseLeave:Connect(release)
+        return nil
+    end
     local scale = create("UIScale", { Scale = 1, Parent = visual })
     Library._attachSheen(button, visual)
     button.MouseButton1Down:Connect(function()
@@ -14761,7 +14789,7 @@ function Tab:Viewport(opts)
     -- Every frame: a flick slows down, the spin carries on when idle, and the camera eases
     -- toward its target for zoom, reset and tilt.
     window:_listen("Render", function(deltaTime)
-        if not center or not window.Open or window.Minimized or not parts.Frame.Visible then
+        if not center or window.Minimized or not parts.Frame.Visible or (not window.Open and not handle:IsPoppedOut()) then
             return
         end
         if not dragging then
@@ -21179,6 +21207,14 @@ function Window:Dialog(opts)
     end
     local WIDTH = 300
     local PAD = 18
+    -- The buttons sit in a grid with fixed cells: one button is a chip on the right, two share the row, and three
+    -- or more form a two-column grid, so every button stays inside the card whatever its text.
+    local specs = opts.Buttons or {}
+    local gap = 8
+    local columns = #specs >= 2 and 2 or 1
+    local cellSize = #specs == 1 and UDim2.fromOffset(120, 34) or UDim2.new(1 / columns, -(gap * (columns - 1)) / columns, 0, 34)
+    local rowCount = math.ceil(#specs / columns)
+    local rowHeight = rowCount * 34 + math.max(rowCount - 1, 0) * gap
 
     local overlay = create("TextButton", {
         Size = UDim2.fromScale(1, 1),
@@ -21247,7 +21283,7 @@ function Window:Dialog(opts)
             local newHeight = math.max(content.TextBounds.Y, 16) + 6
             if newHeight ~= contentHeight then
                 contentHeight = newHeight
-                card.Size = UDim2.fromOffset(WIDTH, PAD + 24 + contentHeight + 12 + 34 + PAD)
+                card.Size = UDim2.fromOffset(WIDTH, PAD + 24 + contentHeight + 12 + rowHeight + PAD)
                 local rowFrame = card:FindFirstChild("ButtonRow")
                 if rowFrame then
                     rowFrame.Position = UDim2.fromOffset(PAD, PAD + 24 + contentHeight + 12)
@@ -21259,19 +21295,19 @@ function Window:Dialog(opts)
     local row = create("Frame", {
         Name = "ButtonRow",
         Position = UDim2.fromOffset(PAD, PAD + 24 + contentHeight + 12),
-        Size = UDim2.new(1, -PAD * 2, 0, 34),
+        Size = UDim2.new(1, -PAD * 2, 0, rowHeight),
         BackgroundTransparency = 1,
         ZIndex = 42,
         Parent = card,
     })
-    create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    create("UIGridLayout", {
+        CellSize = cellSize,
+        CellPadding = UDim2.fromOffset(gap, gap),
+        HorizontalAlignment = #specs == 1 and Enum.HorizontalAlignment.Right or Enum.HorizontalAlignment.Left,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 8),
         Parent = row,
     })
-    card.Size = UDim2.fromOffset(WIDTH, PAD + 24 + contentHeight + 12 + 34 + PAD)
+    card.Size = UDim2.fromOffset(WIDTH, PAD + 24 + contentHeight + 12 + rowHeight + PAD)
 
     local dialog = {}
     local closed = false
@@ -21298,8 +21334,7 @@ function Window:Dialog(opts)
     for index, spec in ipairs(opts.Buttons or {}) do
         local primary = spec.Variant == "Primary"
         local buttonFrame = create("TextButton", {
-            Size = UDim2.fromOffset(0, 34),
-            AutomaticSize = Enum.AutomaticSize.X,
+            Size = cellSize,
             BackgroundColor3 = primary and Theme.Accent or Theme.Surface2,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
@@ -21312,10 +21347,9 @@ function Window:Dialog(opts)
         })
         corner(buttonFrame, UDim.new(0, 7))
         local buttonStroke = stroke(buttonFrame, primary and Theme.Accent or Theme.Stroke, 1)
-        padding(buttonFrame, 14, 14)
         local text = label({
-            Size = UDim2.new(0, 0, 1, 0),
-            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2.fromScale(1, 1),
+            TextTruncate = Enum.TextTruncate.AtEnd,
             Text = spec.Title or spec.Name or "OK",
             TextSize = 13,
             TextColor3 = primary and Theme.AccentDark or Theme.Text,
@@ -24672,6 +24706,8 @@ do
 		Boxes3D = true,
 		Skeleton = true,
 		Health = true,
+		DynamicText = true,
+		Meters = true,
 		Font = nil,
 	}
 	-- Automatic players: one object per character while Enabled. AllyColor is used for teammates.
@@ -24706,12 +24742,12 @@ do
 		OutlineColor = Color3.new(1, 1, 1),
 		FillTransparency = 0.65,
 		OutlineTransparency = 0,
-		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom" },
+		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom", To = "Feet" },
 		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300 },
-		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false },
+		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false, Style = "Full" },
 		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
 		Skeleton = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
-		Health = { Enabled = false },
+		Health = { Enabled = false, Side = "Left", Gradient = true },
 		OnDestroy = nil,
 		OnDestroyFunc = nil,
 		BeforeUpdate = nil,
@@ -25024,47 +25060,93 @@ do
 		return component
 	end
 
-	-- The name and the distance, above the TextModel (plus StudsOffset).
+	-- The screen box of a character, from its bounding box. Nil while the character is behind the camera.
+	function P.Box(object)
+		local screen = object._LastScreenPos
+		if not (screen and screen[2] == true and object._CornerOnScreen == true) then
+			return nil
+		end
+		return object._MinX, object._MinY, object._MaxX, object._MaxY
+	end
+	-- The text size follows the box, as the original does: small far away, full size close up.
+	function P.TextSizeFor(object, size)
+		if ESP.GlobalConfig.DynamicText == false then
+			return size
+		end
+		local _, minY, _, maxY = P.Box(object)
+		local height = minY and (maxY - minY) or 100
+		return math.max(math.floor(size * math.clamp(height * 0.016, 0.5, 1) + 0.5), 6)
+	end
+	-- The name sits above the box and the distance below it, as in the original. Without a box both sit over the
+	-- head, so the character still gets its text.
 	function P.Billboard(object, scene)
-		local label = create("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(200, 50),
+		local name = create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Size = UDim2.fromOffset(240, 30),
 			BackgroundTransparency = 1,
 			FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
-			TextWrapped = true,
-			RichText = true,
 			TextStrokeTransparency = 0,
 			Visible = false,
 			ZIndex = 5,
 			Parent = scene.Container,
 		})
-		create("UIStroke", { Parent = label })
-		local component = P.NewComponent({ label })
-		local lastText = nil
+		create("UIStroke", { Parent = name })
+		local distance = create("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Size = UDim2.fromOffset(240, 20),
+			BackgroundTransparency = 1,
+			FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
+			TextStrokeTransparency = 0,
+			Visible = false,
+			ZIndex = 5,
+			Parent = scene.Container,
+		})
+		create("UIStroke", { Parent = distance })
+		local component = P.NewComponent({ name, distance })
+		local lastName, lastDistance = nil, nil
 		function component.Update()
 			local settings = object.CurrentSettings
 			local screen = object._LastScreenPos
-			local textPos, inFront = P.Project(scene, P.Pivot(settings.TextModel).Position + settings.StudsOffset)
-			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Billboards == true and inFront
-			label.Visible = shown == true
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Billboards == true
+			name.Visible = shown == true
+			distance.Visible = shown == true and ESP.GlobalConfig.Distance == true
 			if not shown then
 				return
 			end
-			label.Position = UDim2.fromOffset(textPos.X, textPos.Y)
-			local text = settings.Name
-			if ESP.GlobalConfig.Distance == true then
-				text = string.format('%s\n<font size="%d">[%s]</font>', settings.Name, math.max(settings.TextSize - 3, 1), tostring(math.floor(object._LastDistance or 0)))
+			local minX, minY, maxX, maxY = P.Box(object)
+			local x, top, below
+			if minX then
+				x = (minX + maxX) / 2
+				top = minY - 3
+				below = maxY + 2
+				if settings.Health.Enabled == true and settings.Health.Side == "Bottom" then
+					below = below + 6
+				end
+			else
+				local textPos = P.Project(scene, P.Pivot(settings.TextModel).Position + settings.StudsOffset)
+				x, top, below = textPos.X, textPos.Y, textPos.Y + 2
 			end
-			if text ~= lastText then
-				label.Text = text
-				lastText = text
+			name.Position = UDim2.fromOffset(x, top)
+			distance.Position = UDim2.fromOffset(x, below)
+			local nameSize = P.TextSizeFor(object, settings.TextSize)
+			name.TextSize = nameSize
+			distance.TextSize = math.max(nameSize - 3, 6)
+			local color = P.ColorOf(settings.Color)
+			name.TextColor3 = color
+			distance.TextColor3 = color
+			if settings.Name ~= lastName then
+				name.Text = settings.Name
+				lastName = settings.Name
 			end
-			label.TextSize = settings.TextSize
-			label.TextColor3 = P.ColorOf(settings.Color)
+			local studs = object._LastDistance or 0
+			local text = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
+			if text ~= lastDistance then
+				distance.Text = text
+				lastDistance = text
+			end
 		end
 		return component
 	end
-
 	-- The highlight of the game: Highlight, SelectionBox or a handle adornment, parented to the game folder.
 	function P.Highlighter(object, scene)
 		local settings = object.CurrentSettings
@@ -25166,14 +25248,30 @@ do
 			pool.Begin()
 			if shown then
 				local from = P.TracerOrigin(scene, string.lower(tostring(settings.Tracer.From)))
-				local target = Vector2.new(screen[1].X, screen[1].Y)
+				local target = P.TracerTarget(object, settings)
 				pool.Line(from, target, P.ColorOf(settings.Tracer.Color), settings.Tracer.Thickness, settings.Tracer.Transparency)
 			end
 			pool.End()
 		end
 		return component
 	end
-
+	-- Where the tracer ends on the character: the feet (the bottom middle of the box) by default, or the middle, or
+	-- the head. Without a box it ends at the root, as before.
+	function P.TracerTarget(object, settings)
+		local minX, minY, maxX, maxY = P.Box(object)
+		if not minX then
+			local root = object._LastScreenPos[1]
+			return Vector2.new(root.X, root.Y)
+		end
+		local x = (minX + maxX) / 2
+		local mode = string.lower(tostring(settings.Tracer.To or "Feet"))
+		if mode == "head" then
+			return Vector2.new(x, minY)
+		elseif mode == "center" then
+			return Vector2.new(x, (minY + maxY) / 2)
+		end
+		return Vector2.new(x, maxY)
+	end
 	-- A screen-edge arrow for a target behind the camera, the same geometry as the original's Arrow.
 	function P.Arrow(object, scene)
 		local arrow = create("ImageLabel", {
@@ -25217,34 +25315,66 @@ do
 		return component
 	end
 
+	-- The 2D box, as in the original. Full is a box with a black outline under the coloured line. Corner draws eight
+	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside.
 	function P.Box2D(object, scene)
 		local frame = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 2, Parent = scene.Container })
 		local stroke = create("UIStroke", { Parent = frame })
-		local component = P.NewComponent({ frame })
+		local outline = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 1, Parent = scene.Container })
+		local outlineStroke = create("UIStroke", { Color = Color3.new(0, 0, 0), Parent = outline })
+		local pool = P.LinePool(scene.Container)
+		local component = P.NewComponent({ frame, outline }, { pool })
 		function component.Update()
 			local settings = object.CurrentSettings
-			local screen = object._LastScreenPos
-			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Boxes2D == true and settings.Box2D.Enabled == true and object._CornerOnScreen == true
-			frame.Visible = shown == true
+			local minX, minY, maxX, maxY = P.Box(object)
+			local shown = component.Visible and minX ~= nil and ESP.GlobalConfig.Boxes2D == true and settings.Box2D.Enabled == true
+			pool.Begin()
 			if not shown then
+				frame.Visible = false
+				outline.Visible = false
+				pool.End()
 				return
 			end
-			frame.Position = UDim2.fromOffset(object._MinX, object._MinY)
-			frame.Size = UDim2.fromOffset(object._MaxX - object._MinX, object._MaxY - object._MinY)
 			local color = P.ColorOf(settings.Box2D.Color)
-			frame.BackgroundColor3 = color
-			if settings.Box2D.Filled == true then
-				frame.BackgroundTransparency = 0.5
-			else
-				frame.BackgroundTransparency = 1
+			local thickness = settings.Box2D.Thickness
+			local transparency = settings.Box2D.Transparency
+			if settings.Box2D.Style == "Corner" then
+				frame.Visible = false
+				outline.Visible = false
+				local length = math.min(maxX - minX, maxY - minY) * 0.25
+				local function edge(ax, ay, bx, by)
+					pool.Line(Vector2.new(ax, ay), Vector2.new(bx, by), color, thickness, transparency)
+				end
+				edge(minX, minY, minX + length, minY)
+				edge(minX, minY, minX, minY + length)
+				edge(maxX, minY, maxX - length, minY)
+				edge(maxX, minY, maxX, minY + length)
+				edge(minX, maxY, minX + length, maxY)
+				edge(minX, maxY, minX, maxY - length)
+				edge(maxX, maxY, maxX - length, maxY)
+				edge(maxX, maxY, maxX, maxY - length)
+				pool.End()
+				return
 			end
+			pool.End()
+			local position = UDim2.fromOffset(minX, minY)
+			local size = UDim2.fromOffset(maxX - minX, maxY - minY)
+			frame.Position = position
+			frame.Size = size
+			outline.Position = position
+			outline.Size = size
+			frame.Visible = true
+			outline.Visible = true
+			frame.BackgroundColor3 = color
+			frame.BackgroundTransparency = settings.Box2D.Filled == true and 0.5 or 1
 			stroke.Color = color
-			stroke.Thickness = settings.Box2D.Thickness
-			stroke.Transparency = settings.Box2D.Transparency
+			stroke.Thickness = thickness
+			stroke.Transparency = transparency
+			outlineStroke.Thickness = thickness + 2
+			outlineStroke.Transparency = transparency
 		end
 		return component
 	end
-
 	function P.Box3D(object, scene)
 		local pool = P.LinePool(scene.Container)
 		local component = P.NewComponent({}, { pool })
@@ -25317,6 +25447,7 @@ do
 	end
 
 	-- A health bar beside the 2D box. It is an addition to the original, which has no health bar.
+	-- The health bar: on the left, on the right, or under the box. Gradient colours it from red to green by health.
 	function P.Health(object, scene)
 		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
 		local fill = create("Frame", {
@@ -25326,22 +25457,36 @@ do
 		local component = P.NewComponent({ back })
 		function component.Update()
 			local settings = object.CurrentSettings
-			local screen = object._LastScreenPos
 			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
-			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and object._CornerOnScreen == true and humanoid ~= nil and humanoid.MaxHealth > 0
+			local minX, minY, maxX, maxY = P.Box(object)
+			local shown = component.Visible and minX ~= nil and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and humanoid ~= nil
 			back.Visible = shown == true
 			if not shown then
 				return
 			end
-			local fraction = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-			back.Position = UDim2.fromOffset(object._MinX - 5, object._MinY)
-			back.Size = UDim2.fromOffset(3, object._MaxY - object._MinY)
-			fill.Size = UDim2.fromScale(1, fraction)
-			fill.BackgroundColor3 = Color3.fromHSV(fraction * 0.33, 0.9, 1)
+			local fraction = humanoid.MaxHealth > 0 and math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1) or 0
+			if settings.Health.Side == "Bottom" then
+				back.Position = UDim2.fromOffset(minX - 1, maxY + 2)
+				back.Size = UDim2.fromOffset(maxX - minX + 2, 4)
+				fill.AnchorPoint = Vector2.new(0, 0)
+				fill.Position = UDim2.fromScale(0, 0)
+				fill.Size = UDim2.fromScale(fraction, 1)
+			else
+				local x = settings.Health.Side == "Right" and (maxX + 3) or (minX - 5)
+				back.Position = UDim2.fromOffset(x, minY)
+				back.Size = UDim2.fromOffset(3, maxY - minY)
+				fill.AnchorPoint = Vector2.new(0, 1)
+				fill.Position = UDim2.fromScale(0, 1)
+				fill.Size = UDim2.fromScale(1, fraction)
+			end
+			if settings.Health.Gradient == false then
+				fill.BackgroundColor3 = Color3.fromRGB(80, 220, 90)
+			else
+				fill.BackgroundColor3 = Color3.fromHSV(fraction * 0.3, 1, 1)
+			end
 		end
 		return component
 	end
-
 	function P.BuildComponents(object)
 		local scene = object.Scene
 		object.Components.Billboard = P.Billboard(object, scene)
@@ -25536,7 +25681,7 @@ do
 			object._LastScreenPos = { screen, inFront }
 
 			local gc = ESP.GlobalConfig
-			local wantCorners = inFront and ((gc.Boxes2D == true and current.Box2D.Enabled == true) or (gc.Boxes3D == true and current.Box3D.Enabled == true) or (gc.Health == true and current.Health.Enabled == true))
+			local wantCorners = inFront
 			if wantCorners then
 				local onScreen, _, corners, minX, minY, maxX, maxY = P.Corners(scene, current.Model)
 				object._CornerOnScreen = onScreen
@@ -25872,6 +26017,37 @@ do
 		drawing:CreateToggle({ Name = "Health bar", CurrentValue = settings.Health.Enabled, Flag = "ESP_Health", Callback = function(value)
 			settings.Health.Enabled = value == true
 			ESP:ApplyTemplate()
+		end })
+		drawing:CreateDropdown({ Name = "Box style", Options = { "Full", "Corner" }, CurrentOption = settings.Box2D.Style or "Full", Flag = "ESP_BoxStyle", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.Box2D.Style = tostring(value)
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateDropdown({ Name = "Tracer to", Options = { "Feet", "Center", "Head" }, CurrentOption = settings.Tracer.To or "Feet", Flag = "ESP_TracerTo", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.Tracer.To = tostring(value)
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateDropdown({ Name = "Health side", Options = { "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Side or "Left", Flag = "ESP_HealthSide", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.Health.Side = tostring(value)
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Health gradient", CurrentValue = settings.Health.Gradient ~= false, Flag = "ESP_HealthGradient", Callback = function(value)
+			settings.Health.Gradient = value == true
+			ESP:ApplyTemplate()
+		end })
+		drawing:CreateToggle({ Name = "Scale text with distance", CurrentValue = ESP.GlobalConfig.DynamicText ~= false, Flag = "ESP_DynamicText", Callback = function(value)
+			ESP.GlobalConfig.DynamicText = value == true
+		end })
+		drawing:CreateToggle({ Name = "Distance in metres", CurrentValue = ESP.GlobalConfig.Meters ~= false, Flag = "ESP_Meters", Callback = function(value)
+			ESP.GlobalConfig.Meters = value == true
 		end })
 		drawing:CreateSlider({ Name = "Line thickness", Range = { 1, 4 }, Increment = 0.5, CurrentValue = settings.Box2D.Thickness, Flag = "ESP_Thickness", Callback = function(value)
 			settings.Box2D.Thickness = value
