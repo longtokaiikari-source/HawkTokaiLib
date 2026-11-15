@@ -24697,9 +24697,9 @@ do
 	ESP.GlobalConfig = ESP.GlobalConfig or {
 		IgnoreCharacter = false,
 		Rainbow = false,
-		Billboards = true,
-		Distance = true,
-		Highlighters = true,
+		Billboards = false,
+		Distance = false,
+		Highlighters = false,
 		Tracers = true,
 		Arrows = true,
 		Boxes2D = true,
@@ -24722,7 +24722,7 @@ do
 		Crosshair = false,
 		Font = nil,
 	}
-	-- Automatic players: one object per character while Enabled. AllyColor is used for teammates.
+	-- Players: one object per character, always watched. AllyColor is used for teammates.
 	ESP.Players = ESP.Players or { Enabled = false, HideTeammates = true, AllyColor = Color3.fromRGB(90, 200, 255) }
 	-- The template for the automatic players and for the preview. ApplyTemplate pushes it to the objects that exist.
 	ESP.Settings = ESP.Settings or {}
@@ -25928,7 +25928,7 @@ do
 		return object
 	end
 
-	-- // Automatic players and previews // --
+	-- // Players and previews // --
 	function P.SyncPlayers()
 		local localPlayer = Players.LocalPlayer
 		local config = ESP.Players
@@ -26146,7 +26146,7 @@ do
 
 	-- // Tab // --
 	-- The ESP tab: the players and the drawing in the left groupboxes, the colours and the preview on the right.
-	function ESP:Build(sub, window)
+	function ESP:Build(tab, window)
 		P.Init()
 		if window and window.OnUnload then
 			window:OnUnload(function()
@@ -26154,110 +26154,126 @@ do
 			end)
 		end
 		P.Validate(ESP.Settings, P.Copy(P.Defaults))
-		if ESP.UiReady ~= true then
-			ESP.UiReady = true
-			ESP.Settings.Box2D.Enabled = true
-			ESP.Settings.Skeleton.Enabled = true
-		end
 		local settings = ESP.Settings
 		local config = ESP.GlobalConfig
 		local players = ESP.Players
+		-- The players are always watched. Each page turns on its own feature, so nothing is drawn until its page says so.
+		players.Enabled = true
 
-		local left = sub:AddLeftGroupbox({ Name = "Players", Icon = "users" })
-		left:CreateToggle({ Name = "Automatic players", Desc = "One ESP per player in the game", CurrentValue = players.Enabled, Flag = "ESP_Players", Callback = function(value)
-			players.Enabled = value == true
-		end })
-		left:CreateToggle({ Name = "Hide teammates", CurrentValue = players.HideTeammates, Flag = "ESP_HideTeammates", Callback = function(value)
+		-- One page for each feature.
+		local pagePlayers = tab:CreateSubTab({ Name = "Players" })
+		local gPlayers = pagePlayers:AddLeftGroupbox({ Name = "Players", Icon = "users" })
+		gPlayers:CreateToggle({ Name = "Hide teammates", CurrentValue = players.HideTeammates, Flag = "ESP_HideTeammates", Callback = function(value)
 			players.HideTeammates = value == true
 		end })
-		left:CreateSlider({ Name = "Max distance", Range = { 50, 5000 }, Increment = 50, Suffix = " studs", CurrentValue = settings.MaxDistance, Flag = "ESP_MaxDistance", Callback = function(value)
+		gPlayers:CreateSlider({ Name = "Max distance", Range = { 50, 5000 }, Increment = 50, Suffix = " studs", CurrentValue = settings.MaxDistance, Flag = "ESP_MaxDistance", Callback = function(value)
 			settings.MaxDistance = value
 			ESP:ApplyTemplate()
 		end })
-		left:CreateToggle({ Name = "Names", CurrentValue = config.Billboards, Flag = "ESP_Names", Callback = function(value)
-			config.Billboards = value == true
-		end })
-		left:CreateToggle({ Name = "Distance", CurrentValue = config.Distance, Flag = "ESP_Distance", Callback = function(value)
-			config.Distance = value == true
-		end })
-		left:CreateToggle({ Name = "Rainbow", CurrentValue = config.Rainbow, Flag = "ESP_Rainbow", Callback = function(value)
+		gPlayers:CreateToggle({ Name = "Rainbow", CurrentValue = config.Rainbow, Flag = "ESP_Rainbow", Callback = function(value)
 			config.Rainbow = value == true
 		end })
-		left:CreateToggle({ Name = "Ignore my character", Desc = "Measures distance from the camera", CurrentValue = config.IgnoreCharacter, Flag = "ESP_IgnoreCharacter", Callback = function(value)
+		gPlayers:CreateToggle({ Name = "Ignore my character", Desc = "Measures distance from the camera", CurrentValue = config.IgnoreCharacter, Flag = "ESP_IgnoreCharacter", Callback = function(value)
 			config.IgnoreCharacter = value == true
 		end })
 
-		local drawing = sub:AddLeftGroupbox({ Name = "Drawing", Icon = "box" })
-		drawing:CreateDropdown({ Name = "Highlight", Options = { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }, CurrentOption = "Highlight", Flag = "ESP_Type", Callback = function(value)
-			if type(value) == "table" then
-				value = value[1]
-			end
-			settings.ESPType = string.lower(tostring(value))
-			ESP:ResetAutomatic()
+		local pageNames = tab:CreateSubTab({ Name = "Names" })
+		local gNames = pageNames:AddLeftGroupbox({ Name = "Names" })
+		gNames:CreateToggle({ Name = "Names", CurrentValue = config.Billboards, Flag = "ESP_Names", Callback = function(value)
+			config.Billboards = value == true
 		end })
-		drawing:CreateDropdown({ Name = "2D box", Options = { "Off", "Full", "Corner", "Filled" }, CurrentOption = settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full", Flag = "ESP_Box2DMode", Callback = function(value)
+		gNames:CreateToggle({ Name = "Distance", CurrentValue = config.Distance, Flag = "ESP_Distance", Callback = function(value)
+			config.Distance = value == true
+		end })
+		gNames:CreateToggle({ Name = "Held item", Desc = "Shows the tool a character holds, after its name", CurrentValue = ESP.GlobalConfig.ShowTool == true, Flag = "ESP_ShowTool", Callback = function(value)
+			ESP.GlobalConfig.ShowTool = value == true
+		end })
+		gNames:CreateToggle({ Name = "Scale text with distance", CurrentValue = ESP.GlobalConfig.DynamicText ~= false, Flag = "ESP_DynamicText", Callback = function(value)
+			ESP.GlobalConfig.DynamicText = value == true
+		end })
+		gNames:CreateToggle({ Name = "Distance in metres", CurrentValue = ESP.GlobalConfig.Meters ~= false, Flag = "ESP_Meters", Callback = function(value)
+			ESP.GlobalConfig.Meters = value == true
+		end })
+		gNames:CreateSlider({ Name = "Text size", Range = { 10, 24 }, Increment = 1, CurrentValue = settings.TextSize, Flag = "ESP_TextSize", Callback = function(value)
+			settings.TextSize = value
+			ESP:ApplyTemplate()
+		end })
+
+		local pageBoxes = tab:CreateSubTab({ Name = "Boxes" })
+		local gBoxes = pageBoxes:AddLeftGroupbox({ Name = "Boxes", Icon = "box" })
+		gBoxes:CreateDropdown({ Name = "2D box", Options = { "Off", "Full", "Corner", "Filled" }, CurrentOption = settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full", Flag = "ESP_Box2DMode", Callback = function(value)
 			local choice = type(value) == "table" and value[1] or value
 			settings.Box2D.Enabled = choice ~= "Off"
 			settings.Box2D.Style = choice == "Corner" and "Corner" or "Full"
 			settings.Box2D.Filled = choice == "Filled"
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateDropdown({ Name = "3D box", Options = { "Off", "Full", "Corner" }, CurrentOption = settings.Box3D.Enabled ~= true and "Off" or settings.Box3D.Style == "Corner" and "Corner" or "Full", Flag = "ESP_Box3DMode", Callback = function(value)
+		gBoxes:CreateDropdown({ Name = "3D box", Options = { "Off", "Full", "Corner" }, CurrentOption = settings.Box3D.Enabled ~= true and "Off" or settings.Box3D.Style == "Corner" and "Corner" or "Full", Flag = "ESP_Box3DMode", Callback = function(value)
 			local choice = type(value) == "table" and value[1] or value
 			settings.Box3D.Enabled = choice ~= "Off"
 			settings.Box3D.Style = choice == "Corner" and "Corner" or "Full"
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateDropdown({ Name = "Highlight depth", Options = { "Through walls", "Behind walls" }, CurrentOption = settings.HighlightDepth or "Through walls", Flag = "ESP_HighlightDepth", Callback = function(value)
+		gBoxes:CreateSlider({ Name = "Line thickness", Range = { 1, 4 }, Increment = 0.5, CurrentValue = settings.Box2D.Thickness, Flag = "ESP_Thickness", Callback = function(value)
+			settings.Box2D.Thickness = value
+			settings.Box3D.Thickness = value
+			settings.Skeleton.Thickness = value
+			settings.Tracer.Thickness = value
+			ESP:ApplyTemplate()
+		end })
+
+		local pageHighlight = tab:CreateSubTab({ Name = "Highlight" })
+		local gHighlight = pageHighlight:AddLeftGroupbox({ Name = "Highlight" })
+		gHighlight:CreateToggle({ Name = "Enable highlight", Desc = "Off until you turn it on", CurrentValue = config.Highlighters == true, Flag = "ESP_Highlighters", Callback = function(value)
+			config.Highlighters = value == true
+		end })
+		gHighlight:CreateDropdown({ Name = "Highlight", Options = { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }, CurrentOption = "Highlight", Flag = "ESP_Type", Callback = function(value)
+			if type(value) == "table" then
+				value = value[1]
+			end
+			settings.ESPType = string.lower(tostring(value))
+			ESP:ResetAutomatic()
+		end })
+		gHighlight:CreateDropdown({ Name = "Highlight depth", Options = { "Through walls", "Behind walls" }, CurrentOption = settings.HighlightDepth or "Through walls", Flag = "ESP_HighlightDepth", Callback = function(value)
 			if type(value) == "table" then
 				value = value[1]
 			end
 			settings.HighlightDepth = tostring(value)
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateSlider({ Name = "Highlight fill", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.FillTransparency, Flag = "ESP_HighlightFill", Callback = function(value)
+		gHighlight:CreateSlider({ Name = "Highlight fill", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.FillTransparency, Flag = "ESP_HighlightFill", Callback = function(value)
 			settings.FillTransparency = value
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateSlider({ Name = "Highlight outline", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.OutlineTransparency, Flag = "ESP_HighlightOutline", Callback = function(value)
+		gHighlight:CreateSlider({ Name = "Highlight outline", Range = { 0, 1 }, Increment = 0.05, CurrentValue = settings.OutlineTransparency, Flag = "ESP_HighlightOutline", Callback = function(value)
 			settings.OutlineTransparency = value
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "Skeleton", CurrentValue = settings.Skeleton.Enabled, Flag = "ESP_Skeleton", Callback = function(value)
-			settings.Skeleton.Enabled = value == true
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateToggle({ Name = "Tracer", CurrentValue = settings.Tracer.Enabled, Flag = "ESP_Tracer", Callback = function(value)
+
+		local pageTracers = tab:CreateSubTab({ Name = "Tracers" })
+		local gTracers = pageTracers:AddLeftGroupbox({ Name = "Tracers" })
+		gTracers:CreateToggle({ Name = "Enable tracers", CurrentValue = settings.Tracer.Enabled, Flag = "ESP_Tracer", Callback = function(value)
 			settings.Tracer.Enabled = value == true
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateDropdown({ Name = "Tracer from", Options = { "Top", "Bottom", "Center", "Mouse" }, CurrentOption = "Bottom", Flag = "ESP_TracerFrom", Callback = function(value)
+		gTracers:CreateDropdown({ Name = "Tracer from", Options = { "Top", "Bottom", "Center", "Mouse" }, CurrentOption = "Bottom", Flag = "ESP_TracerFrom", Callback = function(value)
 			if type(value) == "table" then
 				value = value[1]
 			end
 			settings.Tracer.From = string.lower(tostring(value))
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
-			settings.Arrow.Size = value
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateToggle({ Name = "Arrow", Desc = "Points at targets off the screen or behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
-			settings.Arrow.Enabled = value == true
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateSlider({ Name = "Arrow distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
-			settings.Arrow.CenterOffset = value
-			ESP:ApplyTemplate()
-		end })
-		drawing:CreateDropdown({ Name = "Tracer to", Options = { "Feet", "Center", "Head" }, CurrentOption = settings.Tracer.To or "Feet", Flag = "ESP_TracerTo", Callback = function(value)
+		gTracers:CreateDropdown({ Name = "Tracer to", Options = { "Feet", "Center", "Head" }, CurrentOption = settings.Tracer.To or "Feet", Flag = "ESP_TracerTo", Callback = function(value)
 			if type(value) == "table" then
 				value = value[1]
 			end
 			settings.Tracer.To = tostring(value)
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateDropdown({ Name = "Health bar", Options = { "Off", "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left", Flag = "ESP_HealthMode", Callback = function(value)
+
+		local pageHealth = tab:CreateSubTab({ Name = "Health" })
+		local gHealth = pageHealth:AddLeftGroupbox({ Name = "Health" })
+		gHealth:CreateDropdown({ Name = "Health bar", Options = { "Off", "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left", Flag = "ESP_HealthMode", Callback = function(value)
 			local choice = type(value) == "table" and value[1] or value
 			settings.Health.Enabled = choice ~= "Off"
 			if choice ~= "Off" then
@@ -26265,77 +26281,91 @@ do
 			end
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "Health gradient", CurrentValue = settings.Health.Gradient ~= false, Flag = "ESP_HealthGradient", Callback = function(value)
+		gHealth:CreateToggle({ Name = "Health gradient", CurrentValue = settings.Health.Gradient ~= false, Flag = "ESP_HealthGradient", Callback = function(value)
 			settings.Health.Gradient = value == true
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateToggle({ Name = "Visible check colours", Desc = "Players you can see and players behind a wall in two colours", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
-			ESP.GlobalConfig.VisibleCheck = value == true
-		end })
-		drawing:CreateToggle({ Name = "Only visible", Desc = "Hides the players behind a wall", CurrentValue = ESP.GlobalConfig.VisibleOnly == true, Flag = "ESP_VisibleOnly", Callback = function(value)
-			ESP.GlobalConfig.VisibleOnly = value == true
-		end })
-		drawing:CreateToggle({ Name = "Health number", CurrentValue = ESP.GlobalConfig.HealthText == true, Flag = "ESP_HealthText", Callback = function(value)
+		gHealth:CreateToggle({ Name = "Health number", CurrentValue = ESP.GlobalConfig.HealthText == true, Flag = "ESP_HealthText", Callback = function(value)
 			ESP.GlobalConfig.HealthText = value == true
 		end })
-		drawing:CreateToggle({ Name = "Head dot", CurrentValue = ESP.GlobalConfig.HeadDots == true, Flag = "ESP_HeadDots", Callback = function(value)
-			ESP.GlobalConfig.HeadDots = value == true
-		end })
-		drawing:CreateToggle({ Name = "Held item", Desc = "Shows the tool a character holds, after its name", CurrentValue = ESP.GlobalConfig.ShowTool == true, Flag = "ESP_ShowTool", Callback = function(value)
-			ESP.GlobalConfig.ShowTool = value == true
-		end })
-		drawing:CreateToggle({ Name = "Distance fade", Desc = "Text and lines fade out towards the max distance", CurrentValue = ESP.GlobalConfig.Fade == true, Flag = "ESP_Fade", Callback = function(value)
-			ESP.GlobalConfig.Fade = value == true
-		end })
-		drawing:CreateToggle({ Name = "FOV circle", CurrentValue = ESP.GlobalConfig.FOV == true, Flag = "ESP_FOV", Callback = function(value)
-			ESP.GlobalConfig.FOV = value == true
-		end })
-		drawing:CreateSlider({ Name = "FOV radius", Range = { 20, 400 }, Increment = 5, CurrentValue = ESP.GlobalConfig.FOVRadius or 120, Flag = "ESP_FOVRadius", Callback = function(value)
-			ESP.GlobalConfig.FOVRadius = value
-		end })
-		drawing:CreateToggle({ Name = "Crosshair", CurrentValue = ESP.GlobalConfig.Crosshair == true, Flag = "ESP_Crosshair", Callback = function(value)
-			ESP.GlobalConfig.Crosshair = value == true
-		end })
-		drawing:CreateToggle({ Name = "Scale text with distance", CurrentValue = ESP.GlobalConfig.DynamicText ~= false, Flag = "ESP_DynamicText", Callback = function(value)
-			ESP.GlobalConfig.DynamicText = value == true
-		end })
-		drawing:CreateToggle({ Name = "Distance in metres", CurrentValue = ESP.GlobalConfig.Meters ~= false, Flag = "ESP_Meters", Callback = function(value)
-			ESP.GlobalConfig.Meters = value == true
-		end })
-		drawing:CreateSlider({ Name = "Line thickness", Range = { 1, 4 }, Increment = 0.5, CurrentValue = settings.Box2D.Thickness, Flag = "ESP_Thickness", Callback = function(value)
-			settings.Box2D.Thickness = value
-			settings.Box3D.Thickness = value
-			settings.Skeleton.Thickness = value
-			settings.Tracer.Thickness = value
+
+		local pageSkeleton = tab:CreateSubTab({ Name = "Skeleton" })
+		local gSkeleton = pageSkeleton:AddLeftGroupbox({ Name = "Skeleton" })
+		gSkeleton:CreateToggle({ Name = "Enable skeleton", CurrentValue = settings.Skeleton.Enabled, Flag = "ESP_Skeleton", Callback = function(value)
+			settings.Skeleton.Enabled = value == true
 			ESP:ApplyTemplate()
 		end })
-		drawing:CreateSlider({ Name = "Text size", Range = { 10, 24 }, Increment = 1, CurrentValue = settings.TextSize, Flag = "ESP_TextSize", Callback = function(value)
-			settings.TextSize = value
+		gSkeleton:CreateToggle({ Name = "Head dot", CurrentValue = ESP.GlobalConfig.HeadDots == true, Flag = "ESP_HeadDots", Callback = function(value)
+			ESP.GlobalConfig.HeadDots = value == true
+		end })
+
+		local pageArrows = tab:CreateSubTab({ Name = "Arrows" })
+		local gArrows = pageArrows:AddLeftGroupbox({ Name = "Arrows" })
+		gArrows:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
+			settings.Arrow.Size = value
+			ESP:ApplyTemplate()
+		end })
+		gArrows:CreateToggle({ Name = "Enable arrows", Desc = "Points at targets off the screen or behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
+			settings.Arrow.Enabled = value == true
+			ESP:ApplyTemplate()
+		end })
+		gArrows:CreateSlider({ Name = "Arrow distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
+			settings.Arrow.CenterOffset = value
 			ESP:ApplyTemplate()
 		end })
 
-		local colors = sub:AddRightGroupbox({ Name = "Colors", Icon = "box" })
-		colors:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
+		local pageVisibility = tab:CreateSubTab({ Name = "Visibility" })
+		local gVisibility = pageVisibility:AddLeftGroupbox({ Name = "Visibility" })
+		gVisibility:CreateToggle({ Name = "Visible check colours", Desc = "Players you can see and players behind a wall in two colours", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
+			ESP.GlobalConfig.VisibleCheck = value == true
+		end })
+		gVisibility:CreateToggle({ Name = "Only visible", Desc = "Hides the players behind a wall", CurrentValue = ESP.GlobalConfig.VisibleOnly == true, Flag = "ESP_VisibleOnly", Callback = function(value)
+			ESP.GlobalConfig.VisibleOnly = value == true
+		end })
+		gVisibility:CreateToggle({ Name = "Distance fade", Desc = "Text and lines fade out towards the max distance", CurrentValue = ESP.GlobalConfig.Fade == true, Flag = "ESP_Fade", Callback = function(value)
+			ESP.GlobalConfig.Fade = value == true
+		end })
+		gVisibility:CreateSlider({ Name = "Fade start", Desc = "Where the fade starts, as a share of the max distance", Range = { 0.1, 1 }, Increment = 0.05, CurrentValue = config.FadeStart or 0.6, Flag = "ESP_FadeStart", Callback = function(value)
+			config.FadeStart = value
+		end })
+
+		local pageOverlay = tab:CreateSubTab({ Name = "Overlay" })
+		local gOverlay = pageOverlay:AddLeftGroupbox({ Name = "Overlay", Icon = "crosshair" })
+		gOverlay:CreateToggle({ Name = "FOV circle", CurrentValue = ESP.GlobalConfig.FOV == true, Flag = "ESP_FOV", Callback = function(value)
+			ESP.GlobalConfig.FOV = value == true
+		end })
+		gOverlay:CreateSlider({ Name = "FOV radius", Range = { 20, 400 }, Increment = 5, CurrentValue = ESP.GlobalConfig.FOVRadius or 120, Flag = "ESP_FOVRadius", Callback = function(value)
+			ESP.GlobalConfig.FOVRadius = value
+		end })
+		gOverlay:CreateToggle({ Name = "Crosshair", CurrentValue = ESP.GlobalConfig.Crosshair == true, Flag = "ESP_Crosshair", Callback = function(value)
+			ESP.GlobalConfig.Crosshair = value == true
+		end })
+
+		local pageColours = tab:CreateSubTab({ Name = "Colours" })
+		local gColours = pageColours:AddLeftGroupbox({ Name = "Colours" })
+		gColours:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
 			settings.Color = value
 			ESP:ApplyTemplate()
 		end })
-		colors:CreateColorPicker({ Name = "Visible colour", Color = ESP.GlobalConfig.VisibleColor, Flag = "ESP_VisibleColor", Callback = function(value)
+		gColours:CreateColorPicker({ Name = "Visible colour", Color = ESP.GlobalConfig.VisibleColor, Flag = "ESP_VisibleColor", Callback = function(value)
 			ESP.GlobalConfig.VisibleColor = value
 		end })
-		colors:CreateColorPicker({ Name = "Hidden colour", Color = ESP.GlobalConfig.HiddenColor, Flag = "ESP_HiddenColor", Callback = function(value)
+		gColours:CreateColorPicker({ Name = "Hidden colour", Color = ESP.GlobalConfig.HiddenColor, Flag = "ESP_HiddenColor", Callback = function(value)
 			ESP.GlobalConfig.HiddenColor = value
 		end })
-		colors:CreateColorPicker({ Name = "Ally color", Color = players.AllyColor, Flag = "ESP_AllyColor", Callback = function(value)
+		gColours:CreateColorPicker({ Name = "Ally color", Color = players.AllyColor, Flag = "ESP_AllyColor", Callback = function(value)
 			players.AllyColor = value
 		end })
-		colors:CreateColorPicker({ Name = "Tracer color", Color = settings.Tracer.Color, Flag = "ESP_TracerColor", Callback = function(value)
+		gColours:CreateColorPicker({ Name = "Tracer color", Color = settings.Tracer.Color, Flag = "ESP_TracerColor", Callback = function(value)
 			settings.Tracer.Color = value
 			ESP:ApplyTemplate()
 		end })
 
-		local preview = sub:AddRightGroupbox({ Name = "Preview", Icon = "box" })
-		local view = preview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
+		local pagePreview = tab:CreateSubTab({ Name = "Preview" })
+		local gPreview = pagePreview:AddLeftGroupbox({ Name = "Preview", Icon = "box" })
+		local view = gPreview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
 		ESP:AttachPreview(view)
+
 	end
 end
 

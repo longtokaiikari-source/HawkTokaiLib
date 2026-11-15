@@ -2000,7 +2000,7 @@ Library.ESP.Players.Enabled = true         -- one ESP per player, with HideTeamm
 Library.ESP.Settings.Box2D.Enabled = true  -- the template for the players and the preview
 Library.ESP:ApplyTemplate()                -- pushes the template to the objects that exist
 Library.ESP:AttachPreview(viewportHandle)  -- the ESP over a Tab:Viewport
-Library.ESP:Build(sub, Window)             -- the ESP tab: players, drawing, colours and a preview
+Library.ESP:Build(tab, Window)             -- the ESP tab: one page for each feature, colours and a preview
 ```
 
 Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`, `Color`, `MaxDistance` (default 5000), `StudsOffset`, `TextSize`, `ESPType` (`Highlight`, `SelectionBox`, `SphereAdornment`, `CylinderAdornment`, `Adornment`, `Text`), `Thickness`, `Transparency`, `SurfaceColor`, `BorderColor`, `FillColor`, `OutlineColor`, `FillTransparency`, `OutlineTransparency`. The components are `Tracer` (`From`: `Top`, `Bottom`, `Center`, `Mouse`), `Arrow` (`CenterOffset`), `Box2D` (`Filled`), `Box3D` and `Skeleton`, plus `Health`, which the original does not have. The callbacks are `OnDestroy`, `OnDestroyFunc`, `BeforeUpdate` and `AfterUpdate`.
@@ -2014,6 +2014,8 @@ Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`,
 The arrow for a target off the screen or behind you is drawn with lines, like the box: a black outline under the coloured line, with the name and distance behind the tail. `Arrow.Size` sets its size (default 12), and `Arrow.CenterOffset` sets how far it sits from the centre at 1080p (default 300).
 
 The highlight can see through walls (`HighlightDepth = "Through walls"`, the default) or not (`"Behind walls"`). The visible check (`GlobalConfig.VisibleCheck`) colours players you can see and players behind a wall in two colours, and `GlobalConfig.VisibleOnly` hides the second kind. `GlobalConfig.HealthText`, `HeadDots`, `ShowTool`, `Fade`, `FOV`, `FOVRadius` and `Crosshair` turn on the health number, the head dot, the held item, the distance fade, the FOV ring and the crosshair. The Drawing tab has a control for each.
+
+The ESP tab has one page for each feature: Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on. Nothing is on until its page says so, there is no master switch, and the players are always watched.
 
 ### Testing without Roblox
 

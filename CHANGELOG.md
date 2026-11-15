@@ -69,6 +69,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 - **ESP measures every object in front of the camera**, so the text, the health bar and the tracer all have the box to work from.
 - **ESP arrow** is drawn with lines, in the box's style: a black outline under the coloured line, with the name and distance behind the tail. It reads the target's place in the camera's own frame, so it points the right way behind the camera too. `Arrow.Size` (default 12) sets its size, with a slider in the drawing tab. It used to be an image from the web.
+- **ESP tab, one page for each feature**: `Library.ESP:Build(tab, window)` takes the tab (not a sub tab) and makes the pages Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on, so the features no longer pile up on each other.
+- **ESP defaults**: the names, the distance and the highlight start off, and the 2D box and the skeleton are off until their pages turn them on.
 
 ### Fixed
 
@@ -93,6 +95,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - The hidden egg in the key gate, moved to Home.
 - The forced `Tahoma8` font in the Loader and the Example.
 - The music track and its ID from the Example.
+- **Automatic players switch**: the players are always watched, so there is no master switch to turn ESP on. The first-run switch-on of the 2D box and the skeleton is gone too.
+
 
 ## [0.1.0] - the fork
 

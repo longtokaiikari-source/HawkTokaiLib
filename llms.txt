@@ -164,7 +164,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Library.ESP:Clear() and Library.ESP:Destroy().
 - Library.ESP.GlobalConfig: IgnoreCharacter, Rainbow, Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font.
 - Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
-- Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(sub, window) makes the ESP tab.
+- Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(tab, window) makes the ESP tab.
 - tests/esp_test.lua: plain Lua 5.3+ test of the ESP block in Source.luau against a Roblox API mock. Geometry, rules, components and cleanup only, no rendering.
 - Box2D.Style: "Full" (default, black outline under the line) or "Corner" (eight corner lines). Tracer.To: "Feet" (default), "Center", "Head". Health.Side: "Left" (default), "Right", "Bottom"; Health.Gradient defaults on.
 - Name above the 2D box, distance below it; GlobalConfig.Meters (default on, studs x 0.28) and GlobalConfig.DynamicText (default on) scale the text with the box.
@@ -175,3 +175,4 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Highlight: HighlightDepth = "Through walls" (default, AlwaysOnTop) or "Behind walls" (Occluded); FillTransparency and OutlineTransparency sliders.
 - Visible check: GlobalConfig.VisibleCheck (colours: VisibleColor, HiddenColor), GlobalConfig.VisibleOnly (hides the hidden). Ray from camera to head.
 - Extras, all off by default: GlobalConfig.HealthText, HeadDots, ShowTool, Fade (FadeStart 0.6 of max distance), FOV (FOVRadius), Crosshair.
+- ESP tab: Library.ESP:Build(tab, window) makes one page per feature (Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours, Preview). Each page turns its own feature on; everything is off by default; no master switch; players are always watched.

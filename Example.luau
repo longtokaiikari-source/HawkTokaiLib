@@ -27,7 +27,7 @@ end
       Status      live readouts: statuses, status lists and dependent controls
       Elements    one of every element as a full-width card
       Popups      notifications, confirms and dialogs
-      ESP         the automatic player ESP, ESP for one model you pick, and a preview
+      ESP         one page for each ESP feature, ESP for one model you pick, and a preview
       Cloud       a shared config browser backed by an in-memory store
       Settings    interface options, config manager and theme manager
 ]]
@@ -556,11 +556,11 @@ end
 -- ESP
 --------------------------------------------------------------------------------
 
--- Build makes the Players tab: automatic ESP for every other player, the drawing options and a preview on a model.
--- Everything it sets is also in Library.ESP, so a script can change the same settings without the tab.
-local Esp = Window:CreateTab({ Name = "ESP", Desc = "Players, boxes and a preview", Icon = "users" })
-local EspPlayers = Esp:CreateSubTab({ Name = "Players" })
-Library.ESP:Build(EspPlayers, Window)
+-- Build makes one page for each feature: Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows,
+-- Visibility, Overlay, Colours and Preview. Each page turns its own feature on; nothing is on until its page says so.
+-- Everything a page sets is also in Library.ESP, so a script can change the same settings without the tab.
+local Esp = Window:CreateTab({ Name = "ESP", Desc = "One page for each feature", Icon = "users" })
+Library.ESP:Build(Esp, Window)
 
 -- Objects: ESP for one model you pick. Add takes any Model or Part. A setting you leave out keeps its default.
 -- The object draws until you Destroy it, the model leaves the game, or the window unloads (the Unload button).
