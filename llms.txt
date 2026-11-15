@@ -167,3 +167,5 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(sub, window) makes the ESP tab.
 - tests/esp_test.lua: plain Lua 5.3+ test of the ESP block in Source.luau against a Roblox API mock. Geometry, rules, components and cleanup only, no rendering.
 
+## Player list
+- `Tab:PlayerList({ Name, Height, Actions })`: live list of the players in the server. Actions = { { Name, Callback(player) } }. Rows follow joins and leaves; distances refresh every 2 seconds. Returns a handle with Refresh().

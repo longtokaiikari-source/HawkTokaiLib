@@ -1842,15 +1842,18 @@ end
 
 -- A soft band of light that sweeps across a button once each time the pointer enters it.
 -- It sits behind the button's content and copies the button's corner radius.
-function Library._attachSheen(button)
+-- A band of light sweeps across the button when the pointer comes in. It sits on the visible shape, so it
+-- follows that shape's rounded corners and not the card around it.
+function Library._attachSheen(button, visual)
+    visual = visual or button
     local sheen = create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 0,
         BorderSizePixel = 0,
-        Parent = button,
+        Parent = visual,
     })
-    local radius = button:FindFirstChildOfClass("UICorner")
+    local radius = visual:FindFirstChildOfClass("UICorner")
     if radius then
         corner(sheen, radius.CornerRadius)
     end
@@ -1868,41 +1871,38 @@ function Library._attachSheen(button)
     })
     button.MouseEnter:Connect(function()
         band.Offset = Vector2.new(-1, 0)
-        tween(band, { Offset = Vector2.new(1, 0) }, 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        tween(band, { Offset = Vector2.new(1, 0) }, 0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
     end)
     return sheen
 end
-
--- The press feel of a button: a quick squeeze while the mouse or finger is down, a springy
--- release when it lets go, and a ripple that starts at the press point, not at the release.
-function Library._attachPress(button)
-    local scale = create("UIScale", { Scale = 1, Parent = button })
-    Library._attachSheen(button)
+-- The press feel of a button. The input is read on button, but the squeeze, the light and the ripple go on
+-- visual, so they stay inside the shape the player sees. A press squeezes it a little, and the release eases
+-- back without overshooting, so it reads as a press and not as a bounce.
+function Library._attachPress(button, visual)
+    visual = visual or button
+    local scale = create("UIScale", { Scale = 1, Parent = visual })
+    Library._attachSheen(button, visual)
     button.MouseButton1Down:Connect(function()
-        tween(scale, { Scale = 0.965 }, 0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        tween(scale, { Scale = 0.97 }, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end)
-    -- The wave starts where the press really happened: the input's own position, which is right
-    -- for a mouse and for a finger alike.
     button.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            ripple(button, Vector2.new(input.Position.X, input.Position.Y))
+            ripple(visual, Vector2.new(input.Position.X, input.Position.Y))
         end
     end)
     button.MouseButton1Up:Connect(function()
-        tween(scale, { Scale = 1 }, 0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(scale, { Scale = 1 }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
     end)
     button.MouseLeave:Connect(function()
-        tween(scale, { Scale = 1 }, 0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(scale, { Scale = 1 }, 0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
     end)
     return scale
 end
-
 local function rowButton(tab, opts)
     local primary = opts.Style == "Primary"
     local boxHeight = TOUCH and 34 or 28
     local height = boxHeight + 6 + (opts.Desc and 16 or 0)
     local button = card(tab, "TextButton", height, opts)
-    Library._attachPress(button)
 
     local box = create("Frame", {
         Position = UDim2.fromOffset(14, 3),
@@ -1915,6 +1915,7 @@ local function rowButton(tab, opts)
     })
     corner(box, UDim.new(0, 6))
     local boxStroke = stroke(box, primary and Theme.Accent or Theme.Stroke, primary and 0.4 or 0)
+    Library._attachPress(button, box)
 
     local row = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1975,7 +1976,6 @@ local function rowButton(tab, opts)
         tween(boxStroke, primary and { Transparency = 0.4 } or { Color = Theme.Stroke }, 0.25)
     end)
     button.MouseButton1Click:Connect(function()
-        ripple(box)
         safeCall(opts.Callback)
     end)
 
@@ -2683,9 +2683,7 @@ function Tab:Dropdown(opts)
             tween(button, { BackgroundTransparency = 0.35 }, 0.25)
             tween(buttonStroke, { Color = Theme.Stroke }, 0.25)
         end)
-        button.MouseButton1Click:Connect(function()
-            ripple(button)
-        end)
+        Library._attachPress(button)
         return button
     end
     local selectAll = actionButton(opts.SelectAllText or "Select all", UDim2.fromOffset(0, 0))
@@ -7163,10 +7161,17 @@ function Library.Window(_, opts)
     if opts.CornerRadius ~= nil then
         Library:SetCornerRadius(opts.CornerRadius, true)
     end
+    -- A listener that errors is reported once, and the others still run. Before this, one failing
+    -- listener stopped the loop, so a preview behind it stopped spinning.
+    local reported = setmetatable({}, { __mode = "k" })
     local function dispatch(kind)
         return function(...)
             for _, handler in ipairs(self._inputListeners[kind]) do
-                handler(...)
+                local ok, err = pcall(handler, ...)
+                if not ok and not reported[handler] then
+                    reported[handler] = true
+                    warn("[HawkTokaiLib] a " .. kind .. " listener failed; the others still run: " .. tostring(err))
+                end
             end
         end
     end
@@ -7174,7 +7179,11 @@ function Library.Window(_, opts)
     table.insert(self._connections, RunService.RenderStepped:Connect(function(deltaTime)
         renderDispatch(deltaTime)
         for _, step in ipairs(self._frameSteps) do
-            step(deltaTime)
+            local ok, err = pcall(step, deltaTime)
+            if not ok and not reported[step] then
+                reported[step] = true
+                warn("[HawkTokaiLib] a frame step failed; the others still run: " .. tostring(err))
+            end
         end
     end))
     table.insert(self._connections, UserInputService.InputBegan:Connect(dispatch("Began")))
@@ -10833,8 +10842,8 @@ local function softButton(parent, text, props, callback)
         tween(button, { BackgroundTransparency = 0.45 }, 0.25)
         tween(buttonStroke, { Color = Theme.Stroke }, 0.25)
     end)
+    Library._attachPress(button)
     button.MouseButton1Click:Connect(function()
-        ripple(button)
         safeCall(callback)
     end)
     return button, text_
@@ -10899,6 +10908,20 @@ local function bumpExecutions(folder)
     return count
 end
 
+-- The count the Execs stat shows. It is read again on every stats tick, so a run from another session shows up.
+function Library._readExecutions(folder)
+    if not fileApiAvailable() then
+        return nil
+    end
+    local count = nil
+    pcall(function()
+        local path = folder .. "/executions.txt"
+        if isfile(path) then
+            count = tonumber(readfile(path))
+        end
+    end)
+    return count
+end
 -- Containers: a tab or sub tab owns a scrolling list. Elements added straight
 -- to it stack full width, groupboxes go into two columns underneath.
 
@@ -11746,6 +11769,175 @@ Tab.AddRightGroupbox = sideGroupbox("Right")
 
 -- Button rows: equal-width buttons side by side.
 
+-- A live list of the players in the server, the way novoline's Players tab shows them. Each row has the avatar,
+-- the name, the team colour and the distance, and the actions the script gives it as small buttons:
+--   Tab:PlayerList({ Name = "Players", Height = 260, Actions = { { Name = "ESP", Callback = function(player) end } } })
+-- Rows follow players joining and leaving, and the distances are read again every two seconds.
+function Tab:PlayerList(opts)
+    opts = normalize(opts, { Title = "Name", Description = "Desc" })
+    local actions = type(opts.Actions) == "table" and opts.Actions or {}
+    local metrics = metricsOf(self)
+    local frame = card(self, "Frame", opts.Height or 260, opts)
+    local top = opts.Desc and metrics.DescHeight or metrics.Height
+    local title = titleDesc(frame, opts.Name or "Players", opts.Desc, 0, metrics)
+    local list = create("ScrollingFrame", {
+        Position = UDim2.fromOffset(8, top + 4),
+        Size = UDim2.new(1, -16, 1, -(top + 12)),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Accent,
+        ScrollBarImageTransparency = 0.5,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Parent = frame,
+    })
+    create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+        Parent = list,
+    })
+    local rows = {}
+    local function distanceTo(player)
+        local ok, studs = pcall(function()
+            local mine = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local theirs = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if mine and theirs then
+                return math.floor((mine.Position - theirs.Position).Magnitude + 0.5)
+            end
+            return nil
+        end)
+        return (ok and studs) and (studs .. " st") or "—"
+    end
+    local function makeRow(player)
+        local row = create("Frame", {
+            Size = UDim2.new(1, -6, 0, 34),
+            BackgroundColor3 = Theme.Surface3,
+            BackgroundTransparency = 0.55,
+            BorderSizePixel = 0,
+            Parent = list,
+        })
+        corner(row, UDim.new(0, 6))
+        local team = create("Frame", {
+            Position = UDim2.fromOffset(4, 6),
+            Size = UDim2.new(0, 3, 1, -12),
+            BackgroundColor3 = player.Team and player.TeamColor.Color or Theme.Muted,
+            BorderSizePixel = 0,
+            Parent = row,
+        })
+        corner(team, UDim.new(1, 0))
+        local avatar = create("ImageLabel", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 12, 0.5, 0),
+            Size = UDim2.fromOffset(24, 24),
+            BackgroundTransparency = 1,
+            Parent = row,
+        })
+        corner(avatar, UDim.new(1, 0))
+        task.spawn(function()
+            local ok, content = pcall(function()
+                return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+            end)
+            if ok and avatar.Parent then
+                avatar.Image = content
+            end
+        end)
+        label({
+            Position = UDim2.fromOffset(44, 4),
+            Size = UDim2.new(0.5, -44, 0, 14),
+            Text = player.DisplayName,
+            TextSize = 12,
+            TextColor3 = Theme.Text,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = row,
+        })
+        local sub = label({
+            Position = UDim2.fromOffset(44, 18),
+            Size = UDim2.new(0.5, -44, 0, 12),
+            Text = "",
+            TextSize = 10,
+            FontFace = Fonts.Regular,
+            TextColor3 = Theme.Muted,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = row,
+        })
+        local holder = create("Frame", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -6, 0.5, 0),
+            Size = UDim2.new(0, 0, 0, 22),
+            AutomaticSize = Enum.AutomaticSize.X,
+            BackgroundTransparency = 1,
+            Parent = row,
+        })
+        create("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 4),
+            Parent = holder,
+        })
+        for index, action in ipairs(actions) do
+            softButton(holder, action.Name or "Action", {
+                Size = UDim2.fromOffset(0, 22),
+                AutomaticSize = Enum.AutomaticSize.X,
+                LayoutOrder = index,
+            }, function()
+                local ok, err = pcall(action.Callback, player)
+                if not ok then
+                    warn("[HawkTokaiLib] a PlayerList action failed: " .. tostring(err))
+                end
+            end)
+        end
+        return { Frame = row, Subtitle = sub }
+    end
+    local function refresh()
+        local players = Players:GetPlayers()
+        local present = {}
+        for index, player in ipairs(players) do
+            present[player] = true
+            local entry = rows[player]
+            if not entry then
+                entry = makeRow(player)
+                rows[player] = entry
+            end
+            entry.Frame.LayoutOrder = index
+            entry.Subtitle.Text = "@" .. player.Name .. "  ·  " .. distanceTo(player)
+        end
+        for player, entry in pairs(rows) do
+            if not present[player] then
+                entry.Frame:Destroy()
+                rows[player] = nil
+            end
+        end
+        if title then
+            title.Text = (opts.Name or "Players") .. "  " .. #players .. "/" .. Players.MaxPlayers
+        end
+    end
+    local window = self.Window
+    local function listen(signal)
+        local connection = signal:Connect(function()
+            task.defer(refresh)
+        end)
+        if window then
+            table.insert(window._connections, connection)
+        end
+    end
+    listen(Players.PlayerAdded)
+    listen(Players.PlayerRemoving)
+    task.defer(refresh)
+    task.spawn(function()
+        while frame.Parent do
+            task.wait(2)
+            if frame.Parent then
+                refresh()
+            end
+        end
+    end)
+    return finishElement(self, opts, { Refresh = refresh }, frame, "PlayerList")
+end
 function Tab:ButtonRow(opts)
     local specs = type(opts) == "table" and (opts.Buttons or opts) or {}
     local compact = metricsOf(self).Compact
@@ -16856,11 +17048,12 @@ function Window:_homeGraph(parent, order, icon, title, ceiling)
         Parent = track,
     })
     local COUNT = 24
-    local bars, samples = {}, {}
+    local bars, samples, colors = {}, {}, {}
     for index = 1, COUNT do
         local bar = create("Frame", {
             Size = UDim2.new(1 / COUNT, -2, 0, 2),
-            BackgroundColor3 = Theme.Surface3,
+            BackgroundColor3 = Theme.Surface2,
+            BackgroundTransparency = 0.5,
             BorderSizePixel = 0,
             LayoutOrder = index,
             Parent = track,
@@ -16868,10 +17061,14 @@ function Window:_homeGraph(parent, order, icon, title, ceiling)
         corner(bar, UDim.new(0, 2))
         bars[index] = bar
     end
+    -- Each sample keeps the colour it was read with. The newest bar is full strength and older ones fade,
+    -- so the whole history reads at a glance instead of only the last bar.
     local function push(sample, color)
         table.insert(samples, sample)
+        table.insert(colors, color or Theme.Muted)
         if #samples > COUNT then
             table.remove(samples, 1)
+            table.remove(colors, 1)
         end
         local top = ceiling or 1
         for _, s in ipairs(samples) do
@@ -16879,13 +17076,14 @@ function Window:_homeGraph(parent, order, icon, title, ceiling)
         end
         local offset = COUNT - #samples
         for index, bar in ipairs(bars) do
-            local s = samples[index - offset]
-            local latest = index == COUNT
-            local height = s and math.max(s / top, 0.08) or 0
+            local at = index - offset
+            local s = samples[at]
+            local age = COUNT - index
+            local height = s and math.max(s / top, 0.1) or 0
             tween(bar, {
                 Size = UDim2.new(1 / COUNT, -2, height, s and 0 or 2),
-                BackgroundColor3 = (latest and color) or (s and Theme.Muted or Theme.Surface3),
-                BackgroundTransparency = latest and 0 or (s and 0.6 or 0),
+                BackgroundColor3 = s and colors[at] or Theme.Surface2,
+                BackgroundTransparency = s and math.min(0.05 + age * 0.04, 0.65) or 0.5,
             }, 0.35, Enum.EasingStyle.Quint)
         end
     end
@@ -16932,6 +17130,7 @@ function Window:_homeAction(parent, order, icon, text, callback)
     })
     corner(button, UDim.new(0, 8))
     local buttonStroke = stroke(button)
+    Library._attachPress(button)
     local image = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.new(0.5, 0, 0, 11),
@@ -16962,7 +17161,6 @@ function Window:_homeAction(parent, order, icon, text, callback)
         tween(image, { ImageColor3 = Theme.Text }, 0.25)
     end)
     button.MouseButton1Click:Connect(function()
-        ripple(button)
         safeCall(callback)
     end)
     return button
@@ -17870,8 +18068,9 @@ function Window:_homeStats(list, opts, order, tab)
             values.Region.Text = region
         end)
     end
+    local execFolder = opts.StatsFolder or self.ConfigFolder
     if values.Execs then
-        local executions = bumpExecutions(opts.StatsFolder or self.ConfigFolder)
+        local executions = bumpExecutions(execFolder)
         values.Execs.Text = executions and tostring(executions) or "—"
     end
     if values.Friends then
@@ -17939,6 +18138,12 @@ function Window:_homeStats(list, opts, order, tab)
         end
         if session then
             session.Text = formatDuration(os.clock() - started)
+        end
+        if values.Execs then
+            local current = Library._readExecutions(execFolder)
+            if current then
+                values.Execs.Text = tostring(current)
+            end
         end
         if values.Time then
             values.Time.Text = os.date(opts.TimeFormat or "%H:%M")

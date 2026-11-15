@@ -39,6 +39,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP tests**: `tests/esp_test.lua` is plain Lua, with no Python. It runs the ESP against a mock of the Roblox API and checks geometry, rules, components, callbacks and cleanup. It does not render.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
+- **Player list**: `Tab:PlayerList({ Name, Height, Actions })`, a live list of the players in the server. Each row has the avatar, the name, the team colour and the distance, and a small button for each action you give it. Rows follow players joining and leaving.
 
 ### Changed
 
@@ -51,6 +52,9 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - 3D preview: a drag does not start on the toolbar.
 - The Loader and the Example no longer force a font.
 - README and llms.txt document all of the above.
+- **Press feel on every small button**: a press squeezes the button to 97%, and the release eases back without overshooting. The light sweeps across the visible shape only. Settings button rows, home quick actions and the dropdown's Select all and Clear all use the same feel.
+- **FPS and ping history**: each bar keeps the colour it was read with. The newest bar is strongest, older bars fade, and empty slots are dim.
+- **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
 
@@ -61,6 +65,9 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - Sliders jumped to the pointer when pressed in the empty space above or below the bar. The press catcher now hugs the bar, so only the bar and the knob start a drag.
 - Bold text fell back to BuilderSans when the chosen font family had no bold face. It now falls back to that family's regular face.
 - The egg no longer needs a Roblox video upload.
+- **Preview spins again after it is popped out.** The window called its listeners one after another without protection, so one listener that errored stopped the rest, the preview's spin among them. Each listener now runs under `pcall`, and a failing one is reported once.
+- **Button wave no longer spills out.** Compact buttons drew the wave over the whole card, description included. The wave, the squeeze and the light now belong to the visible box.
+- **One wave per click.** Compact buttons, home quick actions and the dropdown no longer draw a second wave on click.
 
 ### Removed
 

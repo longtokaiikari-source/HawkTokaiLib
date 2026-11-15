@@ -2016,3 +2016,20 @@ lua tests/esp_test.lua
 ```
 
 It checks the geometry, the rules, the components, the callbacks and the cleanup. It does not render, so run it in a real executor before you trust a build.
+
+## Player list
+
+`Tab:PlayerList` is a live list of the players in the server. Each row shows the avatar, the name, the team colour and the distance. Give it actions and each row gets a small button for each one.
+
+```lua
+Tab:PlayerList({
+    Name = "Players",
+    Height = 260,
+    Actions = {
+        { Name = "ESP", Callback = function(player) print("ESP", player.Name) end },
+    },
+})
+```
+
+Rows follow players joining and leaving, and the distances are read again every two seconds. The element returns a handle with `Refresh()` if you want to update it yourself.
+
