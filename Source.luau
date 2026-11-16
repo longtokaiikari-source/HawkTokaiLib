@@ -21730,8 +21730,6 @@ function Window:_overflowHint(host, scroller, items, vertical, fadeColor)
 
     local function refresh()
         local view = axis(scroller.AbsoluteWindowSize)
-        local overflow = (axis(scroller.AbsoluteCanvasSize) - view) / scale()
-        local position = axis(scroller.CanvasPosition)
         local start = axis(scroller.AbsolutePosition)
         local before, after = 0, 0
         for _, item in ipairs(items:GetChildren()) do
@@ -21748,7 +21746,9 @@ function Window:_overflowHint(host, scroller, items, vertical, fadeColor)
             local hidden = direction < 0 and before or after
             hint.Count.Text = tostring(hidden)
             hint.Count.Visible = hidden > 0
-            show(hint, overflow > 1 and (direction < 0 and position > 1 or direction > 0 and position < overflow - 1))
+            -- A light shows only while pages are out of view on its side. The count is in screen pixels on both sides,
+            -- so it does not change with the window's scale, unlike the scroll position.
+            show(hint, direction < 0 and before > 0 or direction > 0 and after > 0)
         end
     end
     for _, property in ipairs({ "CanvasPosition", "AbsoluteCanvasSize", "AbsoluteWindowSize" }) do
@@ -22294,6 +22294,11 @@ function Window:_stepBackdrop(deltaTime)
         return
     end
     local eased = 1 - (1 - fade) ^ 3
+    -- How much light there is: none at zero tint, and the full amount from the default tint (0.45) on.
+    local lightLevel = math.min(self._backdropTint / 0.45, 1)
+    -- Light kinds go out with the tint: at zero there is no glow, and no embers, petals, matrix or fireflies either.
+    local lightKind = self.Weather == "Ember" or self.Weather == "Sakura" or self.Weather == "Fireflies" or self.Weather == "Matrix"
+    self._weatherField.Visible = not (lightKind and self._backdropTint <= 0)
     local kind = self.Weather
     -- The dim eases on its own so turning it off doesn't touch the weather.
     local dim = self._dimLevel
@@ -22306,8 +22311,8 @@ function Window:_stepBackdrop(deltaTime)
     self._backdropTintFrame.BackgroundTransparency = 1 - self._backdropTint * eased * dim
     local definition = WEATHER[kind]
     self._backdropHeat.BackgroundTransparency = kind == "Ember"
-        and 1 - (0.22 + math.sin(os.clock() * 2.1) * 0.05) * eased
-        or definition and definition.GlowAmount and 1 - (definition.GlowAmount + math.sin(os.clock() * 0.8) * definition.GlowAmount * 0.25) * eased
+        and 1 - (0.22 + math.sin(os.clock() * 2.1) * 0.05) * eased * lightLevel
+        or definition and definition.GlowAmount and 1 - (definition.GlowAmount + math.sin(os.clock() * 0.8) * definition.GlowAmount * 0.25) * eased * lightLevel
         or 1
 
     -- The gust on restore: particles rush in fast and settle back.

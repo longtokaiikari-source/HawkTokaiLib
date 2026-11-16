@@ -2025,6 +2025,8 @@ The Players page has a Show dead option (dead players in grey) and a Nearest pla
 
 ### Testing without Roblox
 
+`tests/backdrop_test.lua` checks that the backdrop's light goes out with the Backdrop Tint. Run it the same way: `lua tests/backdrop_test.lua` from the project folder.
+
 `tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:
 
 ```

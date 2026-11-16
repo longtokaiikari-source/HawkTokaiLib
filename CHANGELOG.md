@@ -62,6 +62,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP nearest players**: `GlobalConfig.NearestLimit` keeps the ESP of only that many players nearest the camera; 0 keeps everyone (Players page).
 - **UI segmented control**: `Tab:Segmented({ Name, Desc, Options, Default, Callback })` shows its choices as pills, with the chosen one lit. `Tab:CreateSegmented` is the same. The example has a demo on the Objects page.
 - **Credits**: the README credits the developer (longtokai) and the testers (dokkimane, longtokai).
+- **Backdrop test**: `tests/backdrop_test.lua` runs the backdrop's light step on its own, with plain Lua.
 
 ### Changed
 
@@ -102,6 +103,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP wall check** no longer decides from the head alone, which kept a player red while a hand or a foot was showing.
 - **ESP tracer and highlight dropdowns** show the choice that is stored, not a fixed one.
 - **Path names** in the file list drop Windows separators too, so a file name is read the same on both systems.
+- **Backdrop light** follows the Backdrop Tint. Before, the glow, the embers, the petals, the matrix and the fireflies stayed on at zero tint; now they go out with it, and snow and rain are unchanged.
+- **Page row lights**: the lights and arrows at the ends of a long row of pages (the sub tabs, like ESP's) show only while pages are out of view on that side. Before, the far end kept its light after the row was dragged to the end, when the window was scaled below full size.
 
 ### Removed
 
