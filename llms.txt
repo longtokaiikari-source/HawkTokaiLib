@@ -181,3 +181,4 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - ESP: GlobalConfig.ShowDead (grey dead players), GlobalConfig.NearestLimit (0 keeps everyone). Presets: ESP:Export() returns JSON text, ESP:Import(text) returns true or false, reason.
 - UI: Tab:Segmented({ Name, Desc, Options, Default, Callback }) (alias Tab:CreateSegmented) is a row of pills with one lit; handle has Value and Set(value, silent).
 - Credits: developer longtokai; testers dokkimane and longtokai.
+- Presets apply at once: every ESP control is refreshed after ESP:Import (silently, without its callback). Players stay enabled whatever a preset says.

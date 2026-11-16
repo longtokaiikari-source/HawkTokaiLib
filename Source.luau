@@ -10754,7 +10754,7 @@ function Window:ListBackgrounds()
     if type(listfiles) == "function" and type(isfolder) == "function" and isfolder(folder) then
         local files = {}
         for _, path in ipairs(listfiles(folder)) do
-            local name = path:match("([^/\]+)$")
+            local name = path:match("([^/\\]+)$")
             local ext = name and name:match("%.(%w+)$")
             if ext and Library._imageExtensions[ext:lower()] then
                 table.insert(files, name)
@@ -26464,7 +26464,9 @@ do
 		if type(data.Players) == "table" then
 			P.MergeInto(ESP.Players, data.Players)
 		end
+		ESP.Players.Enabled = true
 		ESP:ApplyTemplate()
+		P.RefreshControls()
 		return true
 	end
 	-- The players nearest the camera keep their ESP when the nearest limit is on; the rest are left out.
@@ -26483,6 +26485,33 @@ do
 			object._Culled = limit > 0 and index > limit
 		end
 	end
+    -- The option a stored value stands for. Stored values are kept in lower case, so the match ignores case.
+    function P.OptionFor(value, options)
+        for _, option in options do
+            if string.lower(option) == string.lower(tostring(value)) then
+                return option
+            end
+        end
+        return options[1]
+    end
+    -- How each control of the ESP tab reads its current value, by its flag. A preset uses them to update the controls
+    -- it has changed, so the tab shows what was applied without being reopened.
+    P.Bound = {}
+    function P.Bind(flag, getter)
+        P.Bound[flag] = getter
+    end
+    function P.RefreshControls()
+        local flags = Library.Flags or {}
+        for flag, getter in P.Bound do
+            local element = flags[flag]
+            if element and type(element.Set) == "function" then
+                local ok, value = pcall(getter)
+                if ok and value ~= nil then
+                    pcall(element.Set, element, value, true)
+                end
+            end
+        end
+    end
 	function ESP:Build(tab, window)
 		P.Init()
 		if window and window.OnUnload then
@@ -26496,6 +26525,58 @@ do
 		local players = ESP.Players
 		-- The players are always watched. Each page turns on its own feature, so nothing is drawn until its page says so.
 		players.Enabled = true
+		P.Bind("ESP_HideTeammates", function() return players.HideTeammates end)
+		P.Bind("ESP_MaxDistance", function() return settings.MaxDistance end)
+		P.Bind("ESP_Rainbow", function() return config.Rainbow end)
+		P.Bind("ESP_IgnoreCharacter", function() return config.IgnoreCharacter end)
+		P.Bind("ESP_ShowDead", function() return config.ShowDead == true end)
+		P.Bind("ESP_NearestLimit", function() return config.NearestLimit or 0 end)
+		P.Bind("ESP_Names", function() return config.Billboards end)
+		P.Bind("ESP_Distance", function() return config.Distance end)
+		P.Bind("ESP_ShowTool", function() return ESP.GlobalConfig.ShowTool == true end)
+		P.Bind("ESP_DynamicText", function() return ESP.GlobalConfig.DynamicText ~= false end)
+		P.Bind("ESP_Meters", function() return ESP.GlobalConfig.Meters ~= false end)
+		P.Bind("ESP_TextSize", function() return settings.TextSize end)
+		P.Bind("ESP_DisplayNames", function() return config.DisplayNames == true end)
+		P.Bind("ESP_TeamName", function() return config.TeamName == true end)
+		P.Bind("ESP_Box2DMode", function() return settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full" end)
+		P.Bind("ESP_Box3DMode", function() return settings.Box3D.Enabled ~= true and "Off" or settings.Box3D.Style == "Corner" and "Corner" or "Full" end)
+		P.Bind("ESP_Thickness", function() return settings.Box2D.Thickness end)
+		P.Bind("ESP_Highlighters", function() return config.Highlighters == true end)
+		P.Bind("ESP_Type", function() return P.OptionFor(settings.ESPType, { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }) end)
+		P.Bind("ESP_HighlightDepth", function() return settings.HighlightDepth or "Through walls" end)
+		P.Bind("ESP_HighlightFill", function() return settings.FillTransparency end)
+		P.Bind("ESP_HighlightOutline", function() return settings.OutlineTransparency end)
+		P.Bind("ESP_Tracer", function() return settings.Tracer.Enabled end)
+		P.Bind("ESP_TracerFrom", function() return P.OptionFor(settings.Tracer.From, { "Top", "Bottom", "Center", "Mouse" }) end)
+		P.Bind("ESP_TracerTo", function() return settings.Tracer.To or "Feet" end)
+		P.Bind("ESP_HealthMode", function() return settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left" end)
+		P.Bind("ESP_HealthGradient", function() return settings.Health.Gradient ~= false end)
+		P.Bind("ESP_HealthText", function() return ESP.GlobalConfig.HealthText == true end)
+		P.Bind("ESP_Skeleton", function() return settings.Skeleton.Enabled end)
+		P.Bind("ESP_HeadDots", function() return ESP.GlobalConfig.HeadDots == true end)
+		P.Bind("ESP_ArrowSize", function() return settings.Arrow.Size or 12 end)
+		P.Bind("ESP_Arrow", function() return settings.Arrow.Enabled end)
+		P.Bind("ESP_ArrowOffset", function() return settings.Arrow.CenterOffset end)
+		P.Bind("ESP_VisibleCheck", function() return ESP.GlobalConfig.VisibleCheck == true end)
+		P.Bind("ESP_VisibleOnly", function() return ESP.GlobalConfig.VisibleOnly == true end)
+		P.Bind("ESP_Fade", function() return ESP.GlobalConfig.Fade == true end)
+		P.Bind("ESP_FadeStart", function() return config.FadeStart or 0.6 end)
+		P.Bind("ESP_VisibleEvery", function() return config.VisibleEvery or 1 end)
+		P.Bind("ESP_FOV", function() return ESP.GlobalConfig.FOV == true end)
+		P.Bind("ESP_FOVRadius", function() return ESP.GlobalConfig.FOVRadius or 120 end)
+		P.Bind("ESP_Crosshair", function() return ESP.GlobalConfig.Crosshair == true end)
+		P.Bind("ESP_Radar", function() return config.Radar == true end)
+		P.Bind("ESP_RadarRange", function() return config.RadarRange or 150 end)
+		P.Bind("ESP_RadarSize", function() return config.RadarSize or 110 end)
+		P.Bind("ESP_Color", function() return settings.Color end)
+		P.Bind("ESP_VisibleColor", function() return ESP.GlobalConfig.VisibleColor end)
+		P.Bind("ESP_HiddenColor", function() return ESP.GlobalConfig.HiddenColor end)
+		P.Bind("ESP_AllyColor", function() return players.AllyColor end)
+		P.Bind("ESP_TracerColor", function() return settings.Tracer.Color end)
+		P.Bind("ESP_TeamColours", function() return config.TeamColours == true end)
+		P.Bind("ESP_FriendColours", function() return config.FriendColours == true end)
+		P.Bind("ESP_FriendColor", function() return config.FriendColor end)
 
 		-- One page for each feature.
 		local pagePlayers = tab:CreateSubTab({ Name = "Players" })
@@ -26576,7 +26657,7 @@ do
 		gHighlight:CreateToggle({ Name = "Enable highlight", Desc = "Off until you turn it on", CurrentValue = config.Highlighters == true, Flag = "ESP_Highlighters", Callback = function(value)
 			config.Highlighters = value == true
 		end })
-		gHighlight:CreateDropdown({ Name = "Highlight", Options = { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }, CurrentOption = "Highlight", Flag = "ESP_Type", Callback = function(value)
+		gHighlight:CreateDropdown({ Name = "Highlight", Options = { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }, CurrentOption = P.OptionFor(settings.ESPType, { "Highlight", "SelectionBox", "SphereAdornment", "CylinderAdornment", "Adornment", "Text" }), Flag = "ESP_Type", Callback = function(value)
 			if type(value) == "table" then
 				value = value[1]
 			end
@@ -26605,7 +26686,7 @@ do
 			settings.Tracer.Enabled = value == true
 			ESP:ApplyTemplate()
 		end })
-		gTracers:CreateDropdown({ Name = "Tracer from", Options = { "Top", "Bottom", "Center", "Mouse" }, CurrentOption = "Bottom", Flag = "ESP_TracerFrom", Callback = function(value)
+		gTracers:CreateDropdown({ Name = "Tracer from", Options = { "Top", "Bottom", "Center", "Mouse" }, CurrentOption = P.OptionFor(settings.Tracer.From, { "Top", "Bottom", "Center", "Mouse" }), Flag = "ESP_TracerFrom", Callback = function(value)
 			if type(value) == "table" then
 				value = value[1]
 			end

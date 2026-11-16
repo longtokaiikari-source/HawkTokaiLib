@@ -57,7 +57,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP display names and team name**: `GlobalConfig.DisplayNames` writes the display name instead of the user name, and `GlobalConfig.TeamName` adds the team name after it (Names page).
 - **ESP radar**: `GlobalConfig.Radar` draws a radar in the top right corner of the game view. Each player is a dot placed by where it is from the camera, and the radar turns with the view. `RadarRange` (studs) and `RadarSize` (pixels) set its scale (Overlay page).
 - **ESP visible check interval**: `GlobalConfig.VisibleEvery` (3 by default) sets how many frames pass between two looks at a player (Visibility page).
-- **ESP presets**: the Presets page copies the ESP's settings as text (`ESP:Export()`) and applies a preset back (`ESP:Import(text)`). Colours are kept, and the models and fonts are left out. The controls show the new values when the tabs are opened again.
+- **ESP presets**: the Presets page copies the ESP's settings as text (`ESP:Export()`) and applies a preset back (`ESP:Import(text)`). Colours are kept, and the models and fonts are left out. The controls update at once, and the players stay watched whatever a preset says.
 - **ESP show dead**: `GlobalConfig.ShowDead` draws dead players in grey instead of hiding them (Players page).
 - **ESP nearest players**: `GlobalConfig.NearestLimit` keeps the ESP of only that many players nearest the camera; 0 keeps everyone (Players page).
 - **UI segmented control**: `Tab:Segmented({ Name, Desc, Options, Default, Callback })` shows its choices as pills, with the chosen one lit. `Tab:CreateSegmented` is the same. The example has a demo on the Objects page.
@@ -100,6 +100,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Buttons that size themselves to their text** no longer stretch on press. They show a press as a colour change, because a button that follows its own text cannot hold a child sized by scale.
 - **A popped-out preview keeps spinning** while the main window is closed.
 - **ESP wall check** no longer decides from the head alone, which kept a player red while a hand or a foot was showing.
+- **ESP tracer and highlight dropdowns** show the choice that is stored, not a fixed one.
+- **Path names** in the file list drop Windows separators too, so a file name is read the same on both systems.
 
 ### Removed
 
