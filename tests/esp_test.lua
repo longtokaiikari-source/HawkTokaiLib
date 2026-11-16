@@ -92,6 +92,102 @@ end
 UDim2 = {}
 UDim = { new = function(scale, offset) return { Scale = scale, Offset = offset } end }
 RaycastParams = { new = function() return {} end }
+local function encodeJson(value)
+	if type(value) == "table" then
+		local parts = {}
+		if #value > 0 then
+			for _, item in ipairs(value) do
+				table.insert(parts, encodeJson(item))
+			end
+			return "[" .. table.concat(parts, ",") .. "]"
+		end
+		for key, item in pairs(value) do
+			table.insert(parts, string.format("%q:%s", tostring(key), encodeJson(item)))
+		end
+		table.sort(parts)
+		return "{" .. table.concat(parts, ",") .. "}"
+	elseif type(value) == "string" then
+		return string.format("%q", value)
+	elseif type(value) == "number" then
+		return string.format("%.17g", value)
+	elseif type(value) == "boolean" then
+		return tostring(value)
+	end
+	error("cannot encode " .. type(value))
+end
+local function decodeJson(text)
+	local pos = 1
+	local function skip()
+		pos = text:find("[^ \t\r\n]", pos) or #text + 1
+	end
+	local parseValue
+	function parseValue()
+		skip()
+		local c = text:sub(pos, pos)
+		if c == "{" then
+			pos = pos + 1
+			local object = {}
+			skip()
+			if text:sub(pos, pos) == "}" then
+				pos = pos + 1
+				return object
+			end
+			while true do
+				skip()
+				local _, keyEnd, key = text:find('^"([^"]*)"', pos)
+				pos = keyEnd + 1
+				skip()
+				pos = pos + 1
+				object[key] = parseValue()
+				skip()
+				local sep = text:sub(pos, pos)
+				pos = pos + 1
+				if sep == "}" then
+					return object
+				end
+			end
+		elseif c == "[" then
+			pos = pos + 1
+			local list = {}
+			skip()
+			if text:sub(pos, pos) == "]" then
+				pos = pos + 1
+				return list
+			end
+			while true do
+				table.insert(list, parseValue())
+				skip()
+				local sep = text:sub(pos, pos)
+				pos = pos + 1
+				if sep == "]" then
+					return list
+				end
+			end
+		elseif c == '"' then
+			local _, stringEnd, str = text:find('^"([^"]*)"', pos)
+			pos = stringEnd + 1
+			return str
+		elseif text:sub(pos, pos + 3) == "true" then
+			pos = pos + 4
+			return true
+		elseif text:sub(pos, pos + 4) == "false" then
+			pos = pos + 5
+			return false
+		else
+			local _, numberEnd, num = text:find("^(-?[%d%.eE%+%-]+)", pos)
+			if not num then
+				error("cannot decode at " .. pos)
+			end
+			pos = numberEnd + 1
+			return tonumber(num)
+		end
+	end
+	return parseValue()
+end
+HttpService = {
+	JSONEncode = function(self, value) return encodeJson(value) end,
+	JSONDecode = function(self, text) return decodeJson(text) end,
+}
 function UDim2.fromOffset(x, y) return { XS = 0, XO = x, YS = 0, YO = y } end
 function UDim2.fromScale(x, y) return { XS = x, XO = 0, YS = y, YO = 0 } end
 
@@ -571,6 +667,8 @@ local function mockGroupbox()
 	group.CreateSlider = record("Slider")
 	group.CreateDropdown = record("Dropdown")
 	group.CreateColorPicker = record("ColorPicker")
+	group.CreateInput = record("Input")
+	group.CreateButton = record("Button")
 	group.CreateViewport = function(self, opts)
 		controls[opts.Name] = { kind = "Viewport", opts = opts, handle = handle }
 		return handle
@@ -766,6 +864,7 @@ set("ESP_HighlightFill", 0.3)
 step(2)
 check(math.abs(objNear.Components.Highlighter.Instances[1].FillTransparency - 0.3) < 0.001, "the highlight fill follows its slider")
 local wall = new_instance("Part")
+set("ESP_VisibleEvery", 1)
 set("ESP_VisibleCheck", true)
 workspace.RaycastOverride = function() return { Instance = wall } end
 step(2)
@@ -817,6 +916,138 @@ set("ESP_FOV", false)
 set("ESP_Crosshair", false)
 step(2)
 check(ESP.Overlay.Ring.Visible == false and ESP.Overlay.Cross.Shown == 0, "the overlay goes when it is turned off")
+check(#WARNINGS == 0, "no warnings from the new options")
+
+-- 7f. Team colours, friend colours, the names, the radar and the look-up interval.
+near.Team = { Name = "Red", TeamColor = { Color = Color3.fromRGB(255, 40, 40) } }
+near.DisplayName = "Nearly"
+set("ESP_TeamColours", true)
+set("ESP_DisplayNames", true)
+set("ESP_TeamName", true)
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == near.Team.TeamColor.Color, "a player on a team is drawn in the team colour")
+check(string.find(objNear.Components.Billboard.Frames[1].Text, "Nearly", 1, true) ~= nil, "the display name is shown when Display names is on (" .. tostring(objNear.Components.Billboard.Frames[1].Text) .. ")")
+check(string.find(objNear.Components.Billboard.Frames[1].Text, "[Red]", 1, true) ~= nil, "the team name is shown after the name")
+check(objNear.Components.Highlighter.Instances[1].FillColor == near.Team.TeamColor.Color, "the highlight takes the team colour too")
+near.UserId = 777
+me.IsFriendsWith = function(self, id) return id == 777 end
+set("ESP_FriendColours", true)
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.FriendColor, "a friend is drawn in the friend colour, before the team colour")
+set("ESP_FriendColours", false)
+set("ESP_TeamColours", false)
+set("ESP_DisplayNames", false)
+set("ESP_TeamName", false)
+step(2)
+check(string.find(objNear.Components.Billboard.Frames[1].Text, "Nearly", 1, true) == nil, "the user name is shown again when Display names is off")
+set("ESP_Radar", true)
+step(2)
+check(ESP.Overlay.RadarBack.Visible == true and objNear.Components.Radar.Frames[1].Visible == true, "the radar shows its back and the players")
+local centreX, centreY = 1920 - 16 - 55, 16 + 55
+check(objNear.Components.Radar.Frames[1].Position.YO < centreY, "a player in front is above the middle of the radar")
+check(objBehind.Components.Radar.Frames[1].Position.YO > centreY, "a player behind is below the middle of the radar")
+check(objEdge.Components.Radar.Frames[1].Position.XO > centreX, "a player far to the right sits on the right edge of the radar")
+set("ESP_Radar", false)
+step(2)
+check(objNear.Components.Radar.Frames[1].Visible == false, "the radar dots go with the radar")
+local looks = 0
+local nearHead = objNear.CurrentSettings.Model:FindFirstChild("Head").Position
+set("ESP_VisibleEvery", 4)
+set("ESP_VisibleCheck", true)
+workspace.RaycastOverride = function(origin, direction, params)
+    local gap = (origin + direction) - nearHead
+    if math.abs(gap.X) + math.abs(gap.Y) + math.abs(gap.Z) < 0.01 then
+        looks = looks + 1
+    end
+    return nil
+end
+for _ = 1, 8 do
+    step(1)
+end
+workspace.RaycastOverride = nil
+check(looks >= 2 and looks <= 3, "the visible check looks at a player every fourth frame (" .. looks .. " looks in 8 frames)")
+set("ESP_VisibleCheck", false)
+set("ESP_VisibleEvery", 1)
+step(2)
+check(#WARNINGS == 0, "no warnings from the new options")
+
+-- 7g. The wall check: a player is green when any part of it can be seen, and red when none can. A hand or a foot showing
+-- is enough. A see-through part and a part that cannot collide do not hide anything, and a player behind the camera is red.
+set("ESP_VisibleEvery", 1)
+set("ESP_VisibleCheck", true)
+local wallPart = new_instance("Part")
+local function onlyAt(point)
+    return function(origin, direction)
+        local gap = (origin + direction) - point
+        if math.abs(gap.X) + math.abs(gap.Y) + math.abs(gap.Z) < 0.01 then
+            return nil
+        end
+        return { Instance = wallPart }
+    end
+end
+workspace.RaycastOverride = function() return { Instance = wallPart } end
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.HiddenColor, "a player behind a wall is red")
+workspace.RaycastOverride = onlyAt(objNear.CurrentSettings.Model:FindFirstChild("RightHand").Position)
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "a player with a hand showing is green")
+workspace.RaycastOverride = onlyAt(objNear.CurrentSettings.Model:FindFirstChild("LeftFoot").Position)
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "a player with a foot showing is green")
+workspace.RaycastOverride = onlyAt(objSix.CurrentSettings.Model:FindFirstChild("Left Arm").Position)
+step(2)
+check(objSix.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "an R6 player with an arm showing is green")
+workspace.RaycastOverride = function() return { Instance = wallPart } end
+wallPart.Transparency = 0.8
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "a see-through wall does not hide the player")
+wallPart.Transparency = 0
+wallPart.CanCollide = false
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.VisibleColor, "a part that cannot collide does not hide the player")
+wallPart.CanCollide = true
+step(2)
+check(objNear.Components.Billboard.Frames[1].TextColor3 == ESP.GlobalConfig.HiddenColor, "a solid wall hides the player again")
+check(objBehind._Visible == false, "a player behind the camera is red")
+workspace.RaycastOverride = nil
+set("ESP_VisibleCheck", false)
+set("ESP_VisibleEvery", 1)
+step(2)
+check(#WARNINGS == 0, "no warnings from the wall check")
+
+-- 7h. Show dead, the nearest limit, and presets.
+set("ESP_ShowDead", true)
+step(3)
+local deadSettings = objectOf(dead).CurrentSettings
+check(deadSettings.Visible == true and math.abs(deadSettings.Color.R - 120 / 255) < 0.01, "a dead player is drawn in grey when Show dead is on")
+set("ESP_ShowDead", false)
+step(3)
+check(objectOf(dead).CurrentSettings.Visible == false, "a dead player is hidden again when Show dead is off")
+local function countShown()
+    local shown = 0
+    for _, object in pairs(ESP.PlayerObjects) do
+        if object.Components.Billboard.Frames[1].Visible == true then
+            shown = shown + 1
+        end
+    end
+    return shown
+end
+set("ESP_NearestLimit", 1)
+step(2)
+check(countShown() <= 1, "only the nearest player keeps its ESP with the limit at 1 (" .. countShown() .. " shown)")
+set("ESP_NearestLimit", 0)
+step(2)
+check(countShown() >= 2, "every player keeps its ESP with the limit at 0 (" .. countShown() .. " shown)")
+set("ESP_Color", Color3.fromRGB(10, 200, 30))
+set("ESP_TextSize", 18)
+local saved = ESP:Export()
+check(type(saved) == "string" and string.find(saved, "Settings", 1, true) ~= nil, "a preset is text with the settings in it")
+set("ESP_TextSize", 12)
+set("ESP_Color", Color3.fromRGB(255, 255, 255))
+check(ESP:Import(saved) == true and ESP.Settings.TextSize == 18, "a preset brings back the text size")
+check(math.abs(ESP.Settings.Color.G - 200 / 255) < 0.01 and math.abs(ESP.Settings.Color.R - 10 / 255) < 0.01, "a preset brings back the colour")
+local refused, reason = ESP:Import("not a preset")
+check(refused == false and reason ~= nil, "text that is not a preset is refused")
 check(#WARNINGS == 0, "no warnings from the new options")
 
 -- 12. Clear removes the objects, and the automatic players make theirs again on the next frame.
