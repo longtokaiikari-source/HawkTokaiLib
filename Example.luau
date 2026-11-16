@@ -565,6 +565,11 @@ Library.ESP:Build(Esp, Window)
 -- Objects: ESP for one model you pick. Add takes any Model or Part. A setting you leave out keeps its default.
 -- The object draws until you Destroy it, the model leaves the game, or the window unloads (the Unload button).
 local EspObjects = Esp:CreateSubTab({ Name = "Objects" })
+-- A row of pills for one mode out of a few (the segmented control).
+local EspModes = EspObjects:AddRightGroupbox({ Name = "Modes", Icon = "layout-grid" })
+EspModes:CreateSegmented({ Name = "Mode", Desc = "One of a few modes", Options = { "Off", "Low", "High" }, Default = "Low", Callback = function(value)
+    Library:Notify({ Title = "Mode", Content = tostring(value), Duration = 2 })
+end })
 local EspSingle = EspObjects:AddLeftGroupbox({ Name = "One model", Icon = "crosshair" })
 local EspTarget = nil -- the object Library.ESP:Add returned, or nil when there is none
 

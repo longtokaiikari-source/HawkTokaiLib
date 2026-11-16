@@ -3954,6 +3954,74 @@ function Tab:ColorPicker(opts)
     return finishElement(self, opts, self_, frame, "ColorPicker")
 end
 
+-- A row of pills, one for each option, with the chosen one lit. Use it for a few modes that exclude each other.
+function Tab:Segmented(opts)
+    local frame, frameStroke, _, titleLabel, descLabel
+    local options = type(opts.Options) == "table" and opts.Options or {}
+    local pillWidth = 72
+    local width = math.max(#options, 1) * pillWidth + math.max(#options - 1, 0) * 4
+    opts, frame, frameStroke, _, titleLabel, descLabel = beginElement(self, opts, { Title = "Name", Description = "Desc", CurrentValue = "Default", Value = "Default" }, "Frame", width, "Segmented")
+
+    local holder = create("Frame", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -14, 0.5, 0),
+        Size = UDim2.fromOffset(width, 28),
+        BackgroundTransparency = 1,
+        Parent = frame,
+    })
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+        Parent = holder,
+    })
+
+    local element = { Value = opts.CurrentValue ~= nil and opts.CurrentValue or options[1] }
+    local pills = {}
+    local function render(animate)
+        for name, pill in pairs(pills) do
+            local on = element.Value == name
+            tween(pill, { BackgroundColor3 = on and Theme.Accent or Theme.Surface3, TextColor3 = on and Color3.new(1, 1, 1) or Theme.Muted }, animate and 0.2 or 0)
+        end
+    end
+    for index, name in ipairs(options) do
+        local pill = create("TextButton", {
+            Size = UDim2.fromOffset(pillWidth, 28),
+            BackgroundColor3 = Theme.Surface3,
+            BorderSizePixel = 0,
+            AutoButtonColor = false,
+            Text = tostring(name),
+            TextSize = 13,
+            FontFace = Fonts.Regular,
+            TextColor3 = Theme.Muted,
+            LayoutOrder = index,
+            Parent = holder,
+        })
+        corner(pill, UDim.new(0, 8))
+        pills[name] = pill
+        Library._attachPress(pill)
+        pill.MouseButton1Click:Connect(function()
+            element:Set(name)
+        end)
+    end
+
+    function element:Set(value, silent)
+        if pills[value] == nil then
+            return
+        end
+        self.Value = value
+        render(true)
+        if not silent then
+            safeCall(opts.Callback, value)
+        end
+    end
+
+    render(false)
+    reserveRight(titleLabel, descLabel, width + 20)
+    return finishElement(self, opts, element, frame, "Segmented")
+end
+Tab.CreateSegmented = Tab.Segmented
+
 function Tab:Stepper(opts)
     local frame, frameStroke, _, titleLabel, descLabel
     opts, frame, frameStroke, _, titleLabel, descLabel = beginElement(self, opts, { Title = "Name", Description = "Desc", CurrentValue = "Default", Value = "Default", Increment = "Step" }, "Frame", 150, "Stepper")
@@ -24720,6 +24788,17 @@ do
 		FOV = false,
 		FOVRadius = 120,
 		Crosshair = false,
+		DisplayNames = false,
+		TeamName = false,
+		TeamColours = false,
+		FriendColours = false,
+		FriendColor = Color3.fromRGB(70, 170, 255),
+		VisibleEvery = 1,
+		Radar = false,
+		RadarRange = 150,
+		RadarSize = 110,
+		ShowDead = false,
+		NearestLimit = 0,
 		Font = nil,
 	}
 	-- Players: one object per character, always watched. AllyColor is used for teammates.
@@ -25089,15 +25168,35 @@ do
 		local height = minY and (maxY - minY) or 100
 		return math.max(math.floor(size * math.clamp(height * 0.016, 0.5, 1) + 0.5), 6)
 	end
-	-- With the visible check on, a character you can see and one behind a wall are drawn in two colours.
+	-- The colour a part of the ESP is drawn in. With the visible check on, a character you can see and one behind a
+	-- wall are drawn in two colours. Otherwise a friend has the friend colour (when Friend colours is on), then a player
+	-- on a team has the team's colour (when Team colours is on), and anyone else has the colour given.
 	function P.Tint(object, color)
-		if ESP.GlobalConfig.VisibleCheck ~= true or object._Visible == nil then
-			return color
+		local gc = ESP.GlobalConfig
+		if gc.VisibleCheck == true and object._Visible ~= nil then
+			if object._Visible then
+				return gc.VisibleColor
+			end
+			return gc.HiddenColor
 		end
-		if object._Visible then
-			return ESP.GlobalConfig.VisibleColor
+		local player = object._Player
+		if player then
+			if gc.FriendColours == true and object._Friend == true then
+				return gc.FriendColor
+			end
+			if gc.TeamColours == true and player.Team and player.Team.TeamColor then
+				return player.Team.TeamColor.Color
+			end
 		end
-		return ESP.GlobalConfig.HiddenColor
+		return color
+	end
+	-- The name written above a character: its display name when Display names is on, otherwise its user name.
+	function P.DisplayName(object)
+		local player = object._Player
+		if ESP.GlobalConfig.DisplayNames == true and player and player.DisplayName then
+			return tostring(player.DisplayName)
+		end
+		return tostring(object.CurrentSettings.Name)
 	end
 	-- How faded the text and the lines are: none up to a fraction of the max distance, then fully faded at the max.
 	function P.Fade(object)
@@ -25172,7 +25271,10 @@ do
 			local fade = P.Fade(object)
 			name.TextTransparency = fade
 			distance.TextTransparency = fade
-			local label = tostring(settings.Name)
+			local label = P.DisplayName(object)
+			if ESP.GlobalConfig.TeamName == true and object._Player and object._Player.Team then
+				label = label .. " [" .. tostring(object._Player.Team.Name) .. "]"
+			end
 			if ESP.GlobalConfig.ShowTool == true and settings.Model then
 				local tool = settings.Model:FindFirstChildOfClass("Tool")
 				if tool then
@@ -25264,8 +25366,8 @@ do
 				instance.SurfaceColor3 = P.ColorOf(current.SurfaceColor)
 				instance.SurfaceTransparency = current.Transparency
 			elseif kind == "highlight" then
-				instance.FillColor = P.ColorOf(current.FillColor)
-				instance.OutlineColor = P.ColorOf(current.OutlineColor)
+				instance.FillColor = P.Tint(object, P.ColorOf(current.FillColor))
+				instance.OutlineColor = P.Tint(object, P.ColorOf(current.OutlineColor))
 				instance.FillTransparency = current.FillTransparency
 				instance.OutlineTransparency = current.OutlineTransparency
 			else
@@ -25376,7 +25478,7 @@ do
 			local wing = half * 0.6
 			local leftWing = Vector2.new(base.X - dy * wing, base.Y + dx * wing)
 			local rightWing = Vector2.new(base.X + dy * wing, base.Y - dx * wing)
-			local color = P.ColorOf(settings.Color)
+			local color = P.Tint(object, P.ColorOf(settings.Color))
 			local black = Color3.new(0, 0, 0)
 			-- The black outline first, then the coloured line over it, as the box does.
 			pool.Line(tail, tip, black, 3, 0)
@@ -25606,23 +25708,68 @@ do
 		end
 		return component
 	end
-	-- Whether the character can be seen from the camera: a ray from the camera to its head meets nothing before it.
-	-- The local character and the character itself are not in the way.
+	-- The points of a character the wall check looks at. A rig R15 has its head, body, hands and feet; a rig R6 has its six
+	-- parts. A player is seen when a ray from the camera reaches any one of them, so a hand or a foot showing from behind
+	-- a wall is enough to draw the player as seen.
+	P.WallCheckR15 = { "Head", "UpperTorso", "LowerTorso", "LeftHand", "RightHand", "LeftFoot", "RightFoot" }
+	P.WallCheckR6 = { "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg" }
+	-- The instances a ray is not stopped by: every player's character, so a teammate in front does not decide the check,
+	-- and the model being checked. Only the scenery stops a ray.
+	function P.Ignored(model)
+		local list = {}
+		for _, player in Players:GetPlayers() do
+			if player.Character then
+				table.insert(list, player.Character)
+			end
+		end
+		table.insert(list, model)
+		return list
+	end
+	-- Whether a ray that hit something is stopped by it. A part that cannot collide does not stop it, nor does a part
+	-- that is see-through; anything else does.
+	function P.Blocks(hit)
+		local part = hit.Instance
+		if not part then
+			return true
+		end
+		if part.CanCollide == false then
+			return false
+		end
+		return (part.Transparency or 0) < 0.5
+	end
+	-- Whether any point of a character can be seen from the camera. A character with none of the named parts is checked
+	-- at its primary part.
 	function P.LineOfSight(scene, model)
 		local camera = scene.Camera()
-		local head = model:FindFirstChild("Head") or P.PrimaryPart(model)
-		if not (camera and head) then
+		if not camera then
 			return true
 		end
 		local origin = camera.CFrame.Position
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		local names = humanoid and humanoid.RigType == Enum.HumanoidRigType.R6 and P.WallCheckR6 or P.WallCheckR15
+		local points = {}
+		for _, name in names do
+			local part = model:FindFirstChild(name)
+			if part then
+				table.insert(points, part)
+			end
+		end
+		if #points == 0 then
+			local root = P.PrimaryPart(model)
+			if root then
+				table.insert(points, root)
+			end
+		end
 		local params = RaycastParams.new()
 		params.FilterType = Enum.RaycastFilterType.Exclude
-		local ignore = { model }
-		if Players.LocalPlayer.Character then
-			table.insert(ignore, Players.LocalPlayer.Character)
+		params.FilterDescendantsInstances = P.Ignored(model)
+		for _, part in points do
+			local hit = workspace:Raycast(origin, part.Position - origin, params)
+			if hit == nil or not P.Blocks(hit) then
+				return true
+			end
 		end
-		params.FilterDescendantsInstances = ignore
-		return workspace:Raycast(origin, head.Position - origin, params) == nil
+		return false
 	end
 	-- A small dot on the head, in the colour of the object, to see where the head is.
 	function P.HeadDot(object, scene)
@@ -25652,7 +25799,8 @@ do
 		end
 		return component
 	end
-	-- The overlay of the game view: a field-of-view ring around the centre, and a crosshair at the centre.
+	-- The overlay of the game view: a field-of-view ring around the centre, a crosshair at the centre, and the back of
+	-- the radar in the top corner.
 	function P.DrawOverlay(scene)
 		local overlay = ESP.Overlay
 		if not overlay then
@@ -25666,7 +25814,18 @@ do
 			})
 			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ring })
 			create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0.3, Parent = ring })
-			overlay = { Ring = ring, Cross = P.LinePool(scene.Container) }
+			local radarBack = create("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.fromRGB(12, 12, 14),
+				BackgroundTransparency = 0.35,
+				BorderSizePixel = 0,
+				Visible = false,
+				ZIndex = 6,
+				Parent = scene.Container,
+			})
+			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = radarBack })
+			create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0.4, Parent = radarBack })
+			overlay = { Ring = ring, Cross = P.LinePool(scene.Container), RadarBack = radarBack }
 			ESP.Overlay = overlay
 		end
 		local size = scene.Size()
@@ -25677,6 +25836,10 @@ do
 			overlay.Ring.Position = UDim2.fromOffset(center.X, center.Y)
 			overlay.Ring.Size = UDim2.fromOffset(radius * 2, radius * 2)
 		end
+		local radarSize = ESP.GlobalConfig.RadarSize or 110
+		overlay.RadarBack.Visible = ESP.GlobalConfig.Radar == true
+		overlay.RadarBack.Position = UDim2.fromOffset(size.X - 16 - radarSize / 2, 16 + radarSize / 2)
+		overlay.RadarBack.Size = UDim2.fromOffset(radarSize, radarSize)
 		local cross = overlay.Cross
 		cross.Begin()
 		if ESP.GlobalConfig.Crosshair == true then
@@ -25689,7 +25852,56 @@ do
 		end
 		cross.End()
 	end
-
+	-- A radar in the corner of the game view. Each player is a dot placed by where it is from the camera, and the radar
+	-- turns with the view. A player past the range sits on the edge of the radar.
+	function P.Radar(object, scene)
+		local dot = create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(6, 6),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 7,
+			Parent = scene.Container,
+		})
+		create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+		local component = P.NewComponent({ dot })
+		function component.Update()
+			local settings = object.CurrentSettings
+			local camera = scene.Camera()
+			local world = object._LastWorld
+			local shown = component.Visible and scene == ESP.GameScene and ESP.GlobalConfig.Radar == true and camera ~= nil and world ~= nil and settings.Visible ~= false
+			dot.Visible = false
+			if not shown then
+				return
+			end
+			local cf = camera.CFrame
+			local look = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+			local side = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+			local lookLength = math.sqrt(look.X * look.X + look.Z * look.Z)
+			local sideLength = math.sqrt(side.X * side.X + side.Z * side.Z)
+			if lookLength < 0.001 or sideLength < 0.001 then
+				return
+			end
+			look = Vector3.new(look.X / lookLength, 0, look.Z / lookLength)
+			side = Vector3.new(side.X / sideLength, 0, side.Z / sideLength)
+			local offset = world - cf.Position
+			local size = scene.Size()
+			local radius = (ESP.GlobalConfig.RadarSize or 110) / 2
+			local range = ESP.GlobalConfig.RadarRange or 150
+			local x = offset:Dot(side) / range * radius
+			local y = -offset:Dot(look) / range * radius
+			local length = math.sqrt(x * x + y * y)
+			local edge = radius - 4
+			if length > edge then
+				x, y = x * edge / length, y * edge / length
+			end
+			dot.Position = UDim2.fromOffset(size.X - 16 - radius + x, 16 + radius + y)
+			dot.BackgroundColor3 = P.Tint(object, P.ColorOf(settings.Color))
+			dot.Visible = true
+		end
+		return component
+	end
 	function P.BuildComponents(object)
 		local scene = object.Scene
 		object.Components.Billboard = P.Billboard(object, scene)
@@ -25701,6 +25913,7 @@ do
 		object.Components.Skeleton = P.Skeleton(object, scene)
 		object.Components.Health = P.Health(object, scene)
 		object.Components.HeadDot = P.HeadDot(object, scene)
+		object.Components.Radar = P.Radar(object, scene)
 	end
 
 	function P.HideAll(object, force)
@@ -25884,11 +26097,29 @@ do
 			local screen, inFront = P.Project(scene, P.Pivot(rootInstance).Position)
 			object._LastScreenPos = { screen, inFront }
 			object._LastWorld = P.Pivot(rootInstance).Position
-			object._Visible = nil
-			if inFront and (ESP.GlobalConfig.VisibleCheck == true or ESP.GlobalConfig.VisibleOnly == true) then
-				object._Visible = P.LineOfSight(scene, current.Model)
+			if ESP.GlobalConfig.FriendColours == true and object._Player and object._Friend == nil then
+				local ok, friend = pcall(function()
+					return Players.LocalPlayer:IsFriendsWith(object._Player.UserId)
+				end)
+				object._Friend = ok and friend == true
+			end
+			if ESP.GlobalConfig.VisibleCheck == true or ESP.GlobalConfig.VisibleOnly == true then
+				object._VisibleCountdown = (object._VisibleCountdown or 0) - 1
+				if object._VisibleCountdown <= 0 or object._VisibleKnown == nil or not inFront then
+					object._VisibleKnown = inFront and P.LineOfSight(scene, current.Model) or false
+					object._VisibleCountdown = math.max(ESP.GlobalConfig.VisibleEvery or 1, 1)
+				end
+				object._Visible = object._VisibleKnown
+			else
+				object._VisibleKnown = nil
+				object._VisibleCountdown = 0
+				object._Visible = nil
 			end
 			if ESP.GlobalConfig.VisibleOnly == true and object._Visible == false then
+				P.HideAll(object, true)
+				return
+			end
+			if object._Culled == true then
 				P.HideAll(object, true)
 				return
 			end
@@ -25949,13 +26180,17 @@ do
 					settings.Name = player.Name
 					object = ESP:Add(settings)
 					ESP.PlayerObjects[player] = object
+					object._Player = player
 				end
 				if object then
 					local humanoid = character:FindFirstChildOfClass("Humanoid")
 					local alive = humanoid ~= nil and humanoid.Health > 0
 					local teammate = player.Team ~= nil and player.Team == localPlayer.Team
-					object.CurrentSettings.Visible = config.Enabled == true and alive and not (config.HideTeammates == true and teammate)
-					if teammate then
+					local shownDead = ESP.GlobalConfig.ShowDead == true and not alive
+					object.CurrentSettings.Visible = config.Enabled == true and (alive or shownDead) and not (config.HideTeammates == true and teammate)
+					if shownDead then
+						object.CurrentSettings.Color = Color3.fromRGB(120, 120, 120)
+					elseif teammate then
 						object.CurrentSettings.Color = config.AllyColor
 					else
 						object.CurrentSettings.Color = ESP.Settings.Color or Color3.new(1, 1, 1)
@@ -26047,6 +26282,7 @@ do
 			P.Rainbow(delta)
 		end
 		P.SyncPlayers()
+		P.RankPlayers()
 		if ESP.GameScene then
 			P.DrawOverlay(ESP.GameScene)
 		end
@@ -26146,6 +26382,107 @@ do
 
 	-- // Tab // --
 	-- The ESP tab: the players and the drawing in the left groupboxes, the colours and the preview on the right.
+	-- Presets: the ESP's settings as text, so one set can be copied, kept and pasted back. A colour is kept as its red,
+	-- green and blue. Things that are not data, such as the models and the fonts, are left out.
+	P.PresetLeftOut = { Model = true, TextModel = true, Font = true }
+	function P.IsColour(value)
+		return typeof(value) == "Color3"
+	end
+	function P.ToPlain(value, depth)
+		if depth > 8 then
+			return nil
+		end
+		if P.IsColour(value) then
+			return { R = value.R, G = value.G, B = value.B }
+		end
+		local kind = type(value)
+		if kind == "number" or kind == "string" or kind == "boolean" then
+			return value
+		end
+		if kind ~= "table" then
+			return nil
+		end
+		local plain = {}
+		for key, item in value do
+			if not P.PresetLeftOut[key] and (type(key) == "string" or type(key) == "number") then
+				local converted = P.ToPlain(item, depth + 1)
+				if converted ~= nil then
+					plain[key] = converted
+				end
+			end
+		end
+		return plain
+	end
+	function P.FromPlain(value)
+		if type(value) ~= "table" then
+			return value
+		end
+		if type(value.R) == "number" and type(value.G) == "number" and type(value.B) == "number" then
+			return Color3.new(value.R, value.G, value.B)
+		end
+		local result = {}
+		for key, item in value do
+			result[key] = P.FromPlain(item)
+		end
+		return result
+	end
+	function P.MergeInto(target, source)
+		for key, value in source do
+			if not P.PresetLeftOut[key] and value ~= nil then
+				local colour = P.IsColour(value) or (type(value) == "table" and type(value.R) == "number")
+				if type(value) == "table" and not colour and type(target[key]) == "table" then
+					P.MergeInto(target[key], value)
+				else
+					target[key] = value
+				end
+			end
+		end
+	end
+	-- The text of the ESP's settings, to copy and keep.
+	function ESP:Export()
+		return HttpService:JSONEncode({
+			Settings = P.ToPlain(ESP.Settings, 0),
+			Config = P.ToPlain(ESP.GlobalConfig, 0),
+			Players = P.ToPlain(ESP.Players, 0),
+		})
+	end
+	-- Applies a preset made by Export. Returns false and a reason when the text is not one.
+	function ESP:Import(text)
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(text)
+		end)
+		if not ok or type(data) ~= "table" then
+			return false, "that is not a preset"
+		end
+		data = P.FromPlain(data)
+		if type(data.Settings) == "table" then
+			P.MergeInto(ESP.Settings, data.Settings)
+		end
+		if type(data.Config) == "table" then
+			P.MergeInto(ESP.GlobalConfig, data.Config)
+		end
+		if type(data.Players) == "table" then
+			P.MergeInto(ESP.Players, data.Players)
+		end
+		ESP:ApplyTemplate()
+		return true
+	end
+	-- The players nearest the camera keep their ESP when the nearest limit is on; the rest are left out.
+	function P.RankPlayers()
+		local limit = ESP.GlobalConfig.NearestLimit or 0
+		local list = {}
+		for _, object in ESP.PlayerObjects do
+			if not object.Deleted then
+				table.insert(list, object)
+			end
+		end
+		table.sort(list, function(a, b)
+			return (a._LastDistance or math.huge) < (b._LastDistance or math.huge)
+		end)
+		for index, object in list do
+			object._Culled = limit > 0 and index > limit
+		end
+	end
 	function ESP:Build(tab, window)
 		P.Init()
 		if window and window.OnUnload then
@@ -26177,6 +26514,12 @@ do
 			config.IgnoreCharacter = value == true
 		end })
 
+		gPlayers:CreateToggle({ Name = "Show dead", Desc = "Draws the dead players in grey, instead of hiding them", CurrentValue = config.ShowDead == true, Flag = "ESP_ShowDead", Callback = function(value)
+			config.ShowDead = value == true
+		end })
+		gPlayers:CreateSlider({ Name = "Nearest players", Desc = "Only this many players nearest the camera keep their ESP; 0 keeps everyone", Range = { 0, 30 }, Increment = 1, CurrentValue = config.NearestLimit or 0, Flag = "ESP_NearestLimit", Callback = function(value)
+			config.NearestLimit = value
+		end })
 		local pageNames = tab:CreateSubTab({ Name = "Names" })
 		local gNames = pageNames:AddLeftGroupbox({ Name = "Names" })
 		gNames:CreateToggle({ Name = "Names", CurrentValue = config.Billboards, Flag = "ESP_Names", Callback = function(value)
@@ -26199,6 +26542,12 @@ do
 			ESP:ApplyTemplate()
 		end })
 
+		gNames:CreateToggle({ Name = "Display names", Desc = "Shows the display name instead of the user name", CurrentValue = config.DisplayNames == true, Flag = "ESP_DisplayNames", Callback = function(value)
+			config.DisplayNames = value == true
+		end })
+		gNames:CreateToggle({ Name = "Team name", Desc = "Adds the team name after the name", CurrentValue = config.TeamName == true, Flag = "ESP_TeamName", Callback = function(value)
+			config.TeamName = value == true
+		end })
 		local pageBoxes = tab:CreateSubTab({ Name = "Boxes" })
 		local gBoxes = pageBoxes:AddLeftGroupbox({ Name = "Boxes", Icon = "box" })
 		gBoxes:CreateDropdown({ Name = "2D box", Options = { "Off", "Full", "Corner", "Filled" }, CurrentOption = settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full", Flag = "ESP_Box2DMode", Callback = function(value)
@@ -26316,7 +26665,7 @@ do
 
 		local pageVisibility = tab:CreateSubTab({ Name = "Visibility" })
 		local gVisibility = pageVisibility:AddLeftGroupbox({ Name = "Visibility" })
-		gVisibility:CreateToggle({ Name = "Visible check colours", Desc = "Players you can see and players behind a wall in two colours", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
+		gVisibility:CreateToggle({ Name = "Wall check", Desc = "Green when any part of a player can be seen, red when none can", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
 			ESP.GlobalConfig.VisibleCheck = value == true
 		end })
 		gVisibility:CreateToggle({ Name = "Only visible", Desc = "Hides the players behind a wall", CurrentValue = ESP.GlobalConfig.VisibleOnly == true, Flag = "ESP_VisibleOnly", Callback = function(value)
@@ -26329,6 +26678,9 @@ do
 			config.FadeStart = value
 		end })
 
+		gVisibility:CreateSlider({ Name = "Check every", Desc = "Frames between two looks at a player, so the visible check costs less", Range = { 1, 10 }, Increment = 1, Suffix = " frames", CurrentValue = config.VisibleEvery or 1, Flag = "ESP_VisibleEvery", Callback = function(value)
+			config.VisibleEvery = value
+		end })
 		local pageOverlay = tab:CreateSubTab({ Name = "Overlay" })
 		local gOverlay = pageOverlay:AddLeftGroupbox({ Name = "Overlay", Icon = "crosshair" })
 		gOverlay:CreateToggle({ Name = "FOV circle", CurrentValue = ESP.GlobalConfig.FOV == true, Flag = "ESP_FOV", Callback = function(value)
@@ -26341,6 +26693,15 @@ do
 			ESP.GlobalConfig.Crosshair = value == true
 		end })
 
+		gOverlay:CreateToggle({ Name = "Radar", Desc = "A radar in the corner, turning with the view", CurrentValue = config.Radar == true, Flag = "ESP_Radar", Callback = function(value)
+			config.Radar = value == true
+		end })
+		gOverlay:CreateSlider({ Name = "Radar range", Range = { 50, 600 }, Increment = 10, Suffix = " studs", CurrentValue = config.RadarRange or 150, Flag = "ESP_RadarRange", Callback = function(value)
+			config.RadarRange = value
+		end })
+		gOverlay:CreateSlider({ Name = "Radar size", Range = { 80, 220 }, Increment = 10, Suffix = " px", CurrentValue = config.RadarSize or 110, Flag = "ESP_RadarSize", Callback = function(value)
+			config.RadarSize = value
+		end })
 		local pageColours = tab:CreateSubTab({ Name = "Colours" })
 		local gColours = pageColours:AddLeftGroupbox({ Name = "Colours" })
 		gColours:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
@@ -26361,10 +26722,38 @@ do
 			ESP:ApplyTemplate()
 		end })
 
+		gColours:CreateToggle({ Name = "Team colours", Desc = "Players are drawn in their team's colour", CurrentValue = config.TeamColours == true, Flag = "ESP_TeamColours", Callback = function(value)
+			config.TeamColours = value == true
+		end })
+		gColours:CreateToggle({ Name = "Friend colours", Desc = "Your friends are drawn in the friend colour, before the team colour", CurrentValue = config.FriendColours == true, Flag = "ESP_FriendColours", Callback = function(value)
+			config.FriendColours = value == true
+		end })
+		gColours:CreateColorPicker({ Name = "Friend colour", Color = config.FriendColor, Flag = "ESP_FriendColor", Callback = function(value)
+			config.FriendColor = value
+		end })
 		local pagePreview = tab:CreateSubTab({ Name = "Preview" })
 		local gPreview = pagePreview:AddLeftGroupbox({ Name = "Preview", Icon = "box" })
 		local view = gPreview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
 		ESP:AttachPreview(view)
+		-- Presets: the settings as text. Copy keeps them in the clipboard; Apply reads the text box back into the ESP.
+		local pagePresets = tab:CreateSubTab({ Name = "Presets" })
+		local gPresets = pagePresets:AddLeftGroupbox({ Name = "Preset" })
+		local presetText = ""
+		gPresets:CreateInput({ Name = "Preset text", Placeholder = "paste a preset here", Callback = function(text)
+			presetText = tostring(text or "")
+		end })
+		gPresets:CreateButton({ Name = "Apply preset", Callback = function()
+			local ok, reason = ESP:Import(presetText)
+			Library:Notify({ Title = "ESP", Content = ok and "Preset applied. Reopen the tabs to see the new values." or tostring(reason), Duration = 3 })
+		end })
+		gPresets:CreateButton({ Name = "Copy preset", Callback = function()
+			local text = ESP:Export()
+			presetText = text
+			if type(setclipboard) == "function" then
+				pcall(setclipboard, text)
+			end
+			Library:Notify({ Title = "ESP", Content = "Preset copied.", Duration = 2 })
+		end })
 
 	end
 end

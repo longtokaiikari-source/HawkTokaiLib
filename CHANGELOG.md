@@ -52,6 +52,15 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP held item**: `GlobalConfig.ShowTool` adds the tool a character holds after its name.
 - **ESP distance fade**: `GlobalConfig.Fade` fades the name and the 2D box with the distance, from `FadeStart` of the max distance (default 0.6).
 - **FOV circle and crosshair**: `GlobalConfig.FOV` with `FOVRadius` draws a ring around the centre of the game view, and `GlobalConfig.Crosshair` draws a crosshair there.
+- **ESP team colours**: `GlobalConfig.TeamColours` draws each player in its team's colour (Colours page).
+- **ESP friend colours**: `GlobalConfig.FriendColours` draws your friends in `FriendColor`, which wins over the team colour (Colours page).
+- **ESP display names and team name**: `GlobalConfig.DisplayNames` writes the display name instead of the user name, and `GlobalConfig.TeamName` adds the team name after it (Names page).
+- **ESP radar**: `GlobalConfig.Radar` draws a radar in the top right corner of the game view. Each player is a dot placed by where it is from the camera, and the radar turns with the view. `RadarRange` (studs) and `RadarSize` (pixels) set its scale (Overlay page).
+- **ESP visible check interval**: `GlobalConfig.VisibleEvery` (3 by default) sets how many frames pass between two looks at a player (Visibility page).
+- **ESP presets**: the Presets page copies the ESP's settings as text (`ESP:Export()`) and applies a preset back (`ESP:Import(text)`). Colours are kept, and the models and fonts are left out. The controls show the new values when the tabs are opened again.
+- **ESP show dead**: `GlobalConfig.ShowDead` draws dead players in grey instead of hiding them (Players page).
+- **ESP nearest players**: `GlobalConfig.NearestLimit` keeps the ESP of only that many players nearest the camera; 0 keeps everyone (Players page).
+- **UI segmented control**: `Tab:Segmented({ Name, Desc, Options, Default, Callback })` shows its choices as pills, with the chosen one lit. `Tab:CreateSegmented` is the same. The example has a demo on the Objects page.
 
 ### Changed
 
@@ -71,6 +80,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP arrow** is drawn with lines, in the box's style: a black outline under the coloured line, with the name and distance behind the tail. It reads the target's place in the camera's own frame, so it points the right way behind the camera too. `Arrow.Size` (default 12) sets its size, with a slider in the drawing tab. It used to be an image from the web.
 - **ESP tab, one page for each feature**: `Library.ESP:Build(tab, window)` takes the tab (not a sub tab) and makes the pages Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on, so the features no longer pile up on each other.
 - **ESP defaults**: the names, the distance and the highlight start off, and the 2D box and the skeleton are off until their pages turn them on.
+- **ESP colours in one place**: the highlight and the arrow take the same colour as the rest of the ESP, so a friend, a team or a visible or hidden player is drawn the same way everywhere.
+- **ESP wall check**: the check looks at several points of each player, the head, the body, the hands and the feet (or the six parts of an R6). A player is green when any point can be seen and red when none can. Parts that cannot collide, and see-through parts, do not block the check; other players do not block it either. A player behind the camera is red. The control is called Wall check, and `VisibleEvery` defaults to 1 (every frame).
 
 ### Fixed
 
@@ -87,6 +98,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Report popup**: the reasons sit in a grid inside the card. Before, four reasons ran past the card's left edge.
 - **Buttons that size themselves to their text** no longer stretch on press. They show a press as a colour change, because a button that follows its own text cannot hold a child sized by scale.
 - **A popped-out preview keeps spinning** while the main window is closed.
+- **ESP wall check** no longer decides from the head alone, which kept a player red while a hand or a foot was showing.
 
 ### Removed
 

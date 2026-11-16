@@ -2017,6 +2017,12 @@ The highlight can see through walls (`HighlightDepth = "Through walls"`, the def
 
 The ESP tab has one page for each feature: Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on. Nothing is on until its page says so, there is no master switch, and the players are always watched.
 
+Names has the display name and the team name. Colours has the team colours and the friend colour, and a friend's colour wins over the team's. Overlay has the radar, with its range and size. Visibility has how many frames pass between two looks at a player for the visible check.
+
+The wall check (Visibility page) draws a player green when any part of it can be seen, which covers a hand or a foot showing from behind a wall, and red when none can. It looks at the head, the body, the hands and the feet, or the six parts of an R6. Parts that cannot collide and see-through parts do not block it, and other players do not block it either. A player behind the camera is red.
+
+The Players page has a Show dead option (dead players in grey) and a Nearest players limit. The Presets page copies the settings as text and applies a preset back. `Tab:Segmented` is a row of pills for choosing one of a few modes.
+
 ### Testing without Roblox
 
 `tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:
