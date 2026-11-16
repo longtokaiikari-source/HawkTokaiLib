@@ -600,7 +600,7 @@ EspSingle:CreateButton({
             MaxDistance = 2000,
             Box2D = { Enabled = true, Color = Color3.fromRGB(255, 200, 0), Filled = false },
             Tracer = { Enabled = true, From = "Bottom", Color = Color3.fromRGB(255, 200, 0) }, -- Top, Bottom, Center or Mouse
-            Health = { Enabled = true }, -- a health bar, added to the original settings
+            Health = { Enabled = true }, -- a health bar, added to the defaults
             BeforeUpdate = colorByDistance,
             OnDestroyFunc = function()
                 EspTarget = nil

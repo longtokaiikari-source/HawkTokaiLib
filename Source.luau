@@ -24743,7 +24743,7 @@ for _, class in ipairs({ Library, Window, Tab }) do
 end
 
 -- // ESP // --
--- Ported from mstudio45/msesp v2.1.4 (MIT): the same objects, settings, callbacks and components. The drawing is
+-- The objects, settings, callbacks and components are its own. The drawing is
 -- Frames, so one code path draws over the game and over a 3D preview. Highlight, SelectionBox and the handle
 -- adornments need the world, so they are drawn in the game only.
 Library.ESP = Library.ESP or {}
@@ -24761,7 +24761,7 @@ do
 	ESP.RainbowStep = ESP.RainbowStep or 0
 	ESP.RainbowHue = ESP.RainbowHue or 0
 
-	-- The original's GlobalConfig names, plus Health. Font is a Font object, or nil for the library font.
+	-- The GlobalConfig names, plus Health. Font is a Font object, or nil for the library font.
 	ESP.GlobalConfig = ESP.GlobalConfig or {
 		IgnoreCharacter = false,
 		Rainbow = false,
@@ -24808,7 +24808,7 @@ do
 
 	P.ESPTypes = { text = true, sphereadornment = true, cylinderadornment = true, adornment = true, selectionbox = true, highlight = true }
 	P.TracerFrom = { top = true, bottom = true, center = true, mouse = true }
-	-- The eight corners are numbered like the original: 1-4 the back face at +Z, 5-8 the front face at -Z.
+	-- The eight corners are numbered: 1-4 the back face at +Z, 5-8 the front face at -Z.
 	P.Edges = { { 1, 2 }, { 2, 4 }, { 4, 3 }, { 3, 1 }, { 1, 5 }, { 5, 6 }, { 6, 8 }, { 8, 7 }, { 7, 5 }, { 2, 6 }, { 4, 8 }, { 3, 7 } }
 	P.R15 = {
 		"LowerTorso", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "LeftLowerLeg", "LeftUpperLeg", "LowerTorso",
@@ -24857,7 +24857,7 @@ do
 		return out
 	end
 
-	-- Fills the keys the data does not have from the template, the same as the original's Validate.
+	-- Fills the keys the data does not have from the template,.
 	function P.Validate(data, template)
 		if typeof(data) ~= "table" then
 			return P.Copy(template)
@@ -25022,7 +25022,7 @@ do
 		return Vector3.new((x * 0.5 + 0.5) * size.X, (0.5 - y * 0.5) * size.Y, depth), true
 	end
 
-	-- The eight corners of the model's bounding box, the same as the original's GetModelCorners.
+	-- The eight corners of the model's bounding box.
 	function P.Corners(scene, model)
 		local cframe, size
 		if model:IsA("Model") then
@@ -25159,7 +25159,7 @@ do
 		end
 		return object._MinX, object._MinY, object._MaxX, object._MaxY
 	end
-	-- The text size follows the box, as the original does: small far away, full size close up.
+	-- The text size follows the box: small far away, full size close up.
 	function P.TextSizeFor(object, size)
 		if ESP.GlobalConfig.DynamicText == false then
 			return size
@@ -25211,7 +25211,7 @@ do
 		end
 		return math.clamp((distance - start) / math.max(maxDistance - start, 1), 0, 1)
 	end
-	-- The name sits above the box and the distance below it, as in the original. Without a box, both sit over the
+	-- The name sits above the box and the distance below it. Without a box, both sit over the
 	-- head, so the character still gets its text.
 	function P.Billboard(object, scene)
 		local name = create("TextLabel", {
@@ -25506,7 +25506,7 @@ do
 		return component
 	end
 
-	-- The 2D box, as in the original. Full is a box with a black outline under the coloured line. Corner draws eight
+	-- The 2D box. Full is a box with a black outline under the coloured line. Corner draws eight
 	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside. The colour follows
 	-- the visible check, and the lines fade with the distance when Distance fade is on.
 	function P.Box2D(object, scene)
@@ -25600,7 +25600,7 @@ do
 		return component
 	end
 
-	-- The skeleton follows the original's part sequence. A part that is missing or behind the camera breaks the line.
+	-- The skeleton follows its part sequence. A part that is missing or behind the camera breaks the line.
 	function P.Skeleton(object, scene)
 		local model = object.CurrentSettings.Model
 		local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -25648,7 +25648,7 @@ do
 		return component
 	end
 
-	-- A health bar beside the 2D box. It is an addition to the original, which has no health bar.
+	-- A health bar beside the 2D box.
 	-- The health bar: on the left, on the right, or under the box. Gradient colours it from red to green by health.
 	-- Health number writes the health beside the bar, so the number reads without a second look.
 	function P.Health(object, scene)
@@ -26062,7 +26062,7 @@ do
 		end
 
 		-- One frame for this object: the scene, the distance, the screen position, the corners, the callbacks and the
-		-- components. The order is the original's.
+		-- components. The order is fixed.
 		function object:Render()
 			if object.Deleted then
 				return

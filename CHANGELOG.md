@@ -33,7 +33,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Check progress**: the executor check shows a progress bar with the number of tests done.
 - **Floating group boxes**: a popped-out box has a grip in its bottom-right corner that changes its width, kept for the next pop-out. Pressing a floating box brings it to the front of the others.
 - **Preview pop-out**: the 3D preview has a pop-out button in its header, like a group box's. It floats the preview in its own panel, which the header drags; the button or the slot docks it back with the same flight as a group box. A floating preview's grip changes its width and height.
-- **ESP port**: `Library.ESP` now has the original's objects and settings: `Add`, `Clear`, `Destroy`, per-object settings, the Highlight, SelectionBox and adornment types, the Tracer `Top` origin, the Arrow, the filled 2D box, the 3D box, the skeleton, the four callbacks and the global names. A health bar is added. The port follows mstudio45/msesp v2.1.4 (MIT).
+- **ESP**: `Library.ESP` now has its own objects and settings: `Add`, `Clear`, `Destroy`, per-object settings, the Highlight, SelectionBox and adornment types, the Tracer `Top` origin, the Arrow, the filled 2D box, the 3D box, the skeleton, the four callbacks and the global names. A health bar is added.
 - **ESP preview**: `Library.ESP:AttachPreview(handle)` draws the ESP over a 3D preview with the same settings and components as the game, without the highlight.
 - **Viewport handles**: a viewport handle now exposes `Window`, `Media`, `Camera` and `World`, so an overlay can draw on it.
 - **ESP tests**: `tests/esp_test.lua` is plain Lua, with no Python. It runs the ESP against a mock of the Roblox API and checks geometry, rules, components, callbacks and cleanup. It does not render.
@@ -41,7 +41,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 - **Player list**: `Tab:PlayerList({ Name, Height, Actions })`, a live list of the players in the server. Each row has the avatar, the name, the team colour and the distance, and a small button for each action you give it. Rows follow players joining and leaving.
 - **ESP corner box**: `Box2D.Style = "Corner"` draws eight short corner lines. `"Full"` (the default) keeps the box with a black outline under the coloured line.
-- **ESP text like the original**: the name sits above the box and the distance below it. Distances read in metres by default (`ESP.GlobalConfig.Meters = false` for studs), and the text scales with the box (`ESP.GlobalConfig.DynamicText`).
+- **ESP text**: the name sits above the box and the distance below it. Distances read in metres by default (`ESP.GlobalConfig.Meters = false` for studs), and the text scales with the box (`ESP.GlobalConfig.DynamicText`).
 - **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar from red to green.
 - **ESP tracer target**: `Tracer.To` is Feet (the default), Center or Head.
 - **R6 and R15 tests**: the test checks both rigs side by side, with the skeleton bones, the box, the health bar and the text.
@@ -61,6 +61,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **ESP show dead**: `GlobalConfig.ShowDead` draws dead players in grey instead of hiding them (Players page).
 - **ESP nearest players**: `GlobalConfig.NearestLimit` keeps the ESP of only that many players nearest the camera; 0 keeps everyone (Players page).
 - **UI segmented control**: `Tab:Segmented({ Name, Desc, Options, Default, Callback })` shows its choices as pills, with the chosen one lit. `Tab:CreateSegmented` is the same. The example has a demo on the Objects page.
+- **Credits**: the README credits the developer (longtokai) and the testers (dokkimane, longtokai).
 
 ### Changed
 
@@ -85,7 +86,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
-- The SelectionBox border colour has a default now. The original reads a `BorderColor` it never sets, which errors for the `SelectionBox` type.
+- The SelectionBox border colour has a default now. A `BorderColor` was read but never set, which errors for the `SelectionBox` type.
 - 3D preview drag on touch screens follows the finger, so dragging right turns the model right.
 - Button wave now starts where the mouse or finger really pressed. Before, a touch screen could show it in a fixed spot.
 - Button wave: presses on the right side of a button no longer show the wave toward the middle when the window is scaled down. The wave is now placed in the button's own units.
@@ -102,7 +103,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Removed
 
-- `tokaihub-esp.luau`, the standalone copy of mstudio45/msesp: `Library.ESP` replaces it. The copy had a second block after its final `return`, so it did not load, and its `SelectionBox` read a `BorderColor` it never set.
+- `tokaihub-esp.luau`, an earlier standalone copy of the ESP: `Library.ESP` replaces it. The copy had a second block after its final `return`, so it did not load, and its `SelectionBox` read a `BorderColor` it never set.
 - `assets/egg.mp4` is no longer used, so it is left out of the package. The video showed a black screen with no sound on the tested executor.
 - The hidden egg in the key gate, moved to Home.
 - The forced `Tahoma8` font in the Loader and the Example.

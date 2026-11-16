@@ -1986,7 +1986,7 @@ Whole-value colours take the same forms everywhere: a theme key string, a `Color
 
 ## ESP
 
-`Library.ESP` is a port of [mstudio45/msesp](https://github.com/mstudio45/msesp) v2.1.4, which declares the MIT license in its `wally.toml`. The objects, settings, callbacks and components are the same. The drawing uses Frames, so one code path draws over the game and over a 3D preview.
+`Library.ESP` has its own objects, settings, callbacks and components. The drawing uses Frames, so one code path draws over the game and over a 3D preview.
 
 ```lua
 local object = Library.ESP:Add({ Model = character, ESPType = "Highlight", Box2D = { Enabled = true } })
@@ -2003,7 +2003,7 @@ Library.ESP:AttachPreview(viewportHandle)  -- the ESP over a Tab:Viewport
 Library.ESP:Build(tab, Window)             -- the ESP tab: one page for each feature, colours and a preview
 ```
 
-Settings per object are the original's: `Name`, `Model`, `TextModel`, `Visible`, `Color`, `MaxDistance` (default 5000), `StudsOffset`, `TextSize`, `ESPType` (`Highlight`, `SelectionBox`, `SphereAdornment`, `CylinderAdornment`, `Adornment`, `Text`), `Thickness`, `Transparency`, `SurfaceColor`, `BorderColor`, `FillColor`, `OutlineColor`, `FillTransparency`, `OutlineTransparency`. The components are `Tracer` (`From`: `Top`, `Bottom`, `Center`, `Mouse`), `Arrow` (`CenterOffset`), `Box2D` (`Filled`), `Box3D` and `Skeleton`, plus `Health`, which the original does not have. The callbacks are `OnDestroy`, `OnDestroyFunc`, `BeforeUpdate` and `AfterUpdate`.
+Settings per object are: `Name`, `Model`, `TextModel`, `Visible`, `Color`, `MaxDistance` (default 5000), `StudsOffset`, `TextSize`, `ESPType` (`Highlight`, `SelectionBox`, `SphereAdornment`, `CylinderAdornment`, `Adornment`, `Text`), `Thickness`, `Transparency`, `SurfaceColor`, `BorderColor`, `FillColor`, `OutlineColor`, `FillTransparency`, `OutlineTransparency`. The components are `Tracer` (`From`: `Top`, `Bottom`, `Center`, `Mouse`), `Arrow` (`CenterOffset`), `Box2D` (`Filled`), `Box3D` and `Skeleton`, plus `Health`. The callbacks are `OnDestroy`, `OnDestroyFunc`, `BeforeUpdate` and `AfterUpdate`.
 
 `Highlight`, `SelectionBox` and the handle adornments need the world, so they are drawn in the game only. The preview draws the boxes, the skeleton, the tracer, the arrow, the names and the health bar. The name is a Frame label, so `Font` takes a Font object, not an `Enum.Font`.
 
@@ -2049,3 +2049,7 @@ Tab:PlayerList({
 
 Rows follow players joining and leaving, and the distances are read again every two seconds. The element returns a handle with `Refresh()` if you want to update it yourself.
 
+## Credits
+
+- **Developer:** longtokai
+- **Testers:** dokkimane, longtokai

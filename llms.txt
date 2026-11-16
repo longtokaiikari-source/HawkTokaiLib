@@ -160,7 +160,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
 
 ## ESP (Library.ESP)
-- Library.ESP:Add(settings) returns an object with Hide, Show, ToggleVisibility, SetEveryColor and Destroy. The settings and callbacks are the original msesp v2.1.4 ones.
+- Library.ESP:Add(settings) returns an object with Hide, Show, ToggleVisibility, SetEveryColor and Destroy.
 - Library.ESP:Clear() and Library.ESP:Destroy().
 - Library.ESP.GlobalConfig: IgnoreCharacter, Rainbow, Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font.
 - Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
@@ -180,3 +180,4 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Wall check (GlobalConfig.VisibleCheck): green if any point (head, body, hands, feet; R6: six parts) can be reached from the camera, red if none can; non-colliding and see-through parts and other players do not block; behind the camera is red. VisibleEvery defaults to 1.
 - ESP: GlobalConfig.ShowDead (grey dead players), GlobalConfig.NearestLimit (0 keeps everyone). Presets: ESP:Export() returns JSON text, ESP:Import(text) returns true or false, reason.
 - UI: Tab:Segmented({ Name, Desc, Options, Default, Callback }) (alias Tab:CreateSegmented) is a row of pills with one lit; handle has Value and Set(value, silent).
+- Credits: developer longtokai; testers dokkimane and longtokai.
