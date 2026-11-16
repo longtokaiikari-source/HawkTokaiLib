@@ -660,7 +660,16 @@ local function mockGroupbox()
 	local function record(kind)
 		return function(self, opts)
 			controls[opts.Flag or opts.Name] = { kind = kind, opts = opts }
-			return {}
+			local handle = { Value = opts.CurrentValue or opts.CurrentOption or opts.Color }
+			function handle.Set(self2, value, silent)
+				handle.Value = value
+				controls[opts.Flag or opts.Name].lastSet = value
+			end
+			if opts.Flag then
+				Library.Flags = Library.Flags or {}
+				Library.Flags[opts.Flag] = handle
+			end
+			return handle
 		end
 	end
 	group.CreateToggle = record("Toggle")
@@ -1045,9 +1054,17 @@ check(type(saved) == "string" and string.find(saved, "Settings", 1, true) ~= nil
 set("ESP_TextSize", 12)
 set("ESP_Color", Color3.fromRGB(255, 255, 255))
 check(ESP:Import(saved) == true and ESP.Settings.TextSize == 18, "a preset brings back the text size")
+check(Library.Flags["ESP_TextSize"].Value == 18, "the text size control shows the value a preset applied")
+check(math.abs(Library.Flags["ESP_Color"].Value.G - 200 / 255) < 0.01, "the colour control shows the colour a preset applied")
+set("ESP_TracerFrom", "Mouse")
+local withMouse = ESP:Export()
+set("ESP_TracerFrom", "Top")
+check(ESP:Import(withMouse) == true and Library.Flags["ESP_TracerFrom"].Value == "Mouse", "the tracer control shows the stored choice after a preset")
 check(math.abs(ESP.Settings.Color.G - 200 / 255) < 0.01 and math.abs(ESP.Settings.Color.R - 10 / 255) < 0.01, "a preset brings back the colour")
 local refused, reason = ESP:Import("not a preset")
 check(refused == false and reason ~= nil, "text that is not a preset is refused")
+ESP.Players.Enabled = false
+check(ESP:Import('{"Players":{"Enabled":false,"HideTeammates":false}}') == true and ESP.Players.Enabled == true, "a preset cannot switch the players off: they are always watched")
 check(#WARNINGS == 0, "no warnings from the new options")
 
 -- 12. Clear removes the objects, and the automatic players make theirs again on the next frame.
