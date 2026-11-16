@@ -756,7 +756,7 @@ check(attachment.Object.Components.Box2D.Frames[1].Visible == true, "the preview
 check(#attachment.Overlay._children > 0, "the preview draws into its overlay")
 check(#WARNINGS == 0, "no warnings in the preview")
 
--- 8. Selection box with a border colour that is set (the original reads a border colour it never set).
+-- 8. Selection box with a border colour that is set (a border colour that was read but never set used to error).
 local selection = ESP:Add({ Model = rightSide.Character, ESPType = "selectionbox", BorderColor = Color3.new(1, 0, 0) })
 step(2)
 local selBox = selection.Components.Highlighter.Instances[1]
@@ -779,7 +779,7 @@ check(counts.before >= 3 and counts.after >= 3, "the before and after callbacks 
 cb:Destroy()
 check(counts.destroyed == 1 and counts.func == 1, "the destroy callbacks run once each")
 
--- 10. A bad ESPType is refused, the way the original refuses it.
+-- 10. A bad ESPType is refused.
 check(pcall(function() ESP:Add({ Model = near.Character, ESPType = "bogus" }) end) == false, "an invalid ESPType is refused")
 
 -- 11. Rainbow changes the colour every frame.
