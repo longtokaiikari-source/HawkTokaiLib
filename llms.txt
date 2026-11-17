@@ -159,26 +159,12 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - [README: Configs](README.md#configs): file format, share codes, autoload per account.
 - [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
 
-## ESP (Library.ESP)
-- Library.ESP:Add(settings) returns an object with Hide, Show, ToggleVisibility, SetEveryColor and Destroy.
-- Library.ESP:Clear() and Library.ESP:Destroy().
-- Library.ESP.GlobalConfig: IgnoreCharacter, Rainbow, Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font.
-- Library.ESP.Players (Enabled, HideTeammates, AllyColor) and Library.ESP.Settings (the template), with Library.ESP:ApplyTemplate().
-- Library.ESP:AttachPreview(viewportHandle) draws over a Tab:Viewport. Library.ESP:Build(tab, window) makes the ESP tab.
-- tests/esp_test.lua: plain Lua 5.3+ test of the ESP block in Source.luau against a Roblox API mock. Geometry, rules, components and cleanup only, no rendering.
 - Box2D.Style: "Full" (default, black outline under the line) or "Corner" (eight corner lines). Tracer.To: "Feet" (default), "Center", "Head". Health.Side: "Left" (default), "Right", "Bottom"; Health.Gradient defaults on.
-- Name above the 2D box, distance below it; GlobalConfig.Meters (default on, studs x 0.28) and GlobalConfig.DynamicText (default on) scale the text with the box.
 
 ## Player list
 - `Tab:PlayerList({ Name, Height, Actions })`: live list of the players in the server. Actions = { { Name, Callback(player) } }. Rows follow joins and leaves; distances refresh every 2 seconds. Returns a handle with Refresh().
 - Arrow: drawn with lines, not an image. Shows for a target off the screen or behind the camera; the direction comes from the camera's own frame. Arrow.Size (default 12), Arrow.CenterOffset (ring radius at 1080p, default 300).
 - Highlight: HighlightDepth = "Through walls" (default, AlwaysOnTop) or "Behind walls" (Occluded); FillTransparency and OutlineTransparency sliders.
-- Visible check: GlobalConfig.VisibleCheck (colours: VisibleColor, HiddenColor), GlobalConfig.VisibleOnly (hides the hidden). Ray from camera to head.
-- Extras, all off by default: GlobalConfig.HealthText, HeadDots, ShowTool, Fade (FadeStart 0.6 of max distance), FOV (FOVRadius), Crosshair.
-- ESP tab: Library.ESP:Build(tab, window) makes one page per feature (Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours, Preview). Each page turns its own feature on; everything is off by default; no master switch; players are always watched.
-- ESP extras: GlobalConfig.TeamColours, FriendColours (FriendColor wins over team), DisplayNames, TeamName, Radar (RadarRange studs, RadarSize px, dots turn with the view), VisibleEvery (frames between visible checks, default 3). The highlight and the arrow use the same colour rules as the rest of the ESP.
-- Wall check (GlobalConfig.VisibleCheck): green if any point (head, body, hands, feet; R6: six parts) can be reached from the camera, red if none can; non-colliding and see-through parts and other players do not block; behind the camera is red. VisibleEvery defaults to 1.
-- ESP: GlobalConfig.ShowDead (grey dead players), GlobalConfig.NearestLimit (0 keeps everyone). Presets: ESP:Export() returns JSON text, ESP:Import(text) returns true or false, reason.
 - UI: Tab:Segmented({ Name, Desc, Options, Default, Callback }) (alias Tab:CreateSegmented) is a row of pills with one lit; handle has Value and Set(value, silent).
 - Credits: developer longtokai; testers dokkimane and longtokai.
-- Presets apply at once: every ESP control is refreshed after ESP:Import (silently, without its callback). Players stay enabled whatever a preset says.
+- Example.luau has an ESP tab, like Main: it loads ESP.luau from this repo with `Library.ESP = loadstring(...)()(Library)`. Source.luau never builds the ESP.

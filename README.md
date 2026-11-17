@@ -42,7 +42,7 @@ Settings:CreateConfigManager({ Side = "Left" })
 Settings:CreateThemeManager({ Side = "Right" })
 ```
 
-`Example.luau` is a full showcase of every element: it loads `Source.luau` from this repo, then builds the demo. `Source.luau` is the library itself, readable.
+`Example.luau` is a full showcase of every element, the ESP included as its own tab: it loads `ESP.luau` from this repo. `Source.luau` never builds the ESP on its own. The ESP's own docs are in `esp/`. `Source.luau` is the library itself, readable.
 
 ### Highlights
 
@@ -1984,57 +1984,6 @@ Whole-value colours take the same forms everywhere: a theme key string, a `Color
 | --- | --- |
 | `HawkTokaiLib.Colorize(text, color)` | Wraps `text` in a colour. A theme key gives a tag that follows the theme; anything else is baked in. `HawkTokaiLib:Colorize(...)` works too. |
 
-## ESP
-
-`Library.ESP` has its own objects, settings, callbacks and components. The drawing uses Frames, so one code path draws over the game and over a 3D preview.
-
-```lua
-local object = Library.ESP:Add({ Model = character, ESPType = "Highlight", Box2D = { Enabled = true } })
-object:Hide()                              -- or :Show(), :ToggleVisibility(), :SetEveryColor(color, true)
-object:Destroy()
-Library.ESP:Clear()                        -- removes every object
-Library.ESP:Destroy()                      -- removes everything, the preview too
-
-Library.ESP.GlobalConfig.Rainbow = true    -- also Billboards, Distance, Highlighters, Tracers, Arrows, Boxes2D, Boxes3D, Skeleton, Health, Font, IgnoreCharacter
-Library.ESP.Players.Enabled = true         -- one ESP per player, with HideTeammates and AllyColor
-Library.ESP.Settings.Box2D.Enabled = true  -- the template for the players and the preview
-Library.ESP:ApplyTemplate()                -- pushes the template to the objects that exist
-Library.ESP:AttachPreview(viewportHandle)  -- the ESP over a Tab:Viewport
-Library.ESP:Build(tab, Window)             -- the ESP tab: one page for each feature, colours and a preview
-```
-
-Settings per object are: `Name`, `Model`, `TextModel`, `Visible`, `Color`, `MaxDistance` (default 5000), `StudsOffset`, `TextSize`, `ESPType` (`Highlight`, `SelectionBox`, `SphereAdornment`, `CylinderAdornment`, `Adornment`, `Text`), `Thickness`, `Transparency`, `SurfaceColor`, `BorderColor`, `FillColor`, `OutlineColor`, `FillTransparency`, `OutlineTransparency`. The components are `Tracer` (`From`: `Top`, `Bottom`, `Center`, `Mouse`), `Arrow` (`CenterOffset`), `Box2D` (`Filled`), `Box3D` and `Skeleton`, plus `Health`. The callbacks are `OnDestroy`, `OnDestroyFunc`, `BeforeUpdate` and `AfterUpdate`.
-
-`Highlight`, `SelectionBox` and the handle adornments need the world, so they are drawn in the game only. The preview draws the boxes, the skeleton, the tracer, the arrow, the names and the health bar. The name is a Frame label, so `Font` takes a Font object, not an `Enum.Font`.
-
-### Looks: box, text, health and tracer
-
-`Box2D.Style` is `"Full"` (a box with a black outline) or `"Corner"` (eight corner lines). `Health.Side` is `"Left"`, `"Right"` or `"Bottom"`, and `Health.Gradient` colours it from red to green. `Tracer.To` is `"Feet"` (the default, the bottom middle of the box), `"Center"` or `"Head"`. The name sits above the box and the distance below it. `ESP.GlobalConfig.Meters` (on by default) reads distances in metres, and `ESP.GlobalConfig.DynamicText` scales the text with the box. R6 and R15 both get the box from the character's bounding box and their own skeleton.
-
-The arrow for a target off the screen or behind you is drawn with lines, like the box: a black outline under the coloured line, with the name and distance behind the tail. `Arrow.Size` sets its size (default 12), and `Arrow.CenterOffset` sets how far it sits from the centre at 1080p (default 300).
-
-The highlight can see through walls (`HighlightDepth = "Through walls"`, the default) or not (`"Behind walls"`). The visible check (`GlobalConfig.VisibleCheck`) colours players you can see and players behind a wall in two colours, and `GlobalConfig.VisibleOnly` hides the second kind. `GlobalConfig.HealthText`, `HeadDots`, `ShowTool`, `Fade`, `FOV`, `FOVRadius` and `Crosshair` turn on the health number, the head dot, the held item, the distance fade, the FOV ring and the crosshair. The Drawing tab has a control for each.
-
-The ESP tab has one page for each feature: Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on. Nothing is on until its page says so, there is no master switch, and the players are always watched.
-
-Names has the display name and the team name. Colours has the team colours and the friend colour, and a friend's colour wins over the team's. Overlay has the radar, with its range and size. Visibility has how many frames pass between two looks at a player for the visible check.
-
-The wall check (Visibility page) draws a player green when any part of it can be seen, which covers a hand or a foot showing from behind a wall, and red when none can. It looks at the head, the body, the hands and the feet, or the six parts of an R6. Parts that cannot collide and see-through parts do not block it, and other players do not block it either. A player behind the camera is red.
-
-The Players page has a Show dead option (dead players in grey) and a Nearest players limit. The Presets page copies the settings as text and applies a preset back. `Tab:Segmented` is a row of pills for choosing one of a few modes.
-
-### Testing without Roblox
-
-`tests/backdrop_test.lua` checks that the backdrop's light goes out with the Backdrop Tint. Run it the same way: `lua tests/backdrop_test.lua` from the project folder.
-
-`tests/esp_test.lua` is plain Lua. It reads the ESP block from `Source.luau`, runs it against a mock of the Roblox API, then runs a scenario. From the project folder, run it with Lua 5.3 or newer:
-
-```
-lua tests/esp_test.lua
-```
-
-It checks the geometry, the rules, the components, the callbacks and the cleanup. It does not render, so run it in a real executor before you trust a build.
-
 ## Player list
 
 `Tab:PlayerList` is a live list of the players in the server. Each row shows the avatar, the name, the team colour and the distance. Give it actions and each row gets a small button for each one.
@@ -2044,7 +1993,7 @@ Tab:PlayerList({
     Name = "Players",
     Height = 260,
     Actions = {
-        { Name = "ESP", Callback = function(player) print("ESP", player.Name) end },
+        { Name = "Print", Callback = function(player) print("Print", player.Name) end },
     },
 })
 ```

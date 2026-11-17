@@ -33,41 +33,20 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Check progress**: the executor check shows a progress bar with the number of tests done.
 - **Floating group boxes**: a popped-out box has a grip in its bottom-right corner that changes its width, kept for the next pop-out. Pressing a floating box brings it to the front of the others.
 - **Preview pop-out**: the 3D preview has a pop-out button in its header, like a group box's. It floats the preview in its own panel, which the header drags; the button or the slot docks it back with the same flight as a group box. A floating preview's grip changes its width and height.
-- **ESP**: `Library.ESP` now has its own objects and settings: `Add`, `Clear`, `Destroy`, per-object settings, the Highlight, SelectionBox and adornment types, the Tracer `Top` origin, the Arrow, the filled 2D box, the 3D box, the skeleton, the four callbacks and the global names. A health bar is added.
-- **ESP preview**: `Library.ESP:AttachPreview(handle)` draws the ESP over a 3D preview with the same settings and components as the game, without the highlight.
 - **Viewport handles**: a viewport handle now exposes `Window`, `Media`, `Camera` and `World`, so an overlay can draw on it.
-- **ESP tests**: `tests/esp_test.lua` is plain Lua, with no Python. It runs the ESP against a mock of the Roblox API and checks geometry, rules, components, callbacks and cleanup. It does not render.
 - **Brand mark**: a round badge with an accent ring on the window header, the loader and the key gate.
 - **Discord invite** `https://discord.gg/deVVQEVybd` is used by the Home example, the key gate and the executor card.
 - **Player list**: `Tab:PlayerList({ Name, Height, Actions })`, a live list of the players in the server. Each row has the avatar, the name, the team colour and the distance, and a small button for each action you give it. Rows follow players joining and leaving.
-- **ESP corner box**: `Box2D.Style = "Corner"` draws eight short corner lines. `"Full"` (the default) keeps the box with a black outline under the coloured line.
-- **ESP text**: the name sits above the box and the distance below it. Distances read in metres by default (`ESP.GlobalConfig.Meters = false` for studs), and the text scales with the box (`ESP.GlobalConfig.DynamicText`).
-- **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar from red to green.
-- **ESP tracer target**: `Tracer.To` is Feet (the default), Center or Head.
 - **R6 and R15 tests**: the test checks both rigs side by side, with the skeleton bones, the box, the health bar and the text.
-- **ESP highlight depth**: `HighlightDepth` is `"Through walls"` (the default, always on top) or `"Behind walls"` (occluded by walls). Adornments and selection boxes follow it too. The fill and outline transparency have sliders.
-- **ESP visible check**: `GlobalConfig.VisibleCheck` colours a player you can see and one behind a wall in two colours (`VisibleColor` and `HiddenColor`). `GlobalConfig.VisibleOnly` hides the players behind a wall. A ray from the camera to the head decides, and the local character and the player are not in the way.
-- **ESP health number**: `GlobalConfig.HealthText` writes the health beside the health bar.
-- **ESP head dot**: `GlobalConfig.HeadDots` draws a small dot on each head in view.
-- **ESP held item**: `GlobalConfig.ShowTool` adds the tool a character holds after its name.
-- **ESP distance fade**: `GlobalConfig.Fade` fades the name and the 2D box with the distance, from `FadeStart` of the max distance (default 0.6).
-- **FOV circle and crosshair**: `GlobalConfig.FOV` with `FOVRadius` draws a ring around the centre of the game view, and `GlobalConfig.Crosshair` draws a crosshair there.
-- **ESP team colours**: `GlobalConfig.TeamColours` draws each player in its team's colour (Colours page).
-- **ESP friend colours**: `GlobalConfig.FriendColours` draws your friends in `FriendColor`, which wins over the team colour (Colours page).
-- **ESP display names and team name**: `GlobalConfig.DisplayNames` writes the display name instead of the user name, and `GlobalConfig.TeamName` adds the team name after it (Names page).
-- **ESP radar**: `GlobalConfig.Radar` draws a radar in the top right corner of the game view. Each player is a dot placed by where it is from the camera, and the radar turns with the view. `RadarRange` (studs) and `RadarSize` (pixels) set its scale (Overlay page).
-- **ESP visible check interval**: `GlobalConfig.VisibleEvery` (3 by default) sets how many frames pass between two looks at a player (Visibility page).
-- **ESP presets**: the Presets page copies the ESP's settings as text (`ESP:Export()`) and applies a preset back (`ESP:Import(text)`). Colours are kept, and the models and fonts are left out. The controls update at once, and the players stay watched whatever a preset says.
-- **ESP show dead**: `GlobalConfig.ShowDead` draws dead players in grey instead of hiding them (Players page).
-- **ESP nearest players**: `GlobalConfig.NearestLimit` keeps the ESP of only that many players nearest the camera; 0 keeps everyone (Players page).
 - **UI segmented control**: `Tab:Segmented({ Name, Desc, Options, Default, Callback })` shows its choices as pills, with the chosen one lit. `Tab:CreateSegmented` is the same. The example has a demo on the Objects page.
 - **Credits**: the README credits the developer (longtokai) and the testers (dokkimane, longtokai).
 - **Backdrop test**: `tests/backdrop_test.lua` runs the backdrop's light step on its own, with plain Lua.
 
 ### Changed
 
-- The example's ESP tab shows the automatic players, ESP for one model with `Library.ESP:Add`, and the show, remove and clear buttons.
-- The ESP API is replaced by the port's: `Add`, `Clear`, `Destroy`, `AttachPreview`, `Players`, `Settings` and `GlobalConfig`. The old `Start`, `Stop`, `Attach`, `Detach`, `Shutdown` and `Config` are gone. The tab is still `Library.ESP:Build(sub, Window)`.
+- **Example**: has an `ESP` tab, like Main. It loads `ESP.luau` from this repo; `Source.luau` never builds the ESP.
+- **ESP is not in the library**: `Source.luau` never builds it. `Example.luau` loads `ESP.luau` from this repo and shows the ESP tab. Its docs are in `esp/`.
+
 - The executor check waits at most four seconds for a character, and stops waiting for slow tests after twelve seconds.
 - Key gate redesign: wider panel, brand badge, a "Secured with Junkie" chip, a focus ring on the key input, and hover and press feel on its buttons.
 - Keybind waiting state shows dots instead of `...`.
@@ -78,12 +57,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Press feel on every small button**: a press squeezes the button to 97%, and the release eases back without overshooting. The light sweeps across the visible shape only. Settings button rows, home quick actions and the dropdown's Select all and Clear all use the same feel.
 - **FPS and ping history**: each bar keeps the colour it was read with. The newest bar is strongest, older bars fade, and empty slots are dim.
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
-- **ESP measures every object in front of the camera**, so the text, the health bar and the tracer all have the box to work from.
-- **ESP arrow** is drawn with lines, in the box's style: a black outline under the coloured line, with the name and distance behind the tail. It reads the target's place in the camera's own frame, so it points the right way behind the camera too. `Arrow.Size` (default 12) sets its size, with a slider in the drawing tab. It used to be an image from the web.
-- **ESP tab, one page for each feature**: `Library.ESP:Build(tab, window)` takes the tab (not a sub tab) and makes the pages Players, Names, Boxes, Highlight, Tracers, Health, Skeleton, Arrows, Visibility, Overlay, Colours and Preview. Each page turns its own feature on, so the features no longer pile up on each other.
-- **ESP defaults**: the names, the distance and the highlight start off, and the 2D box and the skeleton are off until their pages turn them on.
-- **ESP colours in one place**: the highlight and the arrow take the same colour as the rest of the ESP, so a friend, a team or a visible or hidden player is drawn the same way everywhere.
-- **ESP wall check**: the check looks at several points of each player, the head, the body, the hands and the feet (or the six parts of an R6). A player is green when any point can be seen and red when none can. Parts that cannot collide, and see-through parts, do not block the check; other players do not block it either. A player behind the camera is red. The control is called Wall check, and `VisibleEvery` defaults to 1 (every frame).
 
 ### Fixed
 
@@ -100,20 +73,15 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Report popup**: the reasons sit in a grid inside the card. Before, four reasons ran past the card's left edge.
 - **Buttons that size themselves to their text** no longer stretch on press. They show a press as a colour change, because a button that follows its own text cannot hold a child sized by scale.
 - **A popped-out preview keeps spinning** while the main window is closed.
-- **ESP wall check** no longer decides from the head alone, which kept a player red while a hand or a foot was showing.
-- **ESP tracer and highlight dropdowns** show the choice that is stored, not a fixed one.
 - **Path names** in the file list drop Windows separators too, so a file name is read the same on both systems.
 - **Backdrop light** follows the Backdrop Tint. Before, the glow, the embers, the petals, the matrix and the fireflies stayed on at zero tint; now they go out with it, and snow and rain are unchanged.
-- **Page row lights**: the lights and arrows at the ends of a long row of pages (the sub tabs, like ESP's) show only while pages are out of view on that side. Before, the far end kept its light after the row was dragged to the end, when the window was scaled below full size.
 
 ### Removed
 
-- `tokaihub-esp.luau`, an earlier standalone copy of the ESP: `Library.ESP` replaces it. The copy had a second block after its final `return`, so it did not load, and its `SelectionBox` read a `BorderColor` it never set.
 - `assets/egg.mp4` is no longer used, so it is left out of the package. The video showed a black screen with no sound on the tested executor.
 - The hidden egg in the key gate, moved to Home.
 - The forced `Tahoma8` font in the Loader and the Example.
 - The music track and its ID from the Example.
-- **Automatic players switch**: the players are always watched, so there is no master switch to turn ESP on. The first-run switch-on of the 2D box and the skeleton is gone too.
 
 
 ## [0.1.0] - the fork
