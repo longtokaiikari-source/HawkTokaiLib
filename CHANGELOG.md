@@ -46,6 +46,11 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
+- **Sliders**: the filled part runs from a deeper accent at the start to the bright accent at the knob, and the knob has a light ring so it stands clear of the track.
+- **Dialogs**: the icon and a hairline along the top take the dialog's type colour (success, warning or error), and the card has a faint sheen.
+- **Groupbox headers**: the icon sits in a small accent-tinted tile, and a hairline separates the header from the body on every tab.
+- **Keybind list**: each key is a keycap chip, a dot lights up in the accent colour while its toggle is on, and hold or toggle is written beside the key.
+- **Watermark**: a pill with an accent dot before the title, and small FPS, PING and TIME labels with their values beside them. FPS and ping are coloured green, amber or red by how good they are.
 - **Home world clock hands**: each hand is now a frame centred on the face, so the hands turn about the middle of the clock instead of drifting off it.
 - **Home**: cards have a faint light along the top, the banner has an accent line along its top edge, and each stat figure has an accent bar beside it.
 - **Example**: has an `ESP` tab, like Main. It loads `ESP.luau` from this repo; `Source.luau` never builds the ESP.

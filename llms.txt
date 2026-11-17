@@ -170,3 +170,8 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Example.luau has an ESP tab, like Main: it loads ESP.luau from this repo with `Library.ESP = loadstring(...)()(Library)`. Source.luau never builds the ESP.
 - Home: an In server card (player headshots), a rotating Tip card (Home.Tips), a Shortcuts card (Home.Shortcuts: { Name, Icon, Callback }), and a time-of-day greeting unless Home.Welcome is set.
 - Home world clock: analogue face with turning hour, minute and second hands, beside the digital time, city and date. Clock.Offset sets the starting GMT offset; the card picks the rest.
+- Watermark: a pill with an accent dot before the title; FPS, PING and TIME labels with values; FPS and ping coloured green, amber or red by quality.
+- Keybind list: each key is a keycap chip; a dot lights in the accent colour while its toggle is on; hold or toggle is shown beside the key.
+- Groupbox headers: the icon sits in an accent-tinted tile; a hairline separates the header from the body.
+- Dialogs: icon and a top hairline take the type colour (success, warning, error); faint sheen on the card.
+- Sliders: the fill runs from a deeper accent to the bright accent; the knob has a light ring.

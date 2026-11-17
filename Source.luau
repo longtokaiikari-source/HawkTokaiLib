@@ -2283,6 +2283,14 @@ function Tab:Slider(opts)
         Parent = track,
     })
     corner(fill, UDim.new(1, 0))
+    -- The filled part runs from a deeper accent at the start to the bright accent at the knob.
+    create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Theme.Accent:Lerp(Theme.AccentDark, 0.35)),
+            ColorSequenceKeypoint.new(1, Theme.Accent),
+        }),
+        Parent = fill,
+    })
 
     local knobGlow = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2305,6 +2313,14 @@ function Tab:Slider(opts)
         Parent = track,
     })
     corner(knob, UDim.new(1, 0))
+    -- A light ring around the knob, so it stands clear of the filled track under it.
+    create("UIStroke", {
+        Color = Color3.new(1, 1, 1),
+        Transparency = 0.2,
+        Thickness = 1.5,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        Parent = knob,
+    })
 
     -- The press catcher hugs the track: a thin band around the bar, a little wider at both ends,
     -- so a press in the empty space above or below the bar does nothing. Only the bar and the
@@ -11192,20 +11208,43 @@ function Tab:Groupbox(opts, icon)
         BorderSizePixel = 0,
         Parent = header,
     })
+    -- A hairline where the header meets the body, so the two read as separate parts.
+    create("Frame", {
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.fromScale(0, 1),
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Theme.Stroke,
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = header,
+    })
     local titleX = 14
     if opts.Icon then
-        local headerIcon = create("ImageLabel", {
+        -- The icon sits in a small accent-tinted tile, so each group's header has a clear mark.
+        local chip = create("Frame", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 14, 0.5, 0),
+            Position = UDim2.new(0, 10, 0.5, 0),
+            Size = UDim2.fromOffset(22, 22),
+            BackgroundColor3 = Theme.Accent,
+            BackgroundTransparency = 0.85,
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            Parent = header,
+        })
+        corner(chip, UDim.new(0, 7))
+        local headerIcon = create("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(14, 14),
             BackgroundTransparency = 1,
             ImageColor3 = Theme.Accent,
             ScaleType = Enum.ScaleType.Fit,
-            ZIndex = 2,
-            Parent = header,
+            ZIndex = 3,
+            Parent = chip,
         })
         applyIcon(headerIcon, opts.Icon)
-        titleX = 37
+        titleX = 40
     end
     local collapseButton = create("ImageLabel", {
         AnchorPoint = Vector2.new(1, 0.5),
@@ -21667,6 +21706,8 @@ end
 
 function Window:Dialog(opts)
     opts = normalize(opts, { Text = "Content", Message = "Content" })
+    -- The dialog takes the colour of its type (success, warning or error), so the hairline and icon say what kind it is.
+    local accent = NOTIFY_COLORS[opts.Type] or Theme.Accent
     if self._dialog then
         self._dialog.Close()
     end
@@ -21702,12 +21743,34 @@ function Window:Dialog(opts)
     })
     corner(card, UDim.new(0, 10))
     local cardStroke = stroke(card, Theme.Stroke, 1)
+    -- A faint light at the top of the card, so it reads as a raised panel.
+    create("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(Color3.new(1, 1, 1)),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.95),
+            NumberSequenceKeypoint.new(0.5, 1),
+        }),
+        Parent = card,
+    })
     local cardScale = create("UIScale", { Scale = 0.94, Parent = card })
     local fading = {}
+    -- A thin line along the top edge, in the dialog's colour, inset clear of the rounded corners.
+    local hairline = create("Frame", {
+        Position = UDim2.fromOffset(14, 0),
+        Size = UDim2.new(1, -28, 0, 2),
+        BackgroundColor3 = accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 42,
+        Parent = card,
+    })
+    corner(hairline, UDim.new(1, 0))
+    table.insert(fading, { hairline, "BackgroundTransparency", 0.15 })
 
     local titleOffset = 0
     if opts.Icon then
-        local holder, image = glowIcon(card, opts.Icon, Theme.Accent, UDim2.new(0, PAD, 0, PAD + 9))
+        local holder, image = glowIcon(card, opts.Icon, accent, UDim2.new(0, PAD, 0, PAD + 9))
         image.ImageTransparency = 1
         holder.ZIndex = 42
         image.ZIndex = 42
@@ -24356,21 +24419,22 @@ function Window:SetWatermark(opts)
             ZIndex = 40,
             Parent = self.Gui,
         })
-        corner(frame, UDim.new(0, 6))
+        corner(frame, UDim.new(0, 13))
+        create("UIGradient", {
+            Rotation = 90,
+            Color = ColorSequence.new(Color3.new(1, 1, 1)),
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.94),
+                NumberSequenceKeypoint.new(1, 1),
+            }),
+            Parent = frame,
+        })
         stroke(frame)
-        padding(frame, 10, 10)
+        padding(frame, 12, 12)
         self:_dragOverlay(frame, "WatermarkPosition")
         wm = {
             Frame = frame,
-            Readout = label({
-                Size = UDim2.new(0, 0, 1, 0),
-                AutomaticSize = Enum.AutomaticSize.X,
-                TextSize = 12,
-                TextColor3 = Theme.Text,
-                TextTruncate = Enum.TextTruncate.None,
-                ZIndex = 41,
-                Parent = frame,
-            }),
+            Slots = self:_buildWatermarkSlots(frame),
             Text = self.Title,
             Corner = "TopRight",
             FPS = false,
@@ -24469,30 +24533,142 @@ function Window:SetWatermarkVisible(visible)
     return self
 end
 
+-- The pill's readouts, each in its own slot: the title with an accent dot, then FPS, ping and time, each with a small
+-- label. A slot shows only when it has something to say, and every visible slot after the first gets a thin divider.
+function Window:_buildWatermarkSlots(frame)
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = frame,
+    })
+    local function slot(order)
+        local holder = create("Frame", {
+            Size = UDim2.new(0, 0, 1, 0),
+            AutomaticSize = Enum.AutomaticSize.X,
+            BackgroundTransparency = 1,
+            LayoutOrder = order,
+            Visible = false,
+            ZIndex = 41,
+            Parent = frame,
+        })
+        create("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            Padding = UDim.new(0, 5),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent = holder,
+        })
+        local divider = create("Frame", {
+            Size = UDim2.fromOffset(1, 12),
+            BackgroundColor3 = Theme.Stroke,
+            BackgroundTransparency = 0.2,
+            BorderSizePixel = 0,
+            LayoutOrder = 0,
+            Visible = false,
+            ZIndex = 41,
+            Parent = holder,
+        })
+        return holder, divider
+    end
+    local function piece(parent, value, size, color, bold, order)
+        local props = {
+            Size = UDim2.new(0, 0, 1, 0),
+            AutomaticSize = Enum.AutomaticSize.X,
+            Text = value,
+            TextSize = size,
+            TextColor3 = color,
+            TextTruncate = Enum.TextTruncate.None,
+            LayoutOrder = order,
+            ZIndex = 41,
+            Parent = parent,
+        }
+        if bold then
+            props.FontFace = Fonts.Bold
+        end
+        return label(props)
+    end
+
+    local titleHolder, titleDivider = slot(1)
+    local dot = create("Frame", {
+        Size = UDim2.fromOffset(7, 7),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        LayoutOrder = 1,
+        ZIndex = 41,
+        Parent = titleHolder,
+    })
+    corner(dot, UDim.new(1, 0))
+    local titleLabel = piece(titleHolder, "", 12, Theme.Text, true, 2)
+
+    local fpsHolder, fpsDivider = slot(2)
+    piece(fpsHolder, "FPS", 10, Theme.Muted, false, 1)
+    local fpsValue = piece(fpsHolder, "0", 12, Theme.Text, true, 2)
+
+    local pingHolder, pingDivider = slot(3)
+    piece(pingHolder, "PING", 10, Theme.Muted, false, 1)
+    local pingValue = piece(pingHolder, "-- ms", 12, Theme.Text, true, 2)
+
+    local timeHolder, timeDivider = slot(4)
+    piece(timeHolder, "TIME", 10, Theme.Muted, false, 1)
+    local timeValue = piece(timeHolder, "--:--:--", 12, Theme.Text, true, 2)
+
+    return {
+        Title = { Holder = titleHolder, Divider = titleDivider, Label = titleLabel },
+        Fps = { Holder = fpsHolder, Divider = fpsDivider, Value = fpsValue },
+        Ping = { Holder = pingHolder, Divider = pingDivider, Value = pingValue },
+        Time = { Holder = timeHolder, Divider = timeDivider, Value = timeValue },
+    }
+end
+
 function Window:_refreshWatermark()
     local wm = self._watermark
     if not wm then
         return
     end
-    local parts = {}
-    if wm.Text ~= "" then
-        table.insert(parts, wm.Text)
+    local s = wm.Slots
+    local visible = {}
+    local function show(part, on)
+        part.Holder.Visible = on
+        if on then
+            visible[#visible + 1] = part
+        end
     end
-    if wm.FPS then
-        table.insert(parts, math.floor(wm.Fps + 0.5) .. " FPS")
-    end
+
+    show(s.Title, wm.Text ~= "")
+    s.Title.Label.Text = wm.Text
+
+    show(s.Fps, wm.FPS == true)
+    local fps = math.floor(wm.Fps + 0.5)
+    s.Fps.Value.Text = tostring(fps)
+    s.Fps.Value.TextColor3 = fps >= 55 and Theme.Success or (fps >= 30 and Theme.Warning or Theme.Error)
+
+    show(s.Ping, wm.Ping == true)
+    local ms = nil
     if wm.Ping then
-        local ok, ms = pcall(function()
+        local ok, value = pcall(function()
             return math.floor(wm.Stats.Network.ServerStatsItem["Data Ping"]:GetValue() + 0.5)
         end)
-        table.insert(parts, (ok and type(ms) == "number") and (ms .. " ms") or "-- ms")
+        ms = (ok and type(value) == "number") and value or nil
     end
+    if ms then
+        s.Ping.Value.Text = tostring(ms) .. " ms"
+        s.Ping.Value.TextColor3 = ms < 90 and Theme.Success or (ms < 180 and Theme.Warning or Theme.Error)
+    else
+        s.Ping.Value.Text = "-- ms"
+        s.Ping.Value.TextColor3 = Theme.Muted
+    end
+
+    show(s.Time, wm.Time == true)
     if wm.Time then
         local offset = self._clockOffset or wm.TimeOffset or 7
         local clockParts = Library._gmtParts(os.time(), offset)
-        table.insert(parts, string.format("%02d:%02d:%02d", clockParts.Hour, clockParts.Minute, clockParts.Second))
+        s.Time.Value.Text = string.format("%02d:%02d:%02d", clockParts.Hour, clockParts.Minute, clockParts.Second)
     end
-    wm.Readout.Text = table.concat(parts, "  |  ")
+
+    for index, part in ipairs(visible) do
+        part.Divider.Visible = index > 1
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -24640,37 +24816,77 @@ function Window:_refreshKeybindList()
         local row = list.Rows[binding]
         if not row then
             local frame = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 18),
+                Size = UDim2.new(1, 0, 0, 22),
                 BackgroundTransparency = 1,
                 LayoutOrder = binding.Order,
                 ZIndex = 41,
                 Parent = list.Frame,
             })
+            local dot = create("Frame", {
+                Position = UDim2.fromOffset(0, 8),
+                Size = UDim2.fromOffset(6, 6),
+                BackgroundColor3 = Theme.Muted,
+                BorderSizePixel = 0,
+                ZIndex = 42,
+                Parent = frame,
+            })
+            corner(dot, UDim.new(1, 0))
+            local chip = create("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, 0, 0.5, 0),
+                Size = UDim2.fromOffset(56, 18),
+                BackgroundColor3 = Theme.Surface2,
+                BorderSizePixel = 0,
+                ZIndex = 42,
+                Parent = frame,
+            })
+            corner(chip, UDim.new(0, 5))
+            create("UIStroke", {
+                Color = Theme.Stroke,
+                Transparency = 0.2,
+                Thickness = 1,
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                Parent = chip,
+            })
             row = {
                 Frame = frame,
+                Dot = dot,
                 Name = label({
-                    Size = UDim2.new(1, -92, 1, 0),
+                    Position = UDim2.fromOffset(14, 0),
+                    Size = UDim2.new(1, -132, 1, 0),
                     TextSize = 12,
                     ZIndex = 42,
                     Parent = frame,
                 }),
-                Key = label({
-                    AnchorPoint = Vector2.new(1, 0),
-                    Position = UDim2.new(1, 0, 0, 0),
-                    Size = UDim2.new(0, 88, 1, 0),
-                    TextSize = 11,
+                Mode = label({
+                    AnchorPoint = Vector2.new(1, 0.5),
+                    Position = UDim2.new(1, -62, 0.5, 0),
+                    Size = UDim2.fromOffset(56, 14),
+                    TextSize = 10,
                     TextColor3 = Theme.Muted,
                     TextXAlignment = Enum.TextXAlignment.Right,
                     ZIndex = 42,
                     Parent = frame,
                 }),
+                Key = label({
+                    Size = UDim2.new(1, 0, 1, 0),
+                    TextSize = 11,
+                    FontFace = Fonts.Bold,
+                    TextColor3 = Theme.Text,
+                    TextXAlignment = Enum.TextXAlignment.Center,
+                    ZIndex = 43,
+                    Parent = chip,
+                }),
             }
             list.Rows[binding] = row
         end
         local name = toggle._searchName
+        local on = toggle:Get() == true
         row.Name.Text = (type(name) == "string" and name ~= "") and name or "Toggle"
-        row.Name.TextColor3 = toggle:Get() == true and Theme.Text or Theme.Muted
-        row.Key.Text = keyName(binding.Key) .. " " .. (binding.Mode == "Hold" and "(hold)" or "(toggle)")
+        row.Name.TextColor3 = on and Theme.Text or Theme.Muted
+        row.Dot.BackgroundColor3 = on and Theme.Accent or Theme.Muted
+        row.Mode.Text = binding.Mode == "Hold" and "hold" or "toggle"
+        row.Key.Text = keyName(binding.Key)
     end
 end
 
