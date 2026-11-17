@@ -18450,6 +18450,39 @@ Library.TimeZones = {
     { 14, "Kiritimati" },
 }
 
+-- The clock parts of a moment at a GMT offset, worked out from the seconds alone. They do not depend on os.date's
+-- time zone handling, so the digits, the date and the hands always come from the same moment.
+Library._gmtParts = function(epoch, hours)
+    local weekdays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }
+    local months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }
+    local whole = math.floor(epoch + math.floor(hours * 3600 + 0.5))
+    local dayFraction = whole % 86400
+    local days = math.floor(whole / 86400)
+    -- The civil date of a day count since 1970-01-01.
+    local z = days + 719468
+    local era = math.floor(z / 146097)
+    local doe = z - era * 146097
+    local yoe = math.floor((doe - math.floor(doe / 1460) + math.floor(doe / 36524) - math.floor(doe / 146096)) / 365)
+    local year = yoe + era * 400
+    local doy = doe - (365 * yoe + math.floor(yoe / 4) - math.floor(yoe / 100))
+    local mp = math.floor((5 * doy + 2) / 153)
+    local day = doy - math.floor((153 * mp + 2) / 5) + 1
+    local month = mp < 10 and mp + 3 or mp - 9
+    if month <= 2 then
+        year = year + 1
+    end
+    return {
+        Hour = math.floor(dayFraction / 3600),
+        Minute = math.floor((dayFraction % 3600) / 60),
+        Second = math.floor(dayFraction % 60),
+        Year = year,
+        Month = month,
+        Day = day,
+        Weekday = weekdays[(days + 4) % 7 + 1],
+        MonthName = months[month],
+    }
+end
+
 function Window:_homeClock(parent, opts, order)
     if opts.Clock == false then
         return nil
@@ -18608,11 +18641,16 @@ function Window:_homeClock(parent, opts, order)
 
     -- The clock reads the UTC clock, with its fraction of a second, and adds the chosen offset. The hands and the
     -- digits all come from that one time, so they agree with each other on any machine's own time zone.
+    -- Whole seconds come from os.time (UTC). The fraction of the second comes from how much tick has moved since the
+    -- whole second last changed, so the second hand glides without depending on tick's own starting point.
+    local clockBase = nil
     local function clockNow()
-        if type(tick) == "function" then
-            return tick()
+        local seconds = os.time()
+        local now = type(tick) == "function" and tick() or os.clock()
+        if not clockBase or clockBase.Seconds ~= seconds then
+            clockBase = { Seconds = seconds, Ticked = now }
         end
-        return os.time()
+        return clockBase.Seconds + (now - clockBase.Ticked)
     end
     local function cityFor(hours)
         for _, zone in ipairs(Library.TimeZones) do
@@ -18622,7 +18660,7 @@ function Window:_homeClock(parent, opts, order)
         end
         return nil
     end
-    local lastWhole, lastDay = nil, nil
+    local lastWhole = nil
     local function paintClock(epoch)
         local shifted = epoch + math.floor(offset * 3600 + 0.5)
         local dayFraction = shifted % 86400
@@ -18632,12 +18670,9 @@ function Window:_homeClock(parent, opts, order)
         local whole = math.floor(shifted)
         if whole ~= lastWhole then
             lastWhole = whole
-            timeText.Text = os.date("!%H:%M:%S", whole)
-        end
-        local day = math.floor(shifted / 86400)
-        if day ~= lastDay then
-            lastDay = day
-            dateText.Text = os.date("!%A, %d %B %Y", whole)
+            local parts = Library._gmtParts(epoch, offset)
+            timeText.Text = string.format("%02d:%02d:%02d", parts.Hour, parts.Minute, parts.Second)
+            dateText.Text = string.format("%s, %d %s %d", parts.Weekday, parts.Day, parts.MonthName, parts.Year)
         end
     end
 
@@ -24454,7 +24489,8 @@ function Window:_refreshWatermark()
     end
     if wm.Time then
         local offset = self._clockOffset or wm.TimeOffset or 7
-        table.insert(parts, os.date("!%H:%M:%S", os.time() + math.floor(offset * 3600 + 0.5)))
+        local clockParts = Library._gmtParts(os.time(), offset)
+        table.insert(parts, string.format("%02d:%02d:%02d", clockParts.Hour, clockParts.Minute, clockParts.Second))
     end
     wm.Readout.Text = table.concat(parts, "  |  ")
 end

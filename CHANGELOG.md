@@ -64,6 +64,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- **Home world clock digits and date**: they are worked out from the seconds in GMT instead of os.date, so they match the hands on any device. The watermark time uses the same code.
 - The SelectionBox border colour has a default now. A `BorderColor` was read but never set, which errors for the `SelectionBox` type.
 - 3D preview drag on touch screens follows the finger, so dragging right turns the model right.
 - Button wave now starts where the mouse or finger really pressed. Before, a touch screen could show it in a fixed spot.
