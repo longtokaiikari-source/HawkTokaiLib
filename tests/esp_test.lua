@@ -1,4 +1,4 @@
--- tests/esp_test.lua: runs the ESP of Source.luau against a mock of the Roblox API. Plain Lua, no Python.
+-- tests/esp_test.lua: runs the ESP of ESP.luau against a mock of the Roblox API. Plain Lua, no Python.
 -- From the project folder:  lua tests/esp_test.lua      (Lua 5.3 or newer)
 -- It checks the geometry, the rules, the components, the callbacks and the cleanup. Nothing is rendered,
 -- so this cannot show what the ESP looks like. Run it in an executor before you trust a build.
@@ -509,22 +509,19 @@ function typeof(value)
 	return kind
 end
 
--- Reads the ESP block from Source.luau and changes the two forms that Lua 5.3 does not have: "a += b" and the
+-- Reads the ESP block from ESP.luau and changes the two forms that Lua 5.3 does not have: "a += b" and the
 -- generic "for ... in t do". The block then runs in the same global environment as the mock.
 do
-	local file = io.open("Source.luau", "r") or io.open("../Source.luau", "r")
-	assert(file, "Source.luau was not found: run this from the project folder")
+	local file = io.open("ESP.luau", "r") or io.open("../ESP.luau", "r")
+	assert(file, "ESP.luau was not found: run this from the project folder")
 	local source = file:read("a")
 	file:close()
-	local first = source:find("-- // ESP // --", 1, true)
-	local last = source:find("\nreturn Library\nend)()", 1, true)
-	assert(first and last, "the ESP block was not found in Source.luau")
 	local lines = {}
-	for line in (source:sub(first, last - 1) .. "\n"):gmatch("(.-)\n") do
+	for line in (source .. "\n"):gmatch("(.-)\n") do
 		if not line:match("^%s*%-%-") then
-			local indent, target, value = line:match("^(%s*)([%w_%.]+)%s*%+=%s*(.-)%s*$")
+			local indent, target, op, value = line:match("^(%s*)([%w_%.]+)%s*([%+%-%*/])=%s*(.-)%s*$")
 			if indent then
-				line = indent .. target .. " = " .. target .. " + (" .. value .. ")"
+				line = indent .. target .. " = " .. target .. " " .. op .. " (" .. value .. ")"
 			end
 			local space, names, expr = line:match("^(%s*)for%s+(.-)%s+in%s+(.-)%s+do%s*$")
 			if space and not expr:find("pairs(", 1, true) then
@@ -533,9 +530,15 @@ do
 		end
 		lines[#lines + 1] = line
 	end
-	local chunk, err = load(table.concat(lines, "\n"), "=ESP block")
+	local chunk, err = load(table.concat(lines, "\n"), "=ESP")
 	assert(chunk, err)
-	chunk()
+	ESP_FACTORY = chunk()
+Library._helpers = {
+	create = create, label = label or function() end, corner = corner or function() end, stroke = stroke or function() end,
+	defaultParent = defaultParent, Players = Players, RunService = RunService, UserInputService = UserInputService, HttpService = HttpService,
+}
+ESP = ESP_FACTORY(Library)
+Library.ESP = ESP
 end
 
 -- The scenario for the port. Each check prints ok or FAIL.
@@ -749,6 +752,71 @@ check(objNear.Components.Box3D.Pools[1].Shown == 12, "the 3D box draws its twelv
 check(objNear.Components.Tracer.Pools[1].Shown == 1, "the tracer draws one line")
 check(objNear.Components.Skeleton.Pools[1].Shown > 0, "the skeleton draws its bones (" .. objNear.Components.Skeleton.Pools[1].Shown .. ")")
 check(objNear.Components.Health.Frames[1].Visible == true, "the health bar is shown in front")
+-- 5b. The health bar colour: green when full, yellow at half, red when low, and the fill follows the health.
+local function nearColour(a, b)
+	return math.abs(a.R - b.R) < 0.01 and math.abs(a.G - b.G) < 0.01 and math.abs(a.B - b.B) < 0.01
+end
+check(nearColour(ESP.HealthColor(1), Color3.fromRGB(70, 225, 95)), "a full health bar is green")
+check(nearColour(ESP.HealthColor(0.5), Color3.fromRGB(245, 200, 45)), "a half health bar is yellow")
+check(nearColour(ESP.HealthColor(0), Color3.fromRGB(235, 50, 50)), "an empty health bar is red")
+local quarter = ESP.HealthColor(0.25)
+check(quarter.R > 0.8 and quarter.G > 0.2 and quarter.G < 0.8 and quarter.B < 0.3, "a quarter of health is blended between red and yellow")
+local hurt = objNear.CurrentSettings.Model:FindFirstChildOfClass("Humanoid")
+hurt.Health = 50
+objNear.Components.Health.Update()
+check(nearColour(objNear.Components.Health.Fill.BackgroundColor3, ESP.HealthColor(0.5)), "the fill of a half-health player is yellow")
+hurt.Health = 10
+objNear.Components.Health.Update()
+check(objNear.Components.Health.Fill.BackgroundColor3.R > 0.8 and objNear.Components.Health.Fill.BackgroundColor3.G < 0.35, "the fill turns red as the health falls")
+hurt.Health = 100
+objNear.Components.Health.Update()
+check(nearColour(objNear.Components.Health.Fill.BackgroundColor3, Color3.fromRGB(70, 225, 95)), "the fill is green again at full health")
+-- 5c. Damage numbers: a red number when the health falls, a green one when it rises, both gone after about a second.
+set("ESP_DamageText", true)
+local hit = objNear.CurrentSettings.Model:FindFirstChildOfClass("Humanoid")
+hit.Health = 100
+objNear.Components.Damage.Update()
+hit.Health = 80
+objNear.Components.Damage.Update()
+check(#objNear.Components.Damage.Frames == 1, "a hit makes one damage number")
+local hitLabel = objNear.Components.Damage.Frames[1]
+check(hitLabel.Text == "-20" and hitLabel.TextColor3.R > 0.8, "the hit number is red and says -20")
+hit.Health = 90
+objNear.Components.Damage.Update()
+check(#objNear.Components.Damage.Frames == 2 and objNear.Components.Damage.Frames[2].Text == "+10", "a heal makes a green +10")
+ESP.Clock = (ESP.Clock or 0) + 0.5
+objNear.Components.Damage.Update()
+check(#objNear.Components.Damage.Frames == 2, "the numbers are still there after half a second")
+ESP.Clock = (ESP.Clock or 0) + 1
+objNear.Components.Damage.Update()
+check(#objNear.Components.Damage.Frames == 0, "the numbers are gone after about a second")
+set("ESP_DamageText", false)
+hit.Health = 40
+objNear.Components.Damage.Update()
+check(#objNear.Components.Damage.Frames == 0, "no numbers when the feature is off")
+hit.Health = 100
+objNear.Components.Damage.Update()
+-- 7h. Speed text: the horizontal speed of a player beside its distance, in metres per second, or studs per second with
+-- Meters off. A falling player has no horizontal speed, and the speed is off by default.
+local savedDistance, savedMeters = ESP.GlobalConfig.Distance, ESP.GlobalConfig.Meters
+local runnerRoot = objNear.CurrentSettings.Model:FindFirstChild("HumanoidRootPart")
+runnerRoot.AssemblyLinearVelocity = Vector3.new(10, 0, 0)
+set("ESP_Names", true)
+set("ESP_Distance", true)
+set("ESP_Speed", false)
+step(2)
+check(objNear.Components.Billboard.Frames[2].Text:match("st/s") == nil and objNear.Components.Billboard.Frames[2].Text:match("m/s") == nil, "speed is off by default")
+set("ESP_Speed", true)
+set("ESP_Meters", false)
+step(2)
+check(objNear.Components.Billboard.Frames[2].Text:match("10 st/s$") ~= nil, "speed reads in studs per second beside the distance: " .. tostring(objNear.Components.Billboard.Frames[2].Text))
+runnerRoot.AssemblyLinearVelocity = Vector3.new(0, 40, 0)
+step(2)
+check(objNear.Components.Billboard.Frames[2].Text:match("0 st/s$") ~= nil, "a falling player has no horizontal speed: " .. tostring(objNear.Components.Billboard.Frames[2].Text))
+set("ESP_Speed", false)
+set("ESP_Meters", savedMeters ~= false)
+set("ESP_Distance", savedDistance == true)
+runnerRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 check(#WARNINGS == 0, "no warnings with every drawing on")
 
 -- 6. Highlight in the game: adorned to the character in front, not to one behind.
@@ -817,7 +885,7 @@ check(objSix.Components.Box2D.Frames[1].Visible == false, "the corner box hides 
 set("ESP_Box2DMode", "Full")
 set("ESP_HealthMode", "Bottom")
 step(2)
-check(objSix.Components.Health.Frames[1].Size.YO == 4, "the bottom health bar is four pixels tall")
+check(objSix.Components.Health.Frames[1].Size.YO == 6, "the bottom health bar is six pixels tall, with its outline")
 set("ESP_HealthMode", "Left")
 step(2)
 local nameLabel, distanceLabel = objSix.Components.Billboard.Frames[1], objSix.Components.Billboard.Frames[2]
@@ -956,9 +1024,13 @@ local centreX, centreY = 1920 - 16 - 55, 16 + 55
 check(objNear.Components.Radar.Frames[1].Position.YO < centreY, "a player in front is above the middle of the radar")
 check(objBehind.Components.Radar.Frames[1].Position.YO > centreY, "a player behind is below the middle of the radar")
 check(objEdge.Components.Radar.Frames[1].Position.XO > centreX, "a player far to the right sits on the right edge of the radar")
+check(ESP.Overlay.RadarSelf.Dot.Visible == true and ESP.Overlay.RadarSelf.Outline.Visible == true and ESP.Overlay.RadarSelf.Pointer.Visible == true, "the radar marks your own character")
+check(ESP.Overlay.RadarSelf.Dot.Position.XO == ESP.Overlay.RadarBack.Position.XO and ESP.Overlay.RadarSelf.Dot.Position.YO == ESP.Overlay.RadarBack.Position.YO, "the marker sits in the middle of the radar")
+check(ESP.Overlay.RadarSelf.Pointer.Position.YO < ESP.Overlay.RadarSelf.Dot.Position.YO, "the pointer sits above the marker, toward the top of the radar")
 set("ESP_Radar", false)
 step(2)
 check(objNear.Components.Radar.Frames[1].Visible == false, "the radar dots go with the radar")
+check(ESP.Overlay.RadarSelf.Dot.Visible == false, "the marker goes with the radar")
 local looks = 0
 local nearHead = objNear.CurrentSettings.Model:FindFirstChild("Head").Position
 set("ESP_VisibleEvery", 4)
