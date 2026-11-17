@@ -44,6 +44,8 @@ do
 		VisibleColor = Color3.fromRGB(90, 255, 120),
 		HiddenColor = Color3.fromRGB(255, 80, 80),
 		HealthText = false,
+		DamageText = false,
+		Speed = false,
 		HeadDots = false,
 		ShowTool = false,
 		Fade = false,
@@ -476,6 +478,16 @@ do
 	end
 	-- The name sits above the box and the distance below it. Without a box, both sit over the
 	-- head, so the character still gets its text.
+	-- The horizontal speed of a character, in studs per second, from its root part. Falling does not count.
+	function P.SpeedOf(model)
+		local root = model and model:FindFirstChild("HumanoidRootPart")
+		local velocity = root and root.AssemblyLinearVelocity
+		if not velocity then
+			return 0
+		end
+		return math.sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z)
+	end
+
 	function P.Billboard(object, scene)
 		local name = create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 1),
@@ -506,7 +518,7 @@ do
 			local screen = object._LastScreenPos
 			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Billboards == true
 			name.Visible = shown == true
-			distance.Visible = shown == true and ESP.GlobalConfig.Distance == true
+			distance.Visible = shown == true and (ESP.GlobalConfig.Distance == true or ESP.GlobalConfig.Speed == true)
 			if not shown then
 				return
 			end
@@ -549,7 +561,16 @@ do
 				lastName = label
 			end
 			local studs = object._LastDistance or 0
-			local text = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
+			local metres = ESP.GlobalConfig.Meters ~= false
+			local parts = {}
+			if ESP.GlobalConfig.Distance == true or ESP.GlobalConfig.Speed ~= true then
+				parts[#parts + 1] = metres and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
+			end
+			if ESP.GlobalConfig.Speed == true then
+				local speed = P.SpeedOf(settings.Model) * (metres and 0.28 or 1)
+				parts[#parts + 1] = string.format("%d %s", math.floor(speed + 0.5), metres and "m/s" or "st/s")
+			end
+			local text = table.concat(parts, " ")
 			if text ~= lastDistance then
 				distance.Text = text
 				lastDistance = text
@@ -911,14 +932,28 @@ do
 		return component
 	end
 
-	-- A health bar beside the 2D box.
-	-- The health bar: on the left, on the right, or under the box. Gradient colours it from red to green by health.
-	-- Health number writes the health beside the bar, so the number reads without a second look.
+	-- Health colours: green when full, yellow at half, red when nearly dead. The colour is blended between the three.
+	local HealthRed = Color3.fromRGB(235, 50, 50)
+	local HealthYellow = Color3.fromRGB(245, 200, 45)
+	local HealthGreen = Color3.fromRGB(70, 225, 95)
+	-- The colour of a health bar at a fraction of full health, from 0 (dead) to 1 (full).
+	function P.HealthColor(fraction)
+		local f = math.clamp(fraction, 0, 1)
+		local from, to, t = HealthYellow, HealthGreen, (f - 0.5) * 2
+		if f < 0.5 then
+			from, to, t = HealthRed, HealthYellow, f * 2
+		end
+		return Color3.new(from.R + (to.R - from.R) * t, from.G + (to.G - from.G) * t, from.B + (to.B - from.B) * t)
+	end
+	ESP.HealthColor = P.HealthColor
+	-- A health bar beside the 2D box: a black outline around a dark track, and a fill that takes its colour from the health.
+	-- Gradient colours the fill by health; off keeps it green. The health number sits beside the bar.
 	function P.Health(object, scene)
-		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
+		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.1, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
+		local track = create("Frame", { Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.fromRGB(22, 22, 26), BackgroundTransparency = 0.2, BorderSizePixel = 0, ZIndex = 4, Parent = back })
 		local fill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(80, 220, 90), BorderSizePixel = 0, ZIndex = 5, Parent = back,
+			BackgroundColor3 = HealthGreen, BorderSizePixel = 0, ZIndex = 5, Parent = track,
 		})
 		local number = create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -934,6 +969,7 @@ do
 		})
 		create("UIStroke", { Parent = number })
 		local component = P.NewComponent({ back, number })
+		component.Fill = fill
 		function component.Update()
 			local settings = object.CurrentSettings
 			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
@@ -947,30 +983,101 @@ do
 			local fraction = humanoid.MaxHealth > 0 and math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1) or 0
 			if settings.Health.Side == "Bottom" then
 				back.Position = UDim2.fromOffset(minX - 1, maxY + 2)
-				back.Size = UDim2.fromOffset(maxX - minX + 2, 4)
+				back.Size = UDim2.fromOffset(maxX - minX + 2, 6)
+				track.Size = UDim2.fromOffset(maxX - minX, 4)
 				fill.AnchorPoint = Vector2.new(0, 0)
 				fill.Position = UDim2.fromScale(0, 0)
 				fill.Size = UDim2.fromScale(fraction, 1)
-				number.Position = UDim2.fromOffset(maxX + 18, maxY + 4)
+				number.Position = UDim2.fromOffset(maxX + 18, maxY + 5)
 			else
 				local onLeft = settings.Health.Side ~= "Right"
-				local x = onLeft and (minX - 5) or (maxX + 3)
+				local x = onLeft and (minX - 8) or (maxX + 3)
 				back.Position = UDim2.fromOffset(x, minY)
-				back.Size = UDim2.fromOffset(3, maxY - minY)
+				back.Size = UDim2.fromOffset(5, maxY - minY)
+				track.Size = UDim2.fromOffset(3, maxY - minY - 2)
 				fill.AnchorPoint = Vector2.new(0, 1)
 				fill.Position = UDim2.fromScale(0, 1)
 				fill.Size = UDim2.fromScale(1, fraction)
-				number.Position = UDim2.fromOffset(onLeft and (x - 26) or (x + 26), (minY + maxY) / 2)
+				number.Position = UDim2.fromOffset(onLeft and (x - 26) or (x + 30), (minY + maxY) / 2)
 			end
 			number.Text = tostring(math.floor(humanoid.Health))
 			if settings.Health.Gradient == false then
-				fill.BackgroundColor3 = Color3.fromRGB(80, 220, 90)
+				fill.BackgroundColor3 = HealthGreen
 			else
-				fill.BackgroundColor3 = Color3.fromHSV(fraction * 0.3, 1, 1)
+				fill.BackgroundColor3 = P.HealthColor(fraction)
 			end
 		end
 		return component
 	end
+	-- Damage numbers: a red -N or a green +N over a player when its health changes. Each number rises and fades out in
+	-- about a second. Off by default; the Damage numbers toggle on the Health page turns it on.
+	local DamageRed = Color3.fromRGB(255, 90, 90)
+	local HealGreen = Color3.fromRGB(120, 240, 130)
+	local DamageLife = 0.9
+	local DamageMax = 6
+	function P.Damage(object, scene)
+		local popups = {}
+		local lastHealth = nil
+		local component = P.NewComponent({})
+		local function clearPopups()
+			for _, popup in popups do
+				popup.Label:Destroy()
+			end
+			popups = {}
+			component.Frames = {}
+		end
+		function component.Update()
+			local settings = object.CurrentSettings
+			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
+			if ESP.GlobalConfig.DamageText ~= true or humanoid == nil then
+				clearPopups()
+				lastHealth = humanoid and humanoid.Health or nil
+				return
+			end
+			local now = ESP.Clock or 0
+			local minX, minY, maxX, maxY = P.Box(object)
+			local health = humanoid.Health
+			local change = lastHealth ~= nil and (health - lastHealth) or 0
+			if math.abs(change) >= 1 and component.Visible and minX ~= nil then
+				local label = create("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Size = UDim2.fromOffset(72, 16),
+					BackgroundTransparency = 1,
+					FontFace = ESP.GlobalConfig.Font or Library.Fonts.Regular,
+					TextSize = 14,
+					TextStrokeTransparency = 0,
+					TextColor3 = change < 0 and DamageRed or HealGreen,
+					Text = (change < 0 and "-" or "+") .. tostring(math.floor(math.abs(change) + 0.5)),
+					ZIndex = 6,
+					Parent = scene.Container,
+				})
+				popups[#popups + 1] = { Label = label, Start = now, X = (minX + maxX) / 2, Y = minY - 4 }
+				while #popups > DamageMax do
+					popups[1].Label:Destroy()
+					table.remove(popups, 1)
+				end
+			end
+			lastHealth = health
+			local alive, labels = {}, {}
+			for _, popup in popups do
+				local age = (now - popup.Start) / DamageLife
+				if age >= 1 then
+					popup.Label:Destroy()
+				else
+					local eased = 1 - (1 - age) * (1 - age)
+					popup.Label.Position = UDim2.fromOffset(popup.X, popup.Y - 28 * eased)
+					popup.Label.TextTransparency = age > 0.6 and (age - 0.6) / 0.4 or 0
+					popup.Label.Visible = component.Visible and minX ~= nil
+					alive[#alive + 1] = popup
+					labels[#labels + 1] = popup.Label
+				end
+			end
+			popups = alive
+			component.Frames = labels
+		end
+		return component
+	end
+
 	-- The points of a character the wall check looks at. A rig R15 has its head, body, hands and feet; a rig R6 has its six
 	-- parts. A player is seen when a ray from the camera reaches any one of them, so a hand or a foot showing from behind
 	-- a wall is enough to draw the player as seen.
@@ -1088,7 +1195,14 @@ do
 			})
 			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = radarBack })
 			create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0.4, Parent = radarBack })
-			overlay = { Ring = ring, Cross = P.LinePool(scene.Container), RadarBack = radarBack }
+			-- Your own character: a white dot with a black outline and a pointer on top. The radar turns with the view,
+			-- so the pointer always shows the way you are facing.
+			local selfOutline = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Visible = false, ZIndex = 8, Parent = scene.Container })
+			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = selfOutline })
+			local selfDot = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Visible = false, ZIndex = 9, Parent = scene.Container })
+			create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = selfDot })
+			local selfPointer = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(5, 5), Rotation = 45, BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Visible = false, ZIndex = 9, Parent = scene.Container })
+			overlay = { Ring = ring, Cross = P.LinePool(scene.Container), RadarBack = radarBack, RadarSelf = { Outline = selfOutline, Dot = selfDot, Pointer = selfPointer } }
 			ESP.Overlay = overlay
 		end
 		local size = scene.Size()
@@ -1103,6 +1217,18 @@ do
 		overlay.RadarBack.Visible = ESP.GlobalConfig.Radar == true
 		overlay.RadarBack.Position = UDim2.fromOffset(size.X - 16 - radarSize / 2, 16 + radarSize / 2)
 		overlay.RadarBack.Size = UDim2.fromOffset(radarSize, radarSize)
+		-- The marker for your own character stays in the middle of the radar, with its pointer above the dot.
+		local marker = overlay.RadarSelf
+		if marker then
+			local cx, cy = size.X - 16 - radarSize / 2, 16 + radarSize / 2
+			local shown = ESP.GlobalConfig.Radar == true
+			marker.Outline.Visible = shown
+			marker.Dot.Visible = shown
+			marker.Pointer.Visible = shown
+			marker.Outline.Position = UDim2.fromOffset(cx, cy)
+			marker.Dot.Position = UDim2.fromOffset(cx, cy)
+			marker.Pointer.Position = UDim2.fromOffset(cx, cy - 7)
+		end
 		local cross = overlay.Cross
 		cross.Begin()
 		if ESP.GlobalConfig.Crosshair == true then
@@ -1175,6 +1301,7 @@ do
 		object.Components.Box3D = P.Box3D(object, scene)
 		object.Components.Skeleton = P.Skeleton(object, scene)
 		object.Components.Health = P.Health(object, scene)
+		object.Components.Damage = P.Damage(object, scene)
 		object.Components.HeadDot = P.HeadDot(object, scene)
 		object.Components.Radar = P.Radar(object, scene)
 	end
@@ -1541,6 +1668,7 @@ do
 		if ESP.Destroyed == true then
 			return
 		end
+		ESP.Clock = (ESP.Clock or 0) + delta
 		if ESP.GlobalConfig.Rainbow == true then
 			P.Rainbow(delta)
 		end
@@ -1796,6 +1924,7 @@ do
 		P.Bind("ESP_NearestLimit", function() return config.NearestLimit or 0 end)
 		P.Bind("ESP_Names", function() return config.Billboards end)
 		P.Bind("ESP_Distance", function() return config.Distance end)
+		P.Bind("ESP_Speed", function() return ESP.GlobalConfig.Speed == true end)
 		P.Bind("ESP_ShowTool", function() return ESP.GlobalConfig.ShowTool == true end)
 		P.Bind("ESP_DynamicText", function() return ESP.GlobalConfig.DynamicText ~= false end)
 		P.Bind("ESP_Meters", function() return ESP.GlobalConfig.Meters ~= false end)
@@ -1816,6 +1945,7 @@ do
 		P.Bind("ESP_HealthMode", function() return settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left" end)
 		P.Bind("ESP_HealthGradient", function() return settings.Health.Gradient ~= false end)
 		P.Bind("ESP_HealthText", function() return ESP.GlobalConfig.HealthText == true end)
+		P.Bind("ESP_DamageText", function() return ESP.GlobalConfig.DamageText == true end)
 		P.Bind("ESP_Skeleton", function() return settings.Skeleton.Enabled end)
 		P.Bind("ESP_HeadDots", function() return ESP.GlobalConfig.HeadDots == true end)
 		P.Bind("ESP_ArrowSize", function() return settings.Arrow.Size or 12 end)
@@ -1871,6 +2001,10 @@ do
 		end })
 		gNames:CreateToggle({ Name = "Distance", CurrentValue = config.Distance, Flag = "ESP_Distance", Callback = function(value)
 			config.Distance = value == true
+		end })
+
+		gNames:CreateToggle({ Name = "Speed", Desc = "Horizontal speed beside the distance: m/s, or studs per second with Distance in metres off", CurrentValue = ESP.GlobalConfig.Speed == true, Flag = "ESP_Speed", Callback = function(value)
+			ESP.GlobalConfig.Speed = value == true
 		end })
 		gNames:CreateToggle({ Name = "Held item", Desc = "Shows the tool a character holds, after its name", CurrentValue = ESP.GlobalConfig.ShowTool == true, Flag = "ESP_ShowTool", Callback = function(value)
 			ESP.GlobalConfig.ShowTool = value == true
@@ -1980,6 +2114,10 @@ do
 		end })
 		gHealth:CreateToggle({ Name = "Health number", CurrentValue = ESP.GlobalConfig.HealthText == true, Flag = "ESP_HealthText", Callback = function(value)
 			ESP.GlobalConfig.HealthText = value == true
+		end })
+
+		gHealth:CreateToggle({ Name = "Damage numbers", Desc = "Red and green numbers over a player when its health changes", CurrentValue = ESP.GlobalConfig.DamageText == true, Flag = "ESP_DamageText", Callback = function(value)
+			ESP.GlobalConfig.DamageText = value == true
 		end })
 
 		local pageSkeleton = tab:CreateSubTab({ Name = "Skeleton" })

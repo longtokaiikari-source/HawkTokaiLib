@@ -16886,6 +16886,17 @@ function Window:_homeCard(parent, order)
     local card = panelCard(parent, 0, order)
     card.AutomaticSize = Enum.AutomaticSize.Y
     padding(card, 16, 16, 14, 14)
+    -- A faint light at the top of each card, so it reads as a raised panel rather than a flat box.
+    create("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(Color3.new(1, 1, 1)),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.955),
+            NumberSequenceKeypoint.new(0.6, 1),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Parent = card,
+    })
     create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = card })
     return card
 end
@@ -16971,6 +16982,24 @@ end
 function Window:_homeProfile(list, opts, order)
     local banner = panelCard(list, 140, order)
     banner.ClipsDescendants = true
+
+    -- A thin accent line along the top, inset and fading to the right.
+    local stripe = create("Frame", {
+        Position = UDim2.fromOffset(12, 0),
+        Size = UDim2.new(1, -24, 0, 2),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Parent = banner,
+    })
+    corner(stripe, UDim.new(1, 0))
+    create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.7, 0.8),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Parent = stripe,
+    })
 
     -- The avatar bust stands on the banner's right edge and fades in from
     -- the left, so it reads as part of the card rather than a framed photo.
@@ -17193,17 +17222,28 @@ function Window:_homeFigure(parent, order, title)
         LayoutOrder = order,
         Parent = parent,
     })
+    -- A thin accent bar beside each figure, so the row reads as a set of tiles.
+    local bar = create("Frame", {
+        Position = UDim2.fromOffset(0, 3),
+        Size = UDim2.fromOffset(2, 30),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        Parent = cell,
+    })
+    corner(bar, UDim.new(1, 0))
     local value = label({
-        Size = UDim2.new(1, -8, 0, 20),
+        Position = UDim2.fromOffset(10, 0),
+        Size = UDim2.new(1, -18, 0, 20),
         Text = "…",
-        TextSize = 15,
+        TextSize = 16,
         FontFace = Fonts.Bold,
         RichText = true,
         Parent = cell,
     })
     label({
-        Position = UDim2.fromOffset(0, 21),
-        Size = UDim2.new(1, -8, 0, 14),
+        Position = UDim2.fromOffset(10, 21),
+        Size = UDim2.new(1, -18, 0, 14),
         Text = string.upper(title),
         TextSize = 10,
         TextColor3 = Theme.Muted,

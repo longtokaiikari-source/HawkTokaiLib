@@ -44,6 +44,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
+- **Home**: cards have a faint light along the top, the banner has an accent line along its top edge, and each stat figure has an accent bar beside it.
 - **Example**: has an `ESP` tab, like Main. It loads `ESP.luau` from this repo; `Source.luau` never builds the ESP.
 - **ESP is not in the library**: `Source.luau` never builds it. `Example.luau` loads `ESP.luau` from this repo and shows the ESP tab. Its docs are in `esp/`.
 
