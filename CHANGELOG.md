@@ -12,6 +12,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
+- **Home world clock**: an analogue face with turning hour, minute and second hands, the digital time, the city of the chosen GMT offset and the date. The hands and the digits come from one UTC time plus the offset.
+- **Home**: an In server card with headshots of the players, a rotating Tip card (`Home.Tips`), a Shortcuts card (`Home.Shortcuts`), and a time-of-day greeting in the banner unless `Welcome` is set.
 - **Executor check** before the key gate. It runs the UNC tests and stops the load below 70 (`UNC = { Fail = 70, Warn = 80 }`), shows a banner from 70 to 79, and loads normally from 80. `UNC = false` skips it. `Library:GetExecutorScore()` returns the score.
 - **Status cards** while the executor check runs and while the protected script loads. The window's own loader takes over when the window opens.
 - **Close button** on the key gate. It closes the gate and stops the load.

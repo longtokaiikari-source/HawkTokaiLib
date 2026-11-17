@@ -16979,6 +16979,22 @@ function Window:_homeToggleChip(parent, order, icon, text, initial, callback)
     return chip
 end
 
+-- A greeting for the player's own time of day.
+local function timeGreeting()
+    local ok, hour = pcall(function()
+        return os.date("*t").hour
+    end)
+    hour = ok and hour or 12
+    if hour < 5 then
+        return "Good night"
+    elseif hour < 12 then
+        return "Good morning"
+    elseif hour < 18 then
+        return "Good afternoon"
+    end
+    return "Good evening"
+end
+
 function Window:_homeProfile(list, opts, order)
     local banner = panelCard(list, 140, order)
     banner.ClipsDescendants = true
@@ -17049,7 +17065,7 @@ function Window:_homeProfile(list, opts, order)
     label({
         Position = UDim2.fromOffset(22, 20),
         Size = textWidth + UDim2.fromOffset(0, 14),
-        Text = string.upper(opts.Welcome or "Welcome back"),
+        Text = string.upper(opts.Welcome or timeGreeting()),
         TextSize = 10,
         TextColor3 = Theme.Muted,
         Parent = banner,
@@ -18451,18 +18467,98 @@ function Window:_homeClock(parent, opts, order)
     self:_homeCaption(card, "World clock", 0)
 
     local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 104),
         BackgroundTransparency = 1,
         LayoutOrder = 1,
         Parent = card,
     })
-    local timeText = label({
-        Size = UDim2.new(1, -132, 1, 0),
-        Text = "--:--:--",
-        TextSize = 28,
-        FontFace = Fonts.Bold,
+
+    -- The analogue face: twelve ticks, and an hour, minute and second hand turning about its centre.
+    local face = create("Frame", {
+        Position = UDim2.fromOffset(0, 4),
+        Size = UDim2.fromOffset(96, 96),
+        BackgroundColor3 = Theme.Surface,
+        BorderSizePixel = 0,
         Parent = row,
     })
+    corner(face, UDim.new(1, 0))
+    stroke(face, Theme.Stroke, 0, 2)
+    for hour = 0, 11 do
+        local angle = math.rad(hour * 30)
+        local major = hour % 3 == 0
+        local tick = create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, math.sin(angle) * 39, 0.5, -math.cos(angle) * 39),
+            Size = major and UDim2.fromOffset(3, 8) or UDim2.fromOffset(2, 5),
+            Rotation = hour * 30,
+            BackgroundColor3 = major and Theme.Text or Theme.Muted,
+            BorderSizePixel = 0,
+            Parent = face,
+        })
+        corner(tick, UDim.new(1, 0))
+    end
+    -- A hand is a bar whose bottom end sits on the centre, so turning it swings it about the middle.
+    local function hand(length, width, color)
+        local frame = create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 1),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(width, length),
+            BackgroundColor3 = color,
+            BorderSizePixel = 0,
+            Parent = face,
+        })
+        corner(frame, UDim.new(1, 0))
+        return frame
+    end
+    local hourHand = hand(24, 4, Theme.Text)
+    local minuteHand = hand(34, 3, Theme.Text)
+    local secondHand = hand(38, 1, Theme.Accent)
+    local cap = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(7, 7),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 5,
+        Parent = face,
+    })
+    corner(cap, UDim.new(1, 0))
+
+    -- The digital time, the city of the chosen offset and the date, beside the face.
+    local textColumn = create("Frame", {
+        Position = UDim2.fromOffset(110, 0),
+        Size = UDim2.new(1, -250, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = row,
+    })
+    local timeText = label({
+        Position = UDim2.fromOffset(0, 16),
+        Size = UDim2.new(1, 0, 0, 34),
+        Text = "--:--:--",
+        TextSize = 30,
+        FontFace = Fonts.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = textColumn,
+    })
+    local zoneText = label({
+        Position = UDim2.fromOffset(0, 54),
+        Size = UDim2.new(1, 0, 0, 16),
+        Text = "",
+        TextSize = 12,
+        TextColor3 = Theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = textColumn,
+    })
+    local dateText = label({
+        Position = UDim2.fromOffset(0, 72),
+        Size = UDim2.new(1, 0, 0, 16),
+        Text = "",
+        TextSize = 12,
+        TextColor3 = Theme.Muted,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = textColumn,
+    })
+
     local chip = create("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
@@ -18490,19 +18586,39 @@ function Window:_homeClock(parent, opts, order)
     })
     applyIcon(chipArrow, "chevron-down", true)
 
-    local dateText = label({
-        Size = UDim2.new(1, 0, 0, 18),
-        Text = "",
-        TextSize = 12,
-        TextColor3 = Theme.Muted,
-        LayoutOrder = 2,
-        Parent = card,
-    })
-
-    local function refresh(now)
-        local shifted = now + math.floor(offset * 3600 + 0.5)
-        timeText.Text = os.date("!%H:%M:%S", shifted)
-        dateText.Text = os.date("!%A, %d %B %Y", shifted)
+    -- The clock reads the UTC clock, with its fraction of a second, and adds the chosen offset. The hands and the
+    -- digits all come from that one time, so they agree with each other on any machine's own time zone.
+    local function clockNow()
+        if type(tick) == "function" then
+            return tick()
+        end
+        return os.time()
+    end
+    local function cityFor(hours)
+        for _, zone in ipairs(Library.TimeZones) do
+            if zone[1] == hours then
+                return string.match(zone[2], "^[^,]+")
+            end
+        end
+        return nil
+    end
+    local lastWhole, lastDay = nil, nil
+    local function paintClock(epoch)
+        local shifted = epoch + math.floor(offset * 3600 + 0.5)
+        local dayFraction = shifted % 86400
+        hourHand.Rotation = (dayFraction % 43200) / 43200 * 360
+        minuteHand.Rotation = (dayFraction % 3600) / 3600 * 360
+        secondHand.Rotation = (dayFraction % 60) / 60 * 360
+        local whole = math.floor(shifted)
+        if whole ~= lastWhole then
+            lastWhole = whole
+            timeText.Text = os.date("!%H:%M:%S", whole)
+        end
+        local day = math.floor(shifted / 86400)
+        if day ~= lastDay then
+            lastDay = day
+            dateText.Text = os.date("!%A, %d %B %Y", whole)
+        end
     end
 
     -- The zone list opens as a popup over the window, like the dropdowns do.
@@ -18537,6 +18653,7 @@ function Window:_homeClock(parent, opts, order)
     local choices = {}
     local function paint()
         chipText.Text = gmtText(offset)
+        zoneText.Text = cityFor(offset) or gmtText(offset)
         for _, choice in ipairs(choices) do
             local active = choice.Hours == offset
             choice.Code.TextColor3 = active and Theme.Accent or Theme.Text
@@ -18625,7 +18742,7 @@ function Window:_homeClock(parent, opts, order)
             self:_writeConfigSettings({ ClockOffset = hours })
             setOpen(false)
             paint()
-            refresh(os.time())
+            paintClock(clockNow())
         end)
     end
 
@@ -18647,14 +18764,9 @@ function Window:_homeClock(parent, opts, order)
         end
     end)
     paint()
-    refresh(os.time())
-    local lastSecond = -1
+    paintClock(clockNow())
     table.insert(self._frameSteps, function()
-        local now = os.time()
-        if now ~= lastSecond then
-            lastSecond = now
-            refresh(now)
-        end
+        paintClock(clockNow())
     end)
     return card
 end
@@ -18790,6 +18902,192 @@ function Window:_homeEgg(parent, opts, order)
     return row
 end
 
+-- The people in this server as round headshots, yours first and ringed in the accent colour. Shows up to nine,
+-- then a +N pill. It redraws only when someone joins or leaves.
+function Window:_homeServer(list, opts, order)
+    local card = self:_homeCard(list, order)
+    local caption = self:_homeCaption(card, "In server", 0)
+    local row = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        Parent = card,
+    })
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = row,
+    })
+    local MAX_HEADS = 9
+    local shown, lastKey = {}, nil
+    local function refresh()
+        if not row.Parent then
+            return
+        end
+        local players = Players:GetPlayers()
+        local ids = {}
+        for index, player in ipairs(players) do
+            ids[index] = tostring(player.UserId)
+        end
+        caption.Text = string.upper("In server - " .. #players)
+        local key = table.concat(ids, ",")
+        if key == lastKey then
+            return
+        end
+        lastKey = key
+        for _, item in ipairs(shown) do
+            item:Destroy()
+        end
+        shown = {}
+        table.sort(players, function(a, b)
+            if a == LocalPlayer then
+                return b ~= LocalPlayer
+            end
+            if b == LocalPlayer then
+                return false
+            end
+            return a.UserId < b.UserId
+        end)
+        for index = 1, math.min(#players, MAX_HEADS) do
+            local player = players[index]
+            local head = create("ImageLabel", {
+                Size = UDim2.fromOffset(36, 36),
+                BackgroundColor3 = Theme.Surface3,
+                BorderSizePixel = 0,
+                Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(player.UserId) .. "&w=150&h=150",
+                LayoutOrder = index,
+                Parent = row,
+            })
+            corner(head, UDim.new(1, 0))
+            if player == LocalPlayer then
+                stroke(head, Theme.Accent, 0, 2)
+            else
+                stroke(head, Theme.Stroke, 0, 1)
+            end
+            shown[#shown + 1] = head
+        end
+        local extra = #players - MAX_HEADS
+        if extra > 0 then
+            local pill = create("Frame", {
+                Size = UDim2.fromOffset(36, 36),
+                BackgroundColor3 = Theme.Surface3,
+                BorderSizePixel = 0,
+                LayoutOrder = MAX_HEADS + 1,
+                Parent = row,
+            })
+            corner(pill, UDim.new(1, 0))
+            label({
+                Size = UDim2.fromScale(1, 1),
+                Text = "+" .. tostring(extra),
+                TextSize = 12,
+                FontFace = Fonts.Bold,
+                TextColor3 = Theme.Muted,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                TextYAlignment = Enum.TextYAlignment.Center,
+                Parent = pill,
+            })
+            shown[#shown + 1] = pill
+        end
+    end
+    Players.PlayerAdded:Connect(function()
+        task.defer(refresh)
+    end)
+    Players.PlayerRemoving:Connect(function()
+        task.defer(refresh)
+    end)
+    task.defer(refresh)
+    return refresh
+end
+
+-- A rotating tip, one short line at a time. Opts.Tips replaces the built-in tips.
+function Window:_homeTip(parent, opts, order)
+    local keyText = typeof(self.Keybind) == "EnumItem" and self.Keybind.Name or tostring(self.Keybind)
+    local tips = opts.Tips
+    if type(tips) ~= "table" or #tips == 0 then
+        tips = {
+            "Press " .. keyText .. " to show or hide this window.",
+            "Drag the divider beside the tabs to make the sidebar wider or narrower.",
+            "Search in the sidebar's top box to jump to any feature in any tab.",
+            "Save your settings under Configs, and pick one to load when the script starts.",
+        }
+    end
+    local card = self:_homeCard(parent, order)
+    self:_homeCaption(card, "Tip", 0)
+    local row = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        Parent = card,
+    })
+    local icon = create("ImageLabel", {
+        Position = UDim2.fromOffset(0, 11),
+        Size = UDim2.fromOffset(18, 18),
+        BackgroundTransparency = 1,
+        ImageColor3 = Theme.Accent,
+        ScaleType = Enum.ScaleType.Fit,
+        Parent = row,
+    })
+    applyIcon(icon, "lightbulb")
+    local text = label({
+        Position = UDim2.fromOffset(28, 0),
+        Size = UDim2.new(1, -28, 1, 0),
+        Text = tips[1],
+        TextSize = 13,
+        TextColor3 = Theme.Text,
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Parent = row,
+    })
+    if #tips > 1 then
+        local index = 1
+        task.spawn(function()
+            while not self._destroyed and card.Parent do
+                task.wait(8)
+                if not card.Parent then
+                    break
+                end
+                tween(text, { TextTransparency = 1 }, 0.3)
+                task.wait(0.35)
+                index = index % #tips + 1
+                text.Text = tips[index]
+                tween(text, { TextTransparency = 0 }, 0.3)
+            end
+        end)
+    end
+    return card
+end
+
+-- Shortcut tiles the script adds to Home: Home.Shortcuts = { { Name = "Rejoin", Icon = "refresh-cw", Callback = fn } }.
+-- Nothing is drawn without them.
+function Window:_homeShortcuts(list, opts, order)
+    local items = opts.Shortcuts
+    if type(items) ~= "table" or #items == 0 then
+        return nil
+    end
+    local card = self:_homeCard(list, order)
+    self:_homeCaption(card, "Shortcuts", 0)
+    local grid = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+        Parent = card,
+    })
+    local columns = math.min(#items, 4)
+    create("UIGridLayout", {
+        CellPadding = UDim2.fromOffset(8, 8),
+        CellSize = UDim2.new(1 / columns, -8, 0, 52),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = grid,
+    })
+    for index, item in ipairs(items) do
+        self:_homeAction(grid, index, item.Icon or "zap", item.Name or "Shortcut", item.Callback or function() end)
+    end
+    return card
+end
+
 function Window:_buildHome(opts)
     -- Values from the Loader (RunProtected) win over the protected script's Home options,
     -- so the Discord link and the egg follow the Loader even when the protected copy is older.
@@ -18829,16 +19127,17 @@ function Window:_buildHome(opts)
     local list = overview.List
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
-    self:_homeEgg(list, opts, 9)
+    self:_homeEgg(list, opts, 10)
     local refreshStats, resetStats = self:_homeStats(list, opts, 3, tab)
     self:_homeClock(list, opts, 4)
+    local refreshServer = self:_homeServer(list, opts, 5)
 
     -- Server and links side by side, stacked when narrow.
     local split = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 5,
+        LayoutOrder = 6,
         Parent = list,
     })
     local splitLayout = create("UIListLayout", {
@@ -18875,7 +19174,9 @@ function Window:_buildHome(opts)
     split:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSplit)
     task.defer(fitSplit)
 
-    self:_homeExecutor(list, opts, 5)
+    self:_homeShortcuts(list, opts, 7)
+    self:_homeExecutor(list, opts, 8)
+    self:_homeTip(list, opts, 9)
 
     if type(pages) == "table" then
         for _, page in ipairs(pages) do
@@ -18894,6 +19195,7 @@ function Window:_buildHome(opts)
                 refreshExpiry()
                 refreshGame()
                 refreshFeatures()
+                refreshServer()
             else
                 resetStats()
             end

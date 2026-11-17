@@ -480,6 +480,14 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 
 ---
 
+## What's new on Home
+
+- **In server**: round headshots of the players in this server, yours ringed in the accent colour, with a `+N` pill past nine. It redraws when someone joins or leaves.
+- **Tip**: a rotating tip under the executor card. `Home.Tips = { "...", "..." }` replaces the built-in tips.
+- **Shortcuts**: `Home.Shortcuts = { { Name = "Rejoin", Icon = "refresh-cw", Callback = fn } }` adds tiles in their own card. No card is drawn without them.
+- **Greeting**: the banner greets you by the time of day (Good morning, afternoon or evening) unless the Home options set `Welcome`.
+- **World clock**: an analogue face with turning hour, minute and second hands, beside the digital time, the city and the date. The hands and the digits read the UTC clock plus the chosen offset, so they agree on any machine.
+
 ## Tab
 
 > A sidebar button and a page with its icon and title.
