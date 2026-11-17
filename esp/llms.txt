@@ -16,3 +16,6 @@
 - Presets apply at once: every ESP control is refreshed after ESP:Import (silently, without its callback). Players stay enabled whatever a preset says.
 - ESP is in ESP.luau, its own file: `Library.ESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/ESP.luau"))()(Library)` loads it after the library. Nothing loads it by itself.
 - ESP is off by default: nothing loads ESP.luau until a script loads it.
+- ESP health bar: the fill takes its colour from health (green full, yellow half, red low) inside a black outline; ESP.HealthColor(fraction) returns that colour. Radar: a marker for your own character in the middle, pointing up.
+- ESP damage numbers: GlobalConfig.DamageText writes a red -N or green +N over a player when its health changes; each rises and fades in about 0.9s; off by default (Health page toggle 'Damage numbers').
+- ESP speed: GlobalConfig.Speed adds the horizontal speed beside the distance (m/s, or st/s with Meters off); falling does not count; off by default (Names page toggle 'Speed').

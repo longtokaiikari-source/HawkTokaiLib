@@ -2,14 +2,21 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **ESP health bar**: a black outline around a dark track, and the fill takes its colour from health (green when full, yellow at half, red when low, blended between). `ESP.HealthColor(fraction)` returns that colour.
+- **ESP radar marker**: your own character is a white dot with a black outline and a pointer, in the middle of the radar, always pointing up because the radar turns with the view.
+
 ### Added
 
+- **ESP speed**: the Names page has a Speed toggle (`GlobalConfig.Speed`) that adds each player's horizontal speed beside its distance, in m/s, or st/s with Meters off. Falling does not count; off by default.
+- **ESP damage numbers**: `GlobalConfig.DamageText` (the Damage numbers toggle on the Health page) writes a red `-N` or a green `+N` over a player when its health changes. Each number rises and fades in about a second; off by default.
 - **ESP**: `Library.ESP` now has its own objects and settings: `Add`, `Clear`, `Destroy`, per-object settings, the Highlight, SelectionBox and adornment types, the Tracer `Top` origin, the Arrow, the filled 2D box, the 3D box, the skeleton, the four callbacks and the global names. A health bar is added.
 - **ESP preview**: `Library.ESP:AttachPreview(handle)` draws the ESP over a 3D preview with the same settings and components as the game, without the highlight.
 - **ESP tests**: `tests/esp_test.lua` is plain Lua, with no Python. It runs the ESP against a mock of the Roblox API and checks geometry, rules, components, callbacks and cleanup. It does not render.
 - **ESP corner box**: `Box2D.Style = "Corner"` draws eight short corner lines. `"Full"` (the default) keeps the box with a black outline under the coloured line.
 - **ESP text**: the name sits above the box and the distance below it. Distances read in metres by default (`ESP.GlobalConfig.Meters = false` for studs), and the text scales with the box (`ESP.GlobalConfig.DynamicText`).
-- **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar from red to green.
+- **ESP health bar sides**: `Health.Side` is Left, Right or Bottom. `Health.Gradient` colours the bar by health: green when full, yellow at half, red when low.
 - **ESP tracer target**: `Tracer.To` is Feet (the default), Center or Head.
 - **ESP highlight depth**: `HighlightDepth` is `"Through walls"` (the default, always on top) or `"Behind walls"` (occluded by walls). Adornments and selection boxes follow it too. The fill and outline transparency have sliders.
 - **ESP visible check**: `GlobalConfig.VisibleCheck` colours a player you can see and one behind a wall in two colours (`VisibleColor` and `HiddenColor`). `GlobalConfig.VisibleOnly` hides the players behind a wall. A ray from the camera to the head decides, and the local character and the player are not in the way.
