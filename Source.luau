@@ -18497,22 +18497,42 @@ function Window:_homeClock(parent, opts, order)
         })
         corner(tick, UDim.new(1, 0))
     end
-    -- A hand is a bar whose bottom end sits on the centre, so turning it swings it about the middle.
-    local function hand(length, width, color)
+    -- Each hand is a frame centred on the face, with its bar in the top half and an optional short tail in the bottom
+    -- half. The frame turns about the middle of the face, so the hand swings from the centre, not from its own end.
+    local function hand(length, width, color, tail)
         local frame = create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(width, length * 2),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = face,
+        })
+        local bar = create("Frame", {
             AnchorPoint = Vector2.new(0.5, 1),
             Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(width, length),
             BackgroundColor3 = color,
             BorderSizePixel = 0,
-            Parent = face,
+            Parent = frame,
         })
-        corner(frame, UDim.new(1, 0))
+        corner(bar, UDim.new(1, 0))
+        if tail then
+            local counterweight = create("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0),
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(width, tail),
+                BackgroundColor3 = color,
+                BorderSizePixel = 0,
+                Parent = frame,
+            })
+            corner(counterweight, UDim.new(1, 0))
+        end
         return frame
     end
     local hourHand = hand(24, 4, Theme.Text)
     local minuteHand = hand(34, 3, Theme.Text)
-    local secondHand = hand(38, 1, Theme.Accent)
+    local secondHand = hand(38, 1, Theme.Accent, 8)
     local cap = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
