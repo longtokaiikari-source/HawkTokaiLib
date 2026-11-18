@@ -1134,6 +1134,14 @@ local function safeCall(callback, ...)
     end
 end
 
+-- The ScreenGuis the library makes outside a window (key system, status, executor notice, egg). An unload removes them
+-- once the last window is gone.
+Library._libraryGuis = {}
+function Library._trackGui(gui)
+    table.insert(Library._libraryGuis, gui)
+    return gui
+end
+
 -- Runs a user callback on its own thread and waits for it with task.wait.
 -- A callback that yields inside an engine call (InvokeServer and the like)
 -- resumes at game identity, which can no longer touch the GUI in CoreGui;
@@ -5120,6 +5128,7 @@ function Library._playEasterEgg(picture, sound, volume, onFinish, kickMessage)
         DisplayOrder = 20000,
         Parent = defaultParent(),
     })
+    Library._trackGui(gui)
     -- A full-screen button: it covers the screen and takes every click.
     local cover = create("TextButton", {
         Size = UDim2.fromScale(1, 1),
@@ -5413,6 +5422,7 @@ function Library:RequireKey(opts)
         DisplayOrder = 10000,
         Parent = defaultParent(),
     })
+    Library._trackGui(gui)
     local backdrop = create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(0, 0, 0),
@@ -6824,6 +6834,7 @@ function Library._showStatusCard(title, detail)
         DisplayOrder = 24000,
         Parent = defaultParent(),
     })
+    Library._trackGui(gui)
     local panel = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
@@ -7052,6 +7063,7 @@ function Library._showExecutorCard(score, minimum, missing)
         DisplayOrder = 25000,
         Parent = defaultParent(),
     })
+    Library._trackGui(gui)
     create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(0, 0, 0),
@@ -7165,6 +7177,7 @@ function Library._showExecutorBanner(score)
         DisplayOrder = 25000,
         Parent = defaultParent(),
     })
+    Library._trackGui(gui)
     local banner = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.new(0.5, 0, 0, 14),
@@ -25205,11 +25218,33 @@ function Window:Destroy()
             return
         end
         removed = true
-        if not pcall(gui.Destroy, gui) then
+        if typeof(gui) ~= "Instance" then
+            return
+        end
+        local function take()
+            -- Hide first, so nothing stays clickable; then destroy; if destroy fails, take it out of the tree.
             pcall(function()
                 gui.Enabled = false
             end)
+            if not pcall(gui.Destroy, gui) then
+                pcall(function()
+                    gui.Parent = nil
+                end)
+            end
+            if #Library.Windows == 0 then
+                for _, extra in ipairs(Library._libraryGuis or {}) do
+                    if typeof(extra) == "Instance" then
+                        if not pcall(extra.Destroy, extra) then
+                            pcall(function()
+                                extra.Parent = nil
+                            end)
+                        end
+                    end
+                end
+                Library._libraryGuis = {}
+            end
         end
+        Library._runOnGui(take)
     end
     -- The fade out is decoration only. Input is already cut at this point, so
     -- if any of it fails the gui is removed straight away instead of being
@@ -25312,6 +25347,15 @@ local function runTrusted(fn, ...)
         error(result[2], 0)
     end
     return table.unpack(result, 2, result.n)
+end
+
+-- Runs a change to the library's GUI on a thread that can still touch it. Unload uses this for its removal, which runs
+-- after a delay on a thread that may have lost access to CoreGui; if the trusted queue cannot run it, it runs directly.
+function Library._runOnGui(fn)
+    local ok = pcall(runTrusted, fn)
+    if not ok then
+        pcall(fn)
+    end
 end
 
 local guardedObjects = setmetatable({}, { __mode = "k" })
