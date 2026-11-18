@@ -179,3 +179,5 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Dialogs: buttons and backdrop ignore input for 0.25s after opening, so the opening click cannot press Confirm.
 - Dialogs: a dialog that fails while building removes its half-built overlay and prints the error. Unload prints 'unload started' and 'unload removed the window'.
 - Dialogs: a gradient that does not end at full strength stopped the dialog opening; fixed. Gradients must start at 0 and end at 1 (tests/sequence_test.lua checks). A dialog that cannot open shows an error notification.
+- Panels: a light on a panel is its own layer, never a gradient on the panel itself (that fades the panel). tests/sequence_test.lua checks this.
+- Console: expected fallbacks stay quiet (missing icons warn once per name; executors without file functions do not warn about custom fonts or the egg). The example's ESP tab builds in a protected call.

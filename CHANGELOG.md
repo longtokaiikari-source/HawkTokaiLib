@@ -69,6 +69,9 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- **Console clean-up**: a stand-in run of the example in a minimal and a full executor found no errors. Expected fallbacks no longer print: a missing icon warns once per name, an executor without file functions stays quiet about custom fonts and the egg, an empty font name means the default font, a character whose rig cannot be read shows nothing. The unload trace lines used for diagnosis are removed.
+- **Example**: the ESP tab builds inside a protected call, so an error in the ESP cannot take the Settings tab or the Unload button with it.
+- **Dialogs and panels**: the light on the dialog card was a gradient on the card itself, which faded the whole card, so the dialog looked see-through. The light is now a layer of its own that fades in with the dialog. Home cards and the watermark pill had the same fade and are solid again.
 - **Dialogs**: the card's sheen used a gradient that did not reach full strength, so Roblox refused to build the dialog and Unload never asked. Fixed. A dialog that cannot open now shows an error notification.
 - **Dialogs**: if a dialog fails while it is being built, its half-built overlay is removed, so it cannot block every click, and the error is printed. Unload prints a short trace (started, removed) so a failure shows where it stopped.
 - **Dialogs**: the buttons and the backdrop ignore input for a quarter of a second after a dialog opens, so the click that opened it (Unload, for one) cannot also press Confirm. Unload asks first again.

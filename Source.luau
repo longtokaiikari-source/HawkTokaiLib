@@ -258,7 +258,6 @@ local FONT_WEIGHTS = {
 function Library:LoadFont(opts)
     opts = normalize(opts, {})
     if type(writefile) ~= "function" or type(isfile) ~= "function" or typeof(getcustomasset) ~= "function" then
-        warn("[HawkTokaiLib] custom fonts need writefile, isfile and getcustomasset")
         return false
     end
     local name = opts.Name or "CustomFont"
@@ -319,6 +318,9 @@ end
 -- preset is downloaded the first time it is chosen. Text already on screen is restyled too.
 function Library:SetFont(name)
     name = tostring(name or "")
+    if name == "" then
+        name = Library.DefaultFont
+    end
     local builtin = Library.BuiltinFonts[name]
     if builtin then
         local ok, faces = pcall(builtin)
@@ -396,7 +398,11 @@ local function resolveIcon(icon)
     elseif type(entry) == "string" then
         return entry
     end
-    warn("[HawkTokaiLib] unknown lucide icon: " .. name)
+    Library._warnedIcons = Library._warnedIcons or {}
+    if not Library._warnedIcons[name] then
+        Library._warnedIcons[name] = true
+        warn("[HawkTokaiLib] unknown lucide icon: " .. name)
+    end
     return nil
 end
 
@@ -16938,17 +16944,6 @@ function Window:_homeCard(parent, order)
     local card = panelCard(parent, 0, order)
     card.AutomaticSize = Enum.AutomaticSize.Y
     padding(card, 16, 16, 14, 14)
-    -- A faint light at the top of each card, so it reads as a raised panel rather than a flat box.
-    create("UIGradient", {
-        Rotation = 90,
-        Color = ColorSequence.new(Color3.new(1, 1, 1)),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.955),
-            NumberSequenceKeypoint.new(0.6, 1),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Parent = card,
-    })
     create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = card })
     return card
 end
@@ -18959,7 +18954,9 @@ function Window:_homeEgg(parent, opts, order)
                     state[kind == "Image" and "picture" or "sound"] = result
                 else
                     state.error = tostring(result)
-                    warn("[HawkTokaiLib] An egg file is not ready: " .. state.error)
+                    if not tostring(state.error or ""):find("cannot save files", 1, true) then
+                        warn("[HawkTokaiLib] An egg file is not ready: " .. state.error)
+                    end
                 end
             end)
         end
@@ -18993,7 +18990,9 @@ function Window:_homeEgg(parent, opts, order)
                 waited += 0.2
             end
             if not state.picture or not state.sound then
-                warn("[HawkTokaiLib] The egg is not ready: " .. tostring(state.error or "the download did not finish"))
+                if not tostring(state.error or ""):find("cannot save files", 1, true) then
+                    warn("[HawkTokaiLib] The egg is not ready: " .. tostring(state.error or "the download did not finish"))
+                end
                 state.playing = false
                 return
             end
@@ -21783,16 +21782,24 @@ function Window:_buildDialog(opts)
     })
     corner(card, UDim.new(0, 10))
     local cardStroke = stroke(card, Theme.Stroke, 1)
-    -- A faint light at the top of the card, so it reads as a raised panel.
+    -- A faint light at the top of the card. It is a layer of its own, so the card's own background is never faded by it.
+    local sheenFrame = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 1,
+        Parent = card,
+    })
+    corner(sheenFrame, UDim.new(0, 10))
     create("UIGradient", {
         Rotation = 90,
-        Color = ColorSequence.new(Color3.new(1, 1, 1)),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.95),
+            NumberSequenceKeypoint.new(0, 0),
             NumberSequenceKeypoint.new(0.5, 1),
             NumberSequenceKeypoint.new(1, 1),
         }),
-        Parent = card,
+        Parent = sheenFrame,
     })
     local cardScale = create("UIScale", { Scale = 0.94, Parent = card })
     local fading = {}
@@ -21808,6 +21815,7 @@ function Window:_buildDialog(opts)
     })
     corner(hairline, UDim.new(1, 0))
     table.insert(fading, { hairline, "BackgroundTransparency", 0.15 })
+    table.insert(fading, { sheenFrame, "BackgroundTransparency", 0.95 })
 
     local titleOffset = 0
     if opts.Icon then
@@ -24467,15 +24475,6 @@ function Window:SetWatermark(opts)
             Parent = self.Gui,
         })
         corner(frame, UDim.new(0, 13))
-        create("UIGradient", {
-            Rotation = 90,
-            Color = ColorSequence.new(Color3.new(1, 1, 1)),
-            Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0.94),
-                NumberSequenceKeypoint.new(1, 1),
-            }),
-            Parent = frame,
-        })
         stroke(frame)
         padding(frame, 12, 12)
         self:_dragOverlay(frame, "WatermarkPosition")
@@ -25220,7 +25219,6 @@ function Window:Destroy()
         return
     end
     self._destroyed = true
-    warn("[HawkTokaiLib] unload started")
     for _, callback in ipairs(self._unloadCallbacks or {}) do
         pcall(callback)
     end
@@ -25266,7 +25264,6 @@ function Window:Destroy()
                     gui.Parent = nil
                 end)
             end
-            warn("[HawkTokaiLib] unload removed the window")
             if #Library.Windows == 0 then
                 for _, extra in ipairs(Library._libraryGuis or {}) do
                     if typeof(extra) == "Instance" then

@@ -897,7 +897,6 @@ do
 			end
 		end
 		if not sequence then
-			warn("[HawkTokai ESP] could not detect the rig type for " .. tostring(object.CurrentSettings.Name))
 			return nil
 		end
 		local pool = P.LinePool(scene.Container)
