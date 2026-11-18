@@ -178,3 +178,4 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Unload: removes the window (hidden first, then destroyed) even when it runs off the main thread; library guis go with the last window. The Example's toggle button shows on PC.
 - Dialogs: buttons and backdrop ignore input for 0.25s after opening, so the opening click cannot press Confirm.
 - Dialogs: a dialog that fails while building removes its half-built overlay and prints the error. Unload prints 'unload started' and 'unload removed the window'.
+- Dialogs: a gradient that does not end at full strength stopped the dialog opening; fixed. Gradients must start at 0 and end at 1 (tests/sequence_test.lua checks). A dialog that cannot open shows an error notification.

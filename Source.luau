@@ -21731,6 +21731,9 @@ function Window:Dialog(opts)
             end)
         end
         warn("[HawkTokaiLib] the dialog failed to open: " .. tostring(result))
+        pcall(function()
+            self:Notify({ Title = "Dialog", Content = "It could not open: " .. tostring(result), Type = "Error", Duration = 8 })
+        end)
         return nil
     end
     return result
@@ -21787,6 +21790,7 @@ function Window:_buildDialog(opts)
         Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.95),
             NumberSequenceKeypoint.new(0.5, 1),
+            NumberSequenceKeypoint.new(1, 1),
         }),
         Parent = card,
     })

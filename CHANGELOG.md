@@ -69,6 +69,7 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- **Dialogs**: the card's sheen used a gradient that did not reach full strength, so Roblox refused to build the dialog and Unload never asked. Fixed. A dialog that cannot open now shows an error notification.
 - **Dialogs**: if a dialog fails while it is being built, its half-built overlay is removed, so it cannot block every click, and the error is printed. Unload prints a short trace (started, removed) so a failure shows where it stopped.
 - **Dialogs**: the buttons and the backdrop ignore input for a quarter of a second after a dialog opens, so the click that opened it (Unload, for one) cannot also press Confirm. Unload asks first again.
 - **Unload**: the window is now removed even when Unload runs on a thread that lost access to the GUI. The window is hidden first, then destroyed, and the library's own screen guis are removed with the last window, so nothing stays on screen or clickable. The Example's toggle button now shows on PC too.
