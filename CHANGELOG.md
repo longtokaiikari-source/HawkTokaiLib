@@ -69,6 +69,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- **Dialogs**: if a dialog fails while it is being built, its half-built overlay is removed, so it cannot block every click, and the error is printed. Unload prints a short trace (started, removed) so a failure shows where it stopped.
+- **Dialogs**: the buttons and the backdrop ignore input for a quarter of a second after a dialog opens, so the click that opened it (Unload, for one) cannot also press Confirm. Unload asks first again.
 - **Unload**: the window is now removed even when Unload runs on a thread that lost access to the GUI. The window is hidden first, then destroyed, and the library's own screen guis are removed with the last window, so nothing stays on screen or clickable. The Example's toggle button now shows on PC too.
 - **Home world clock digits and date**: they are worked out from the seconds in GMT instead of os.date, so they match the hands on any device. The watermark time uses the same code.
 - The SelectionBox border colour has a default now. A `BorderColor` was read but never set, which errors for the `SelectionBox` type.

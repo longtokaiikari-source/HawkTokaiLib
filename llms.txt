@@ -176,3 +176,5 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Dialogs: icon and a top hairline take the type colour (success, warning, error); faint sheen on the card.
 - Sliders: the fill runs from a deeper accent to the bright accent; the knob has a light ring.
 - Unload: removes the window (hidden first, then destroyed) even when it runs off the main thread; library guis go with the last window. The Example's toggle button shows on PC.
+- Dialogs: buttons and backdrop ignore input for 0.25s after opening, so the opening click cannot press Confirm.
+- Dialogs: a dialog that fails while building removes its half-built overlay and prints the error. Unload prints 'unload started' and 'unload removed the window'.

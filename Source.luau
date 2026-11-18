@@ -21717,10 +21717,33 @@ function Tab:GetBadge()
     return nil
 end
 
+-- Builds a dialog. If building it fails part way, the half-built overlay is removed, so it cannot stay on screen and
+-- block every click. The error is printed so it can be reported.
 function Window:Dialog(opts)
+    self._pendingOverlay = nil
+    local ok, result = pcall(self._buildDialog, self, opts)
+    local pending = self._pendingOverlay
+    self._pendingOverlay = nil
+    if not ok then
+        if typeof(pending) == "Instance" then
+            pcall(function()
+                pending:Destroy()
+            end)
+        end
+        warn("[HawkTokaiLib] the dialog failed to open: " .. tostring(result))
+        return nil
+    end
+    return result
+end
+
+function Window:_buildDialog(opts)
     opts = normalize(opts, { Text = "Content", Message = "Content" })
     -- The dialog takes the colour of its type (success, warning or error), so the hairline and icon say what kind it is.
     local accent = NOTIFY_COLORS[opts.Type] or Theme.Accent
+    -- The buttons and the backdrop ignore input for a moment after the dialog opens. The click that opened it can
+    -- otherwise land on one of its buttons (on touch the release lands on whatever is under the finger), and the
+    -- dialog's action runs before it was ever shown.
+    local armedAt = tick() + 0.25
     if self._dialog then
         self._dialog.Close()
     end
@@ -21744,6 +21767,7 @@ function Window:Dialog(opts)
         ZIndex = 40,
         Parent = self.Body,
     })
+    self._pendingOverlay = overlay
     local card = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 10),
@@ -21928,6 +21952,9 @@ function Window:Dialog(opts)
             end
         end)
         buttonFrame.MouseButton1Click:Connect(function()
+            if closed or tick() < armedAt then
+                return
+            end
             dialog.Close()
             safeCall(spec.Callback)
         end)
@@ -21935,6 +21962,9 @@ function Window:Dialog(opts)
 
     if opts.CloseOnBackdrop ~= false then
         overlay.MouseButton1Click:Connect(function()
+            if closed or tick() < armedAt then
+                return
+            end
             dialog.Close()
             safeCall(opts.OnCancel)
         end)
@@ -25186,6 +25216,7 @@ function Window:Destroy()
         return
     end
     self._destroyed = true
+    warn("[HawkTokaiLib] unload started")
     for _, callback in ipairs(self._unloadCallbacks or {}) do
         pcall(callback)
     end
@@ -25231,6 +25262,7 @@ function Window:Destroy()
                     gui.Parent = nil
                 end)
             end
+            warn("[HawkTokaiLib] unload removed the window")
             if #Library.Windows == 0 then
                 for _, extra in ipairs(Library._libraryGuis or {}) do
                     if typeof(extra) == "Instance" then
