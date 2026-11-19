@@ -3520,12 +3520,124 @@ function Tab:Input(opts)
     }, frame, "Input")
 end
 
+-- Key combos: a key with any of Ctrl, Shift and Alt held. A plain key stays an Enum.KeyCode, so older configs and
+-- scripts keep working; a combo is kept as text such as "Ctrl+Shift+K".
+Library._modifierOrder = { "Ctrl", "Shift", "Alt" }
+Library._modifierKeys = {
+    Ctrl = { Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl },
+    Shift = { Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift },
+    Alt = { Enum.KeyCode.LeftAlt, Enum.KeyCode.RightAlt },
+}
+function Library._isModifierKey(keyCode)
+    for _, keys in pairs(Library._modifierKeys) do
+        for _, key in ipairs(keys) do
+            if key == keyCode then
+                return true
+            end
+        end
+    end
+    return false
+end
+function Library._heldModifiers()
+    local held = {}
+    for name, keys in pairs(Library._modifierKeys) do
+        for _, key in ipairs(keys) do
+            if UserInputService:IsKeyDown(key) then
+                held[name] = true
+                break
+            end
+        end
+    end
+    return held
+end
+function Library._noMods(mods)
+    return mods == nil or next(mods) == nil
+end
+function Library._sameMods(a, b)
+    for _, name in ipairs(Library._modifierOrder) do
+        if (a ~= nil and a[name] == true) ~= (b ~= nil and b[name] == true) then
+            return false
+        end
+    end
+    return true
+end
+function Library._modsMatch(required)
+    if Library._noMods(required) then
+        return true
+    end
+    return Library._sameMods(required, Library._heldModifiers())
+end
+function Library._combosOverlap(keyA, modsA, keyB, modsB)
+    if keyA == nil or keyB == nil or keyA ~= keyB then
+        return false
+    end
+    if Library._noMods(modsA) or Library._noMods(modsB) then
+        return true
+    end
+    return Library._sameMods(modsA, modsB)
+end
+function Library._comboText(key, mods)
+    if key == nil then
+        return "None"
+    end
+    local parts = {}
+    for _, name in ipairs(Library._modifierOrder) do
+        if mods ~= nil and mods[name] == true then
+            parts[#parts + 1] = name
+        end
+    end
+    parts[#parts + 1] = keyName(key)
+    return table.concat(parts, "+")
+end
+function Library._comboSave(key, mods)
+    if key == nil then
+        return nil
+    end
+    if Library._noMods(mods) then
+        return key
+    end
+    local parts = {}
+    for _, name in ipairs(Library._modifierOrder) do
+        if mods[name] == true then
+            parts[#parts + 1] = name
+        end
+    end
+    parts[#parts + 1] = key.Name
+    return table.concat(parts, "+")
+end
+function Library._parseCombo(value)
+    if value == nil or value == "" or value == "None" then
+        return nil, {}
+    end
+    if typeof(value) == "EnumItem" then
+        return value, {}
+    end
+    local mods, key = {}, nil
+    for part in string.gmatch(tostring(value), "[^+]+") do
+        part = part:match("^%s*(.-)%s*$")
+        local isModifier = false
+        for _, name in ipairs(Library._modifierOrder) do
+            if part == name then
+                mods[name] = true
+                isModifier = true
+            end
+        end
+        if not isModifier then
+            local ok, code = pcall(function()
+                return Enum.KeyCode[part]
+            end)
+            if ok then
+                key = code
+            end
+        end
+    end
+    return key, mods
+end
+
+
 function Tab:Keybind(opts)
     local frame, frameStroke, _, titleLabel, descLabel
     opts, frame, frameStroke, _, titleLabel, descLabel = beginElement(self, opts, { Title = "Name", Description = "Desc", CurrentKeybind = "Default", Value = "Default" }, "Frame", 110, "Keybind")
-    if type(opts.Default) == "string" then
-        opts.Default = Enum.KeyCode[opts.Default]
-    end
     local compact = metricsOf(self).Compact
     local chipHeight = metricsOf(self).Chip
 
@@ -3551,7 +3663,8 @@ function Tab:Keybind(opts)
         Parent = chip,
     })
 
-    local self_ = { Value = opts.Default, Listening = false }
+    local self_ = { Value = nil, Mods = {}, Listening = false }
+    self_.Value, self_.Mods = Library._parseCombo(opts.Default)
 
     local function fitChip(instant)
         local width = math.max(chipLabel.TextBounds.X + 20, TOUCH and 44 or 36)
@@ -3617,7 +3730,7 @@ function Tab:Keybind(opts)
 
     local function render()
         local listening = self_.Listening
-        chipLabel.Text = listening and "" or keyName(self_.Value)
+        chipLabel.Text = listening and "" or Library._comboText(self_.Value, self_.Mods)
         dotsHolder.Visible = listening
         tween(chipStroke, { Color = listening and Theme.StrokeHover or Theme.Stroke }, 0.15)
         tween(chipLabel, { TextColor3 = listening and Theme.Accent or Theme.Muted }, 0.15)
@@ -3628,17 +3741,58 @@ function Tab:Keybind(opts)
         end
     end
 
-    function self_:Set(keyCode, silent)
+    -- Conflicts: another keybind in this window, or a toggle binding, that takes the same key and modifiers.
+    local function conflictName()
+        if self_.Value == nil then
+            return nil
+        end
+        for _, other in ipairs(self.Window._keybindElements or {}) do
+            if other ~= self_ and other.Value ~= nil and Library._combosOverlap(self_.Value, self_.Mods, other.Value, other.Mods) then
+                return other.Title
+            end
+        end
+        for _, binding in pairs(self.Window._toggleBinds or {}) do
+            if Library._combosOverlap(self_.Value, self_.Mods, binding.Key, binding.Mods) then
+                return binding.Label
+            end
+        end
+        return nil
+    end
+    local function refreshConflict(announce)
+        local other = conflictName()
+        self_.Conflict = other
+        tween(chipStroke, { Color = other and Theme.Warning or (self_.Listening and Theme.StrokeHover or Theme.Stroke) }, 0.15)
+        if other and announce then
+            self.Window:Notify({
+                Title = "Key already in use",
+                Content = Library._comboText(self_.Value, self_.Mods) .. " is also bound to " .. tostring(other),
+                Type = "Warning",
+                Duration = 4,
+            })
+        end
+    end
+    self_._refreshConflict = refreshConflict
+    local function apply(key, mods, silent)
         local wasListening = self_.Listening
-        self_.Value = keyCode
+        self_.Value = key
+        self_.Mods = mods or {}
         self_.Listening = false
         render()
         if not wasListening then
             flashStroke(frameStroke)
         end
-        if not silent then
-            safeCall(opts.OnChanged, keyCode)
+        for _, element in ipairs(self.Window._keybindElements or {}) do
+            if element._refreshConflict then
+                element._refreshConflict(element == self_ and not silent)
+            end
         end
+        if not silent then
+            safeCall(opts.OnChanged, Library._comboSave(key, self_.Mods))
+        end
+    end
+    function self_:Set(value, silent)
+        local key, mods = Library._parseCombo(value)
+        apply(key, mods, silent)
     end
 
     chip.MouseButton1Click:Connect(function()
@@ -3651,25 +3805,38 @@ function Tab:Keybind(opts)
             return
         end
         if self_.Listening then
-            self.Window._consumedKey = input.KeyCode
-            self.Window._consumedAt = os.clock()
+            if Library._isModifierKey(input.KeyCode) then
+                return
+            end
             if input.KeyCode == Enum.KeyCode.Escape then
                 self_.Listening = false
                 render()
+                return
+            end
+            self.Window._consumedInput = input
+            if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
+                apply(nil, {}, false)
             else
-                self_:Set(input.KeyCode)
+                apply(input.KeyCode, Library._heldModifiers(), false)
             end
             return
         end
-        if not gameProcessed and self_.Value ~= nil and input.KeyCode == self_.Value then
-            safeCall(opts.Callback, input.KeyCode)
+        if gameProcessed or UserInputService:GetFocusedTextBox() then
+            return
+        end
+        if self_.Value ~= nil and input.KeyCode == self_.Value and Library._modsMatch(self_.Mods) then
+            safeCall(opts.Callback, input.KeyCode, self_.Mods)
         end
     end, self_)
 
     render()
     task.defer(fitChip, true)
+    self_.Title = titleLabel.Text
+    self.Window._keybindElements = self.Window._keybindElements or {}
+    table.insert(self.Window._keybindElements, self_)
+    refreshConflict(false)
     function self_:Get()
-        return self_.Value
+        return Library._comboSave(self_.Value, self_.Mods)
     end
     self_._onHide = function()
         if self_.Listening then
@@ -7246,17 +7413,18 @@ function Library.Window(_, opts)
     Library._hideStatus()
     opts = normalize(opts, { Name = "Title", LoadingSubtitle = "Subtitle", ToggleUIKeybind = "Keybind" })
 
-    if type(opts.Keybind) == "string" then
-        opts.Keybind = Enum.KeyCode[opts.Keybind]
-    end
     local size = opts.Size or UDim2.fromOffset(760, 520)
-    local keybind = opts.Keybind or Enum.KeyCode.RightControl
+    local keybind, keybindMods = Library._parseCombo(opts.Keybind)
+    if opts.Keybind == nil then
+        keybind, keybindMods = Enum.KeyCode.RightControl, {}
+    end
 
     local self = setmetatable({
         Tabs = {},
         CurrentTab = nil,
         Open = true,
         Keybind = keybind,
+        KeybindMods = keybindMods,
         _connections = {},
         _controls = {},
         _inputListeners = { Began = {}, Changed = {}, Ended = {}, Render = {} },
@@ -7659,10 +7827,10 @@ function Library.Window(_, opts)
         if gameProcessed then
             return
         end
-        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == self.Keybind then
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == self.Keybind and Library._modsMatch(self.KeybindMods) then
             task.defer(function()
-                local consumed = self._consumedKey == input.KeyCode and os.clock() - (self._consumedAt or 0) < 0.2
-                self._consumedKey = nil
+                local consumed = self._consumedInput == input
+                self._consumedInput = nil
                 if not consumed and not self._destroyed then
                     if self.Minimized then
                         self:Restore()
@@ -9758,7 +9926,7 @@ local function serializeFlag(element)
         value = element:_saveValue()
     end
     if kind == "Keybind" then
-        return { Type = kind, Value = value and value.Name or nil }
+        return { Type = kind, Value = typeof(value) == "EnumItem" and value.Name or (type(value) == "string" and value) or nil }
     elseif kind == "ColorPicker" then
         return { Type = kind, Value = typeof(value) == "Color3" and { Hex = colorToHex(value) } or nil }
     end
@@ -9769,7 +9937,7 @@ local function deserializeFlag(element, entry, silent)
     local kind = element._type
     local value = entry.Value
     if kind == "Keybind" then
-        element:Set(type(value) == "string" and Enum.KeyCode[value] or nil, silent)
+        element:Set(type(value) == "string" and value or nil, silent)
     elseif kind == "ColorPicker" then
         local color = colorFromValue(value)
         if color then
@@ -17685,7 +17853,7 @@ function Window:_homeExecutor(list, opts, order)
     self._keyChipLabel = label({
         Size = UDim2.new(0, 0, 1, 0),
         AutomaticSize = Enum.AutomaticSize.X,
-        Text = keyName(self.Keybind),
+        Text = Library._comboText(self.Keybind, self.KeybindMods),
         TextSize = 11,
         FontFace = Fonts.Bold,
         TextTruncate = Enum.TextTruncate.None,
@@ -19109,7 +19277,8 @@ end
 
 -- A rotating tip, one short line at a time. Opts.Tips replaces the built-in tips.
 function Window:_homeTip(parent, opts, order)
-    local keyText = typeof(self.Keybind) == "EnumItem" and self.Keybind.Name or tostring(self.Keybind)
+    local combo = Library._comboSave(self.Keybind, self.KeybindMods)
+    local keyText = typeof(combo) == "EnumItem" and combo.Name or tostring(combo or "None")
     local tips = opts.Tips
     if type(tips) ~= "table" or #tips == 0 then
         tips = {
@@ -24080,7 +24249,7 @@ function Window:_buildMiniBar()
         barsHolder.Visible = running > 0
         meter.Visible = not splitOn
         miniTitle.Visible = not splitOn
-        local key = typeof(self.Keybind) == "EnumItem" and keyName(self.Keybind)
+        local key = self.Keybind ~= nil and Library._comboText(self.Keybind, self.KeybindMods)
         hint.Text = TOUCH and "Tap to open" or (key and ("Click or press " .. key .. " to open") or "Click to open")
 
         local list = {}
@@ -24401,9 +24570,11 @@ function Window:SetKeepOnScreen(enabled)
 end
 
 function Window:SetKeybind(keyCode)
-    self.Keybind = keyCode
+    local key, mods = Library._parseCombo(keyCode)
+    self.Keybind = key
+    self.KeybindMods = mods
     if self._keyChipLabel then
-        self._keyChipLabel.Text = keyName(keyCode)
+        self._keyChipLabel.Text = Library._comboText(key, mods)
     end
 end
 
@@ -24731,10 +24902,8 @@ function Window:BindToggle(toggle, keyCode, mode)
         previous.Remove()
         self._toggleBinds[toggle] = nil
     end
-    if type(keyCode) == "string" then
-        keyCode = Enum.KeyCode[keyCode]
-    end
-    if keyCode == nil then
+    local key, mods = Library._parseCombo(keyCode)
+    if key == nil then
         self:_refreshKeybindList()
         return self
     end
@@ -24742,16 +24911,18 @@ function Window:BindToggle(toggle, keyCode, mode)
     self._bindOrder = (self._bindOrder or 0) + 1
     local binding = {
         Toggle = toggle,
-        Key = keyCode,
+        Key = key,
+        Mods = mods,
         Mode = mode == "Hold" and "Hold" or "Toggle",
         Held = false,
         Order = self._bindOrder,
+        Label = (type(toggle._searchName) == "string" and toggle._searchName ~= "" and toggle._searchName) or "a toggle",
     }
     local removeBegan = self:_listen("Began", function(input, gameProcessed)
-        if gameProcessed or input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= keyCode then
+        if gameProcessed or input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= key then
             return
         end
-        if UserInputService:GetFocusedTextBox() then
+        if UserInputService:GetFocusedTextBox() or not Library._modsMatch(mods) then
             return
         end
         if binding.Mode == "Hold" then
@@ -24764,7 +24935,7 @@ function Window:BindToggle(toggle, keyCode, mode)
         end
     end)
     local removeEnded = self:_listen("Ended", function(input)
-        if input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= keyCode then
+        if input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= key then
             return
         end
         if binding.Held then
@@ -24932,7 +25103,7 @@ function Window:_refreshKeybindList()
         row.Name.TextColor3 = on and Theme.Text or Theme.Muted
         row.Dot.BackgroundColor3 = on and Theme.Accent or Theme.Muted
         row.Mode.Text = binding.Mode == "Hold" and "hold" or "toggle"
-        row.Key.Text = keyName(binding.Key)
+        row.Key.Text = Library._comboText(binding.Key, binding.Mods)
     end
 end
 

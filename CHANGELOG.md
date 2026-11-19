@@ -12,6 +12,10 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
+- **Key combos**: a keybind or `BindToggle` takes a key with Ctrl, Shift or Alt, such as `"Ctrl+K"` or `"Shift+F3"`. Plain keys work as before and are saved the same way.
+- **Keybind capture**: Backspace or Delete clears a keybind, Escape cancels, and a modifier pressed on its own does not bind.
+- **Keybind conflicts**: a keybind that takes a key already used by another keybind or a toggle binding shows an amber chip and a notice naming the other one.
+- **Window toggle key**: `ToggleUIKeybind` and `Window:SetKeybind` take combos too.
 - **Home world clock**: an analogue face with turning hour, minute and second hands, the digital time, the city of the chosen GMT offset and the date. The hands and the digits come from one UTC time plus the offset.
 - **Home**: an In server card with headshots of the players, a rotating Tip card (`Home.Tips`), a Shortcuts card (`Home.Shortcuts`), and a time-of-day greeting in the banner unless `Welcome` is set.
 - **Executor check** before the key gate. It runs the UNC tests and stops the load below 70 (`UNC = { Fail = 70, Warn = 80 }`), shows a banner from 70 to 79, and loads normally from 80. `UNC = false` skips it. `Library:GetExecutorScore()` returns the score.
@@ -46,6 +50,10 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
+- `Keybind` `Callback` gets the held modifiers as a second argument, `{ Ctrl = true, ... }`, empty for a plain key.
+- `Keybind` `OnChanged` and `Get()` return the combo text for a combo, and the `KeyCode` for a plain key as before.
+- Keybinds and toggle bindings do not fire while a text box has focus.
+
 - **Sliders**: the filled part runs from a deeper accent at the start to the bright accent at the knob, and the knob has a light ring so it stands clear of the track.
 - **Dialogs**: the icon and a hairline along the top take the dialog's type colour (success, warning or error), and the card has a faint sheen.
 - **Groupbox headers**: the icon sits in a small accent-tinted tile, and a hairline separates the header from the body on every tab.
@@ -68,6 +76,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
+
+- A capture no longer swallows the next press of the same key. The window's hide key ignored any press of that key within 0.2 seconds of a capture.
 
 - **Console clean-up**: a stand-in run of the example in a minimal and a full executor found no errors. Expected fallbacks no longer print: a missing icon warns once per name, an executor without file functions stays quiet about custom fonts and the egg, an empty font name means the default font, a character whose rig cannot be read shows nothing. The unload trace lines used for diagnosis are removed.
 - **Example**: the ESP tab builds inside a protected call, so an error in the ESP cannot take the Settings tab or the Unload button with it.

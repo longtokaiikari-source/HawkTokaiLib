@@ -135,7 +135,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `Name` | string | `"HawkTokaiLib"` | Title in the sidebar header. Also names the ScreenGui. |
 | `LoadingSubtitle` | string | — | Small line under the title. |
 | `Icon` | string \| number \| table | HawkTokaiLib mark (full colour) | Lucide name, asset id, or `{ Image, RectOffset, RectSize, Tint }`. See [Icons](#icons). |
-| `ToggleUIKeybind` | string \| KeyCode | `"RightControl"` | Hides and shows the window. `"RightShift"`, `"LeftAlt"`, `"Insert"`, `"F1"`, or an `Enum.KeyCode`. |
+| `ToggleUIKeybind` | string \| KeyCode | `"RightControl"` | Hides and shows the window. Combos such as `"Ctrl+K"` work too. `"RightShift"`, `"LeftAlt"`, `"Insert"`, `"F1"`, or an `Enum.KeyCode`. |
 | `Size` | UDim2 | `760 × 520` | Starting size. |
 | `MinSize` | Vector2 | `480 × 360` | Smallest size the resize grip allows. |
 | `MaxSize` | Vector2 | unlimited | Largest size the resize grip allows. |
@@ -212,7 +212,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetBackdropTint(amount)` | Tint strength, `0` to `1`. |
 | `SetDim(bool)` | Turn the tint on or off. The weather keeps running. |
 | `SetWeatherDensity(n)` / `SetWeatherSpeed(n)` | Particle count and speed multipliers. |
-| `SetKeybind(keyCode)` | Change the hide key. Updates the chip on the home tab. |
+| `SetKeybind(keyCode)` | Change the hide key, as a KeyCode or a combo such as `"Ctrl+K"`. Updates the chip on the home tab. |
 | `SetWatermark(text)` / `SetWatermark({ Text, FPS, Ping, Time, Corner })` | A small corner readout. A string sets its text; a table also switches on live FPS, ping and clock readouts. The clock uses the GMT offset chosen on the Home clock. `Corner` is `"TopRight"` (default), `"TopLeft"`, `"BottomRight"` or `"BottomLeft"`. Nothing shows until you call it. |
 | `SetWatermarkVisible(visible)` | Show or hide the readout without losing its text or settings. |
 | `SetWatermarkEnabled(enabled)` / `IsWatermarkEnabled()` | The player's choice in the Configs tab (Overlays group). Saved beside the configs, and a choice of off always wins over `SetWatermarkVisible`. |
@@ -220,7 +220,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetMusicPlaying(playing)` / `IsMusicPlaying()` | Plays or pauses the track. The choice is saved beside the configs. |
 | `SetMusicVolume(volume)` / `GetMusicVolume()` | Volume from 0 to 1, saved beside the configs. |
 | `SetKeybindListEnabled(enabled)` / `IsKeybindListEnabled()` | The same for the keybind list. Both overlays can be dragged, and the place is saved beside the configs. |
-| `BindToggle(toggle, key, mode?)` | Bind a key to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
+| `BindToggle(toggle, key, mode?)` | Bind a key, or a combo such as `"Ctrl+J"`, to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
 | `SetKeybindListVisible(visible)` | Show or hide an overlay that lists every key bound with `BindToggle`, with its mode and whether the toggle is on. |
 | `SetKeepOnScreen(enabled)` | Turn the viewport clamp on or off. |
 | `SetDragStyle(style)` / `GetDragStyle()` | Set or read the drag style (see `DragStyle`). `SetDragSkeleton(enabled)` still works as an on/off switch. |
@@ -1289,7 +1289,7 @@ local Keybind = Tab:CreateKeybind({
 Keybind:Set(Enum.KeyCode.G)
 ```
 
-Click the chip and press a key to rebind. Escape cancels.
+Click the chip and press a key to rebind. Hold Ctrl, Shift or Alt with the key to bind a combo such as `"Ctrl+K"`. Backspace or Delete clears it to None, and Escape cancels. A key that another keybind or toggle binding also uses shows an amber chip and a notice.
 
 ### Properties
 
@@ -1297,10 +1297,10 @@ Click the chip and press a key to rebind. Escape cancels.
 | --- | --- | --- | --- |
 | `Name` | string | `"Keybind"` | The label. |
 | `Desc` | string | — | Hint text under the label. |
-| `CurrentKeybind` | string \| KeyCode | — | The initial key. |
+| `CurrentKeybind` | string \| KeyCode | — | The initial key, or a combo such as `"Ctrl+K"`. |
 | `Flag` | string | — | The save key. |
-| `Callback` | function | — | Runs when the key is pressed and no text box has focus. |
-| `OnChanged` | function | — | Runs when the user rebinds it. |
+| `Callback` | function | — | `Callback(key, mods)`: runs when the key is pressed and no text box has focus. `mods` has `Ctrl`, `Shift` and `Alt` set to true while they are held, and is empty for a plain key. |
+| `OnChanged` | function | — | Runs when the user rebinds it, with the `KeyCode`, or the combo text such as `"Ctrl+K"`. |
 
 ### Handle
 
@@ -1708,7 +1708,7 @@ A config file and a share code are the same readable JSON, so a code is just the
 ```
 
 - `Folder` is the window's `FolderName`. Importing a code made for another folder asks first, and then only applies the flags that match by name and type.
-- `Config` is the flags as their own JSON string. Each flag is `{ "Value": ..., "Type": ... }`. Colours are `{ "Hex": "rrggbb" }`, keybinds are key names (`"RightShift"`), and a dropdown with nothing picked has no `Value`.
+- `Config` is the flags as their own JSON string. Each flag is `{ "Value": ..., "Type": ... }`. Colours are `{ "Hex": "rrggbb" }`, keybinds are key names (`"RightShift"`), and combos are their text (`"Ctrl+K"`), and a dropdown with nothing picked has no `Value`.
 - Old `<name>:<base64>` codes and older config files (bare flag tables, colours as RGB arrays) still load, and are rewritten in the new format on the next save.
 
 Configs only change when you press **Create** or **Save** (or call `SaveConfig`); nothing is written automatically. The autoload mode lives in `<folder>/configsettings.txt`, apart from the configs, so loading a config never flips it. *This account* keeps the autoload in `autoload_<UserId>.txt`, so other accounts on the same PC don't load it. Switching modes moves the current autoload across.

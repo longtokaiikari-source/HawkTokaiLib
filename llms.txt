@@ -92,7 +92,7 @@ Every element takes `Name`, `Desc` (a muted hint under the name), `Tooltip` (a s
 | `Dropdown` | `Options`, `CurrentOption`, `MultipleOptions`, `AllowNone`, `Searchable`, `MaxRows`, `NoneText`, `Stacked`, `Flag`, `Callback(value or list)` | `Set`, `Get`, `Refresh(options, keepSelection?, skipCallback?)`, `SetOpen`, `.Open` |
 | `OrderList` | `Items`, `MaxRows`, `Numbered`, `Arrows`, `Flag`, `Callback(order)` | `.Value`, `Set(order)`, `Refresh(items)`, `Get` |
 | `Input` | `PlaceholderText`, `CurrentValue`, `Numeric`, `Icon`, `Flag`, `Callback(text, enterPressed)` | `Set`, `Get` |
-| `Keybind` | `CurrentKeybind` (`"F"` or `Enum.KeyCode.F`), `Flag`, `Callback(key)`, `OnChanged(key)` | `.Value`, `.Listening`, `Set`, `Get` |
+| `Keybind` | `CurrentKeybind` (`"F"`, `"Ctrl+K"` or `Enum.KeyCode.F`), `Flag`, `Callback(key, mods)`, `OnChanged(key)` | `.Value`, `.Listening`, `Set`, `Get` |
 | `ColorPicker` | `Color`, `Flag`, `Callback(Color3)` | `.Value`, `Set`, `Get`, `SetOpen` |
 | `Label` | `Text` (or a bare string), `Color`, `Update`, `UpdateRate` | `Set`, `Get`, `SetColor` |
 | `Paragraph` | `Title`, `Content` | `Set(text)` |
@@ -131,7 +131,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 
 - Overlays: `Window:SetWatermark({ Text = "My Hub", FPS = true, Ping = true })`, `Window:SetWatermarkVisible(false)` hides it, `Window:SetKeybindListVisible(true)` lists the keys bound below.
 - Music: `Window:SetMusic("rbxassetid://<audio id>", 0.5)` sets a looping track. The Configs tab gets a Music group once a track is set, and the player turns playback on there. `Window:SetMusicPlaying(true)` and `Window:SetMusicVolume(0.4)` also work.
-- Keybinds for toggles: `Window:BindToggle(Toggle, Enum.KeyCode.G, "Hold")`. `"Toggle"` (default) flips on each press; `"Hold"` keeps it on while the key is down. Pass nil as the key to unbind.
+- Keybinds for toggles: `Window:BindToggle(Toggle, Enum.KeyCode.G, "Hold")`. A combo works too: `Window:BindToggle(Toggle, "Ctrl+J")`. `"Toggle"` (default) flips on each press; `"Hold"` keeps it on while the key is down. Pass nil as the key to unbind.
 
 - Code block: `Tab:CreateCode({ Name = "Script", Code = [[...]], Language = "lua" })`. Monospace, copy button, Lua is coloured.
 - Key gate: `Library:RequireKey({ Keys = { "..." } })`, or `Library:RequireKey({ Junkie = { Service = "...", Identifier = "...", Provider = "..." } })` for Junkie Development. It checks keys with the SDK's `check_key`, returns the key and the check result, and saves the key by default. Call it before `Library.Window`.
