@@ -7440,11 +7440,29 @@ function Library.Window(_, opts)
         _sessionStart = os.clock(),
         _islandLocked = opts.IslandDraggable == false,
     }, Window)
+    -- Only FolderName and FileName are read. Nothing is saved on its own: a config is written when the
+    -- player creates or saves one.
     local saving = type(opts.ConfigurationSaving) == "table" and opts.ConfigurationSaving or {}
     self.ConfigFolder = saving.FolderName or "HawkTokaiLibUI"
     self.ConfigName = saving.FileName
     self._configListeners = {}
     self._pendingFlags = {}
+    self._prefs = {}
+    self:_registerPreference("UI_Layout", function()
+        local layout = {}
+        for _, key in ipairs({ "WatermarkPosition", "KeybindPosition", "IslandPosition" }) do
+            if self._prefs[key] ~= nil then
+                layout[key] = self._prefs[key]
+            end
+        end
+        return layout
+    end, function(value)
+        local layout = type(value) == "table" and value or {}
+        for _, key in ipairs({ "WatermarkPosition", "KeybindPosition", "IslandPosition" }) do
+            self._prefs[key] = layout[key]
+        end
+        self:_applyLayout()
+    end)
 
     local startTheme = opts.DefaultTheme or opts.Theme
     if startTheme ~= nil then
@@ -7877,13 +7895,9 @@ function Library.Window(_, opts)
 
     table.insert(Library.Windows, self)
 
-    -- The font to draw with: the one picked in Settings if it is still known, else the default.
+    -- The font to draw with: the default. A font picked in Settings is kept only by a config.
     do
-        local saved = self:_readConfigSettings().Font
         local wanted = Library.DefaultFont
-        if type(saved) == "string" and (Library.BuiltinFonts[saved] or Library.FontPresets[saved]) then
-            wanted = saved
-        end
         if wanted ~= Library._fontName then
             Library:SetFont(wanted)
         end
@@ -9933,30 +9947,32 @@ local function serializeFlag(element)
     return { Type = kind, Value = value }
 end
 
-local function deserializeFlag(element, entry, silent)
+-- A saved value always runs the feature's callback when it changes, so the switch and the feature
+-- never disagree.
+local function deserializeFlag(element, entry)
     local kind = element._type
     local value = entry.Value
     if kind == "Keybind" then
-        element:Set(type(value) == "string" and value or nil, silent)
+        element:Set(type(value) == "string" and value or nil)
     elseif kind == "ColorPicker" then
         local color = colorFromValue(value)
         if color then
-            element:Set(color, silent)
+            element:Set(color)
         end
     elseif kind == "Dropdown" then
         -- A dropdown saved with nothing picked has no Value at all.
-        element:Set(value, silent)
+        element:Set(value)
     elseif kind == "Toggle" then
         if type(value) == "boolean" then
-            element:Set(value, silent)
+            element:Set(value)
         end
     elseif kind == "Slider" or kind == "Stepper" or kind == "Progress" then
         local number = tonumber(value)
         if number then
-            element:Set(number, silent)
+            element:Set(number)
         end
     elseif value ~= nil then
-        element:Set(value, silent)
+        element:Set(value)
     end
 end
 
@@ -9985,17 +10001,16 @@ local function collectFlags(self)
     return data
 end
 
-function Window:_applyFlags(data, silent)
-    silent = silent == true
+function Window:_applyFlags(data)
     self._pendingFlags = {}
     for flag, entry in pairs(data) do
         local element = Library.Flags[flag]
         if element and type(element.Set) == "function" then
             if entryMatches(element, entry) then
-                pcall(deserializeFlag, element, entry, silent)
+                pcall(deserializeFlag, element, entry)
             end
         elseif type(entry) == "table" then
-            self._pendingFlags[flag] = { Entry = entry, Silent = silent }
+            self._pendingFlags[flag] = { Entry = entry }
         end
     end
 end
@@ -10017,7 +10032,7 @@ function Window:_flagCreated(flag, element)
         end
         self._pendingFlags[flag] = nil
         if entryMatches(element, pending.Entry) then
-            pcall(deserializeFlag, element, pending.Entry, pending.Silent)
+            pcall(deserializeFlag, element, pending.Entry)
         end
     end)
 end
@@ -10173,6 +10188,36 @@ function Window:ConfigExists(name)
     return validConfigName(name) and fileApiAvailable() and isfile(configPath(self, name)) or false
 end
 
+-- The settings as one canonical string: two states compare equal whatever order their keys were made in.
+function Window:_settingsSnapshot()
+    local function text(value)
+        local kind = type(value)
+        if kind == "table" then
+            local keys = {}
+            for key in pairs(value) do
+                keys[#keys + 1] = key
+            end
+            table.sort(keys, function(a, b)
+                return tostring(a) < tostring(b)
+            end)
+            local parts = {}
+            for _, key in ipairs(keys) do
+                parts[#parts + 1] = text(key) .. "=" .. text(value[key])
+            end
+            return "{" .. table.concat(parts, ",") .. "}"
+        elseif kind == "string" then
+            return "s" .. #value .. ":" .. value
+        end
+        return kind .. ":" .. tostring(value)
+    end
+    return text(collectFlags(self))
+end
+
+-- True when the settings differ from the state the loaded config was last loaded or saved with.
+function Window:HasUnsavedChanges()
+    return self.LoadedConfig ~= nil and self._savedSnapshot ~= nil and self._savedSnapshot ~= self:_settingsSnapshot()
+end
+
 function Window:SaveConfig(name)
     name = name or self.ConfigName
     if not name then
@@ -10181,11 +10226,13 @@ function Window:SaveConfig(name)
     local ok, err = writeConfig(self, name, collectFlags(self))
     if ok then
         self.ConfigName = name
+        self.LoadedConfig = name
+        self._savedSnapshot = self:_settingsSnapshot()
     end
     return ok, err
 end
 
-function Window:LoadConfig(name, silent)
+function Window:LoadConfig(name)
     name = name or self.ConfigName
     if not name then
         return false, "no config name"
@@ -10194,9 +10241,10 @@ function Window:LoadConfig(name, silent)
     if not data then
         return false, err
     end
-    self:_applyFlags(data, silent)
+    self:_applyFlags(data)
     self.ConfigName = name
     self.LoadedConfig = name
+    self._savedSnapshot = self:_settingsSnapshot()
     self:_configChanged()
     return true
 end
@@ -10283,11 +10331,11 @@ function Window:ListConfigs()
 end
 
 -- Puts every flagged element back to the value it was created with.
-function Window:ResetConfig(silent)
+function Window:ResetConfig()
     self._pendingFlags = {}
     for _, element in pairs(Library.Flags) do
         if element._defaultEntry and type(element.Set) == "function" then
-            pcall(deserializeFlag, element, element._defaultEntry, silent == true)
+            pcall(deserializeFlag, element, element._defaultEntry)
         end
     end
     self:_configChanged()
@@ -10382,6 +10430,7 @@ function Window:ImportConfig(code, saveAs, force)
     if saveAs then
         self.ConfigName = saveAs
         self.LoadedConfig = saveAs
+        self._savedSnapshot = self:_settingsSnapshot()
     end
     self:_configChanged()
     return true, nil, saveAs
@@ -10404,8 +10453,8 @@ local function removeFile(path)
     end
 end
 
--- Manager settings (autoload mode) live beside the configs, apart
--- from the flags, so loading a config never changes them.
+-- Small state the library keeps beside the configs: the autoload mode, cloud installs and
+-- favourites, and the welcome notices. Loading a config never changes it.
 
 local function settingsPath(self)
     return self.ConfigFolder .. "/configsettings.txt"
@@ -10484,6 +10533,9 @@ function Window:SetAutoload(name, scope)
         return false, "file API unavailable"
     end
     scope = scope or self:GetAutoloadMode()
+    if name ~= nil and name ~= "" and readText(configPath(self, name)) == nil then
+        return false, "no config named " .. tostring(name)
+    end
     local ok, err = true, nil
     if name == nil or name == "" then
         removeFile(autoloadPath(self, scope))
@@ -10520,12 +10572,12 @@ function Window:SetAutoloadMode(mode)
     return true
 end
 
-function Window:LoadAutoload(silent)
+function Window:LoadAutoload()
     local name = self:GetAutoload()
     if not name then
         return false, "no autoload config"
     end
-    return self:LoadConfig(name, silent)
+    return self:LoadConfig(name)
 end
 
 -- Themes
@@ -12413,6 +12465,7 @@ function Tab:_overlayToggles()
     toggle({
         Name = "Watermark",
         Desc = "Corner readout with FPS, ping and time. Drag it to move.",
+        Flag = "UI_Watermark",
         CurrentValue = window:IsWatermarkEnabled(),
         Callback = function(value)
             window:SetWatermarkEnabled(value)
@@ -12421,6 +12474,7 @@ function Tab:_overlayToggles()
     toggle({
         Name = "Keybind list",
         Desc = "Keys bound to toggles. Drag it to move.",
+        Flag = "UI_KeybindList",
         CurrentValue = window:IsKeybindListEnabled(),
         Callback = function(value)
             window:SetKeybindListEnabled(value)
@@ -12445,7 +12499,8 @@ function Tab:_musicControls()
     end
     element("Toggle", {
         Name = "Background music",
-        Desc = "Loops the track set in the script. Saved with your settings.",
+        Desc = "Loops the track set in the script. Save a config to keep it.",
+        Flag = "UI_MusicPlaying",
         CurrentValue = window:IsMusicPlaying(),
         Callback = function(value)
             window:SetMusicPlaying(value)
@@ -12456,6 +12511,7 @@ function Tab:_musicControls()
         Range = { 0, 100 },
         Increment = 5,
         Suffix = "%",
+        Flag = "UI_MusicVolume",
         CurrentValue = math.floor(window:GetMusicVolume() * 100 + 0.5),
         Callback = function(value)
             window:SetMusicVolume(value / 100)
@@ -12463,7 +12519,7 @@ function Tab:_musicControls()
     })
 end
 
--- The font picker, in its own group on the Configs tab. The choice is saved with the configs.
+-- The font picker, in its own group on the Configs tab. A config the player creates carries the choice.
 function Tab:_fontControls()
     local window = self.Window
     local box = self:Groupbox({ Name = "Font", Icon = "type", Side = "Right" })
@@ -12477,13 +12533,15 @@ function Tab:_fontControls()
     end
     element("Dropdown", {
         Name = "Font",
-        Desc = "Changes the text of the whole window. Saved with your settings.",
+        Desc = "Changes the text of the whole window. Save a config to keep it.",
         Options = Library.FontOrder,
         Default = Library._fontName or Library.DefaultFont,
+        Flag = "UI_Font",
         Callback = function(value)
-            if Library:SetFont(value) then
-                window:_writeConfigSettings({ Font = value })
+            if value == (Library._fontName or Library.DefaultFont) then
+                return
             end
+            Library:SetFont(value)
         end,
     })
 end
@@ -12503,7 +12561,15 @@ function Tab:ConfigManager(opts)
     end
 
     local function refreshStatus()
-        status:Set(("loaded: %s   |   autoload: %s"):format(window.LoadedConfig or "none", window:GetAutoload() or "none"))
+        local loaded = window.LoadedConfig or "none"
+        if window:HasUnsavedChanges() then
+            loaded = loaded .. " (unsaved changes)"
+        end
+        local line = ("loaded: %s   |   autoload: %s"):format(loaded, window:GetAutoload() or "none")
+        if not fileApiAvailable() then
+            line = "configs need writefile and readfile on this executor"
+        end
+        status:Set(line)
     end
 
     local function pickedName()
@@ -12586,13 +12652,26 @@ function Tab:ConfigManager(opts)
             notify(false, "Invalid name", 'Names cannot contain \\ / : * ? " < > |')
             return
         end
-        local ok, err = window:SaveConfig(name)
-        if ok then
-            window.LoadedConfig = name
-            nameInput:Set("")
-            select(name)
+        local function write()
+            local ok, err = window:SaveConfig(name)
+            if ok then
+                window.LoadedConfig = name
+                nameInput:Set("")
+                select(name)
+            end
+            notify(ok, ok and "Config created" or "Create failed", ok and name or tostring(err))
         end
-        notify(ok, ok and "Config created" or "Create failed", ok and name or tostring(err))
+        if window:ConfigExists(name) then
+            window:Confirm({
+                Title = "Overwrite config?",
+                Content = name .. " already exists. Replace it with the current settings?",
+                Icon = "triangle-alert",
+                ConfirmText = "Overwrite",
+                Callback = write,
+            })
+            return
+        end
+        write()
     end
 
     function manager:Save(name)
@@ -12618,8 +12697,21 @@ function Tab:ConfigManager(opts)
         if not name then
             return
         end
-        local ok, err = window:LoadConfig(name)
-        notify(ok, ok and "Config loaded" or "Load failed", ok and name or tostring(err))
+        local function doLoad()
+            local ok, err = window:LoadConfig(name)
+            notify(ok, ok and "Config loaded" or "Load failed", ok and name or tostring(err))
+        end
+        if window:HasUnsavedChanges() then
+            window:Confirm({
+                Title = "Discard unsaved changes?",
+                Content = "Your settings changed since " .. (window.LoadedConfig or "the last save") .. " was saved. Load " .. name .. " and lose them?",
+                Icon = "triangle-alert",
+                ConfirmText = "Load",
+                Callback = doLoad,
+            })
+            return
+        end
+        doLoad()
     end
 
     function manager:Delete(name)
@@ -12800,6 +12892,14 @@ function Tab:ConfigManager(opts)
     end)
     status._listeners = status._listeners or {}
     table.insert(status._listeners, disconnect)
+
+    -- The status line follows the settings, so a change shows as unsaved without a button press.
+    task.spawn(function()
+        while window.Gui and window.Gui.Parent do
+            pcall(refreshStatus)
+            task.wait(1)
+        end
+    end)
 
     refreshStatus()
     return manager
@@ -17113,12 +17213,22 @@ function Window:_homeCard(parent, order)
     card.AutomaticSize = Enum.AutomaticSize.Y
     padding(card, 16, 16, 14, 14)
     create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = card })
+    -- The border lights up while the pointer is over the card.
+    local cardStroke = card:FindFirstChildOfClass("UIStroke")
+    if cardStroke then
+        card.MouseEnter:Connect(function()
+            tween(cardStroke, { Color = Theme.StrokeHover }, 0.2)
+        end)
+        card.MouseLeave:Connect(function()
+            tween(cardStroke, { Color = Theme.Stroke }, 0.25)
+        end)
+    end
     return card
 end
 
 -- A small caps heading at the top of a Home card.
 function Window:_homeCaption(parent, text, order)
-    return label({
+    local caption = label({
         Size = UDim2.new(1, 0, 0, 22),
         Text = string.upper(text),
         TextSize = 10,
@@ -17127,6 +17237,17 @@ function Window:_homeCaption(parent, text, order)
         LayoutOrder = order,
         Parent = parent,
     })
+    padding(caption, 10, 0, 0, 0)
+    -- A short accent bar leads each caption.
+    local bar = create("Frame", {
+        Position = UDim2.fromOffset(0, 5),
+        Size = UDim2.fromOffset(3, 11),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Parent = caption,
+    })
+    corner(bar, UDim.new(1, 0))
+    return caption
 end
 
 -- A rounded chip of an icon and short text. Returns the chip, its label and
@@ -17213,6 +17334,11 @@ end
 function Window:_homeProfile(list, opts, order)
     local banner = panelCard(list, 140, order)
     banner.ClipsDescendants = true
+    create("UIGradient", {
+        Color = ColorSequence.new(Theme.Surface2, Theme.Surface2:Lerp(Theme.Accent, 0.12)),
+        Rotation = 0,
+        Parent = banner,
+    })
 
     -- A thin accent line along the top, inset and fading to the right.
     local stripe = create("Frame", {
@@ -17232,6 +17358,17 @@ function Window:_homeProfile(list, opts, order)
         Parent = stripe,
     })
 
+    -- A soft accent halo sits behind the avatar, so the bust stands out from the card.
+    local halo = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, -86, 1, -70),
+        Size = UDim2.fromOffset(176, 176),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        Parent = banner,
+    })
+    corner(halo, UDim.new(1, 0))
     -- The avatar bust stands on the banner's right edge and fades in from
     -- the left, so it reads as part of the card rather than a framed photo.
     local bust = create("ImageLabel", {
@@ -17322,8 +17459,12 @@ function Window:_homeProfile(list, opts, order)
         tier = "Free"
     end
     if tier then
-        local tierChip, tierText, tierIcon = self:_homeChip(chips, 1, opts.TierIcon or self._logoIcon, tostring(tier), Theme.Accent)
+        local tierChip, tierText, tierIcon, tierStroke = self:_homeChip(chips, 1, opts.TierIcon or self._logoIcon, tostring(tier), Theme.Accent)
         tierChip.Active = false
+        tierChip.BackgroundColor3 = Theme.Accent
+        tierChip.BackgroundTransparency = 0.82
+        tierStroke.Color = Theme.Accent
+        tierStroke.Transparency = 0.55
         tierText.FontFace = Fonts.Bold
         tierIcon.Size = UDim2.fromOffset(13, 13)
         self.TierLabel = tierText
@@ -18623,7 +18764,7 @@ local function homePage(sub, page)
 end
 
 -- World clock: the time at a chosen GMT offset, shown under the Home stats.
--- The choice is saved beside the configs (configsettings.txt), so it comes back.
+-- The choice is kept by a config the player creates.
 Library.TimeZones = {
     { -12, "Baker Island" },
     { -11, "Samoa" },
@@ -18708,7 +18849,7 @@ function Window:_homeClock(parent, opts, order)
         local sign = hours < 0 and "-" or "+"
         return string.format("GMT%s%02d:%02d", sign, math.floor(total / 60), total % 60)
     end
-    local offset = tonumber(self:_readConfigSettings().ClockOffset) or tonumber(config.Offset) or 7
+    local offset = tonumber(config.Offset) or 7
     self._clockOffset = offset
 
     local card = self:_homeCard(parent, order)
@@ -19009,7 +19150,6 @@ function Window:_homeClock(parent, opts, order)
         button.MouseButton1Click:Connect(function()
             offset = hours
             self._clockOffset = hours
-            self:_writeConfigSettings({ ClockOffset = hours })
             setOpen(false)
             paint()
             paintClock(clockNow())
@@ -19036,6 +19176,18 @@ function Window:_homeClock(parent, opts, order)
     paint()
     paintClock(clockNow())
     table.insert(self._frameSteps, function()
+        paintClock(clockNow())
+    end)
+    self:_registerPreference("UI_ClockOffset", function()
+        return offset
+    end, function(value)
+        local hours = tonumber(value)
+        if hours == nil then
+            return
+        end
+        offset = hours
+        self._clockOffset = hours
+        paint()
         paintClock(clockNow())
     end)
     return card
@@ -19291,13 +19443,16 @@ function Window:_homeTip(parent, opts, order)
     local card = self:_homeCard(parent, order)
     self:_homeCaption(card, "Tip", 0)
     local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.92,
+        BorderSizePixel = 0,
         LayoutOrder = 1,
         Parent = card,
     })
+    corner(row, UDim.new(0, 8))
     local icon = create("ImageLabel", {
-        Position = UDim2.fromOffset(0, 11),
+        Position = UDim2.fromOffset(12, 13),
         Size = UDim2.fromOffset(18, 18),
         BackgroundTransparency = 1,
         ImageColor3 = Theme.Accent,
@@ -19306,8 +19461,8 @@ function Window:_homeTip(parent, opts, order)
     })
     applyIcon(icon, "lightbulb")
     local text = label({
-        Position = UDim2.fromOffset(28, 0),
-        Size = UDim2.new(1, -28, 1, 0),
+        Position = UDim2.fromOffset(40, 0),
+        Size = UDim2.new(1, -52, 1, 0),
         Text = tips[1],
         TextSize = 13,
         TextColor3 = Theme.Text,
@@ -19668,8 +19823,8 @@ function Window:CloudConfigs(opts)
     local stored = window:_readConfigSettings()
     local favorites = type(stored.CloudFavorites) == "table" and stored.CloudFavorites or {}
     local installed = type(stored.CloudInstalled) == "table" and stored.CloudInstalled or {}
-    if table.find(SORTS, stored.CloudSort) then
-        query.Sort = stored.CloudSort
+    if table.find(SORTS, window._cloudSort) then
+        query.Sort = window._cloudSort
     elseif table.find(SORTS, opts.Sort) then
         query.Sort = opts.Sort
     end
@@ -20895,7 +21050,7 @@ function Window:CloudConfigs(opts)
     sortButton.MouseButton1Click:Connect(function()
         local index = table.find(SORTS, query.Sort) or 1
         query.Sort = SORTS[index % #SORTS + 1]
-        persist("CloudSort", query.Sort)
+        window._cloudSort = query.Sort
         renderFilters()
         fetch(false)
     end)
@@ -23753,7 +23908,7 @@ function Window:_buildMiniBar()
     -- the screen so it keeps its spot across resolutions. Dragging moves it;
     -- each shape is clamped on screen, so the wide card slides in from an edge
     -- and the pill goes back to its spot when it folds.
-    local saved = self:_readConfigSettings().IslandPosition
+    local saved = self._prefs.IslandPosition
     if type(saved) == "table" and tonumber(saved.X) and tonumber(saved.Y) then
         self._islandAnchor = Vector2.new(math.clamp(tonumber(saved.X), 0, 1), math.clamp(tonumber(saved.Y), 0, 1))
     end
@@ -24007,7 +24162,7 @@ function Window:_buildMiniBar()
                 placeIsland(Vector2.new(Mini.Width, Mini.Height), 0.35, Enum.EasingStyle.Back)
             end
             local anchor = self._islandAnchor
-            self:_writeConfigSettings({ IslandPosition = anchor and { X = anchor.X, Y = anchor.Y } or false })
+            self:_setPref("IslandPosition", anchor and { X = anchor.X, Y = anchor.Y } or false)
             hovered = not usingTouch() and pointInside(pointerPosition(), island)
             task.delay(0.1, function()
                 if self.Minimized and not dragging then
@@ -24473,7 +24628,7 @@ function Window:ResetIslandPosition()
     if self._islandReset then
         self._islandReset()
     end
-    self:_writeConfigSettings({ IslandPosition = false })
+    self:_setPref("IslandPosition", false)
 end
 
 function Window:SetMinimized(minimized)
@@ -24617,11 +24772,9 @@ function Window:_dragOverlay(frame, key)
         end
         held = false
         local origin = frame.Parent.AbsolutePosition
-        self:_writeConfigSettings({
-            [key] = {
-                X = math.floor(frame.AbsolutePosition.X - origin.X),
-                Y = math.floor(frame.AbsolutePosition.Y - origin.Y),
-            },
+        self:_setPref(key, {
+            X = math.floor(frame.AbsolutePosition.X - origin.X),
+            Y = math.floor(frame.AbsolutePosition.Y - origin.Y),
         })
     end)
 end
@@ -24661,7 +24814,7 @@ function Window:SetWatermark(opts)
             Frames = 0,
             Span = 0,
             Elapsed = 0,
-            TimeOffset = self._clockOffset or tonumber(self:_readConfigSettings().ClockOffset) or 7,
+            TimeOffset = self._clockOffset or 7,
             Stats = game:GetService("Stats"),
         }
         self._watermark = wm
@@ -24695,7 +24848,7 @@ function Window:SetWatermark(opts)
     if opts.Corner ~= nil then
         wm.Corner = tostring(opts.Corner)
     end
-    local savedPlace = self:_readConfigSettings().WatermarkPosition
+    local savedPlace = self._prefs.WatermarkPosition
     if type(savedPlace) == "table" and tonumber(savedPlace.X) and tonumber(savedPlace.Y) then
         wm.Frame.AnchorPoint = Vector2.new(0, 0)
         wm.Frame.Position = UDim2.fromOffset(savedPlace.X, savedPlace.Y)
@@ -24709,9 +24862,9 @@ function Window:SetWatermark(opts)
     return self
 end
 
--- Overlay preferences saved beside the configs. nil means the player has not chosen yet.
+-- Overlay preferences, kept in memory and carried by configs. nil means the player has not chosen yet.
 function Window:_overlayPref(key)
-    local value = self:_readConfigSettings()[key]
+    local value = self._prefs[key]
     if type(value) == "boolean" then
         return value
     end
@@ -24720,8 +24873,46 @@ end
 
 -- The choice made in Settings. Scripts can still show or hide an overlay with
 -- the Set...Visible functions, but an off choice always wins.
+-- Window preferences live in memory. Nothing writes them on its own: a config the player creates carries them.
+function Window:_setPref(key, value)
+    self._prefs[key] = value
+end
+
+-- A preference a config carries without a control of its own. It is registered like a flag, so Create/Save
+-- and autoload handle it: get returns the value, set applies it.
+function Window:_registerPreference(flag, get, set)
+    local element = { _type = "Preference" }
+    function element:Get()
+        return get()
+    end
+    function element:Set(value, silent)
+        set(value, silent)
+    end
+    Library.Flags[flag] = element
+    self:_flagCreated(flag, element)
+    return element
+end
+
+-- Puts the saved positions back on screen after a config loads.
+function Window:_applyLayout()
+    if self._watermark then
+        self:SetWatermark({})
+    end
+    local place = self._prefs.KeybindPosition
+    if self._keybindFrame and type(place) == "table" and tonumber(place.X) and tonumber(place.Y) then
+        self._keybindFrame.AnchorPoint = Vector2.new(0, 0)
+        self._keybindFrame.Position = UDim2.fromOffset(tonumber(place.X), tonumber(place.Y))
+    end
+    local island = self._prefs.IslandPosition
+    if type(island) == "table" and tonumber(island.X) and tonumber(island.Y) then
+        self._islandAnchor = Vector2.new(math.clamp(tonumber(island.X), 0, 1), math.clamp(tonumber(island.Y), 0, 1))
+    else
+        self._islandAnchor = nil
+    end
+end
+
 function Window:SetWatermarkEnabled(enabled)
-    self:_writeConfigSettings({ ShowWatermark = enabled == true })
+    self:_setPref("ShowWatermark", enabled == true)
     self:SetWatermarkVisible(enabled == true)
     return self
 end
@@ -24731,7 +24922,7 @@ function Window:IsWatermarkEnabled()
 end
 
 function Window:SetKeybindListEnabled(enabled)
-    self:_writeConfigSettings({ ShowKeybindList = enabled == true })
+    self:_setPref("ShowKeybindList", enabled == true)
     self:SetKeybindListVisible(enabled == true)
     return self
 end
@@ -24980,12 +25171,13 @@ function Window:SetKeybindListVisible(visible)
         corner(frame, UDim.new(0, 6))
         stroke(frame)
         padding(frame, 10, 10, 8, 8)
-        local keybindPlace = self:_readConfigSettings().KeybindPosition
+        local keybindPlace = self._prefs.KeybindPosition
         if type(keybindPlace) == "table" and tonumber(keybindPlace.X) and tonumber(keybindPlace.Y) then
             frame.AnchorPoint = Vector2.new(0, 0)
             frame.Position = UDim2.fromOffset(keybindPlace.X, keybindPlace.Y)
         end
         self:_dragOverlay(frame, "KeybindPosition")
+        self._keybindFrame = frame
         create("UIListLayout", {
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 4),
@@ -25275,7 +25467,7 @@ end
 
 -- Background music: one looping Sound in SoundService, created the first time a
 -- track is set. It stays silent until the player turns it on in the Configs tab
--- (Music group). The on/off choice and the volume are saved beside the configs.
+-- (Music group). The on/off choice and the volume are carried by configs the player creates.
 -- Window:SetMusic("rbxassetid://1234567890", 0.5) sets the track and its
 -- starting volume; a volume the player already chose wins over that number.
 function Window:_musicAsset(value)
@@ -25308,10 +25500,7 @@ function Window:SetMusic(id, volume)
         warn("[HawkTokaiLib] SetMusic needs a Roblox audio id, like rbxassetid://1234567890")
         return false
     end
-    local saved = tonumber(self:_readConfigSettings().MusicVolume)
-    if saved then
-        self._musicVolume = math.clamp(saved, 0, 1)
-    elseif tonumber(volume) then
+    if self._musicVolume == nil and tonumber(volume) then
         self._musicVolume = math.clamp(tonumber(volume), 0, 1)
     end
     self._musicId = asset
@@ -25326,7 +25515,7 @@ end
 
 function Window:SetMusicPlaying(playing)
     local on = playing == true
-    self:_writeConfigSettings({ MusicPlaying = on })
+    self._musicPlaying = on
     if on and self._musicId then
         self:_musicSound():Play()
     elseif self._music then
@@ -25336,12 +25525,11 @@ function Window:SetMusicPlaying(playing)
 end
 
 function Window:IsMusicPlaying()
-    return self:_readConfigSettings().MusicPlaying == true
+    return self._musicPlaying == true
 end
 
 function Window:SetMusicVolume(volume)
     self._musicVolume = math.clamp(tonumber(volume) or 0.5, 0, 1)
-    self:_writeConfigSettings({ MusicVolume = self._musicVolume })
     if self._music then
         self._music.Volume = self._musicVolume
     end

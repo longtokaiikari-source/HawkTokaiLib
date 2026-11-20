@@ -27,7 +27,7 @@ local Window = HawkTokaiLib:CreateWindow({
     Name = "My Hub",                       -- title, also names the ScreenGui
     LoadingSubtitle = "by Me",
     ToggleUIKeybind = "RightControl",      -- hides and shows the window
-    ConfigurationSaving = { Enabled = true, FolderName = "MyHub" },
+    ConfigurationSaving = { FolderName = "MyHub" },
     Home = { Discord = "https://discord.gg/deVVQEVybd" },   -- built-in first tab; false removes it
 })
 
@@ -73,6 +73,8 @@ Window:LoadAutoload()                      -- apply the player's autoload config
 - `Update` functions may yield (`InvokeServer`, `task.wait`); they run on their own thread. Element callbacks run inline and errors are caught and warned, so keep them quick and wrap long loops in `task.spawn`. Library calls made from a thread that yielded in an engine call are made safe automatically.
 - `Update` functions on labels and statuses run every `UpdateRate` seconds (default 1). Status lists only refresh while visible.
 - `Window:LoadAutoload()` may run before every element exists: values for flags not created yet are held and applied when the element appears.
+- Nothing is saved on its own. Only Create/Save, `ImportConfig` and `SetAutoload` write. The font, the overlay switches and positions, the clock zone and the music travel inside a config.
+- `Window:HasUnsavedChanges()` says whether the settings differ from the loaded config. The manager's status line and its Load and Create confirms use it.
 - Never build your own config, theme or minimize UI. Use `CreateConfigManager`, `CreateThemeManager` and the built-in island.
 - Icons: a lucide name (`"zap"`, `"lucide:zap"`), an asset id number or `"rbxassetid://…"`, or `{ Image, RectOffset, RectSize, Tint }`.
 - Motion: buttons squeeze while held and spring back, with a wave of light starting at the press point and fading toward the corners, and a band of light sweeps across on hover. A keybind waiting for a key shows three bouncing dots and a soft ring. An input's underline grows from the middle on focus.
@@ -137,11 +139,11 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - Key gate: `Library:RequireKey({ Keys = { "..." } })`, or `Library:RequireKey({ Junkie = { Service = "...", Identifier = "...", Provider = "..." } })` for Junkie Development. It checks keys with the SDK's `check_key`, returns the key and the check result, and saves the key by default. Call it before `Library.Window`.
 - Executor check: `Library:CheckExecutor(opts)` runs inside `RunProtected` before the key gate; `Library:GetExecutorScore()` returns the score once it has run.
 - UNC results for passing executors are cached for six hours (`UNC = { Cache = false }` turns it off). The failing card lists the missing features.
-- Fonts: Configs tab > Font picks one of `Library.FontOrder` (default `Library.DefaultFont` = None, the normal text; a choice is saved with the configs). `Library:SetFont(name)` switches every font and restyles the window. `Library.FontPresets` holds the downloaded URL fonts; `Library.BuiltinFonts` holds the Roblox fonts.
+- Fonts: Configs tab > Font picks one of `Library.FontOrder` (default `Library.DefaultFont` = None, the normal text; a config the player creates keeps the choice). `Library:SetFont(name)` switches every font and restyles the window. `Library.FontPresets` holds the downloaded URL fonts; `Library.BuiltinFonts` holds the Roblox fonts.
 - Protected script: `Library:RunProtected({ Title, Junkie = { Service, Identifier, Provider, ScriptId } })` runs the executor check (`UNC = { Fail = 70, Warn = 80 }`), then checks the key and `load_script` runs the script from Junkie's Original Code. In that script pass `JD_EXPIRES_AT`, `JD_TIER_NAME`, `JD_IS_PREMIUM` and `JD_REASON` to `Home.KeyInfo` for the profile card. The key gate has a Close button, which stops the load without running the script.
 - Junkie setup check: `JunkieTest.lua` runs the settings, SDK, `check_key` and optional `get_key_link` steps and prints each result with the error meaning.
 
-- Overlays: the watermark and the keybind list can be dragged; their place and on/off choice are saved beside the configs. Both switches are in the Configs tab, group Overlays.
+- Overlays: the watermark and the keybind list can be dragged; their place and on/off choice are kept by the configs the player creates. Both switches are in the Configs tab, group Overlays.
 
 - Easter egg: `RunProtected({ EasterEgg = {...} })` or `Home.EasterEgg`, with `Hash, Image, Sound, Volume, Kick`. five taps on the Home avatar (within four seconds) show a see-through input at the bottom right; the secret phrase shows a Play button. Play shows the picture full screen with the sound (both downloaded into the workspace folder), then the player is kicked. The Loader's `Discord` and `EasterEgg` win over the protected script's Home options.
 

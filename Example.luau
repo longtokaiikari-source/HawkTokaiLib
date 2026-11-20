@@ -45,7 +45,7 @@ local Window = Library:CreateWindow({
     Name = "Example",
     LoadingSubtitle = "Loading",
     ToggleUIKeybind = "RightControl", -- a KeyCode name or Enum.KeyCode
-    ConfigurationSaving = { Enabled = true },
+    ConfigurationSaving = { FolderName = "HawkTokaiLibUI" }, -- configs are written only when you press Save
     ToggleButton = { Platform = "Both", Icon = "layout-grid" }, -- "Both" also shows it on PC
     Backdrop = { Weather = "None", Tint = 0.45 }, -- "Snow", "Rain", "Hell Fire", "Sakura", "Fireflies", "Matrix" or "None"
     -- UIScale = 1,           -- 0.6 to 1.5, on top of the automatic fit
