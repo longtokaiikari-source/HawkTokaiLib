@@ -12,8 +12,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
-- **Config safety**: the status line shows `(unsaved changes)` when the settings differ from the loaded config. **Load** asks before it discards unsaved changes, **Create** asks before it overwrites a config with the same name, and the status line says so when the executor has no file functions. `Window:HasUnsavedChanges()` is new.
-
 - **Key combos**: a keybind or `BindToggle` takes a key with Ctrl, Shift or Alt, such as `"Ctrl+K"` or `"Shift+F3"`. Plain keys work as before and are saved the same way.
 - **Keybind capture**: Backspace or Delete clears a keybind, Escape cancels, and a modifier pressed on its own does not bind.
 - **Keybind conflicts**: a keybind that takes a key already used by another keybind or a toggle binding shows an amber chip and a notice naming the other one.
@@ -52,10 +50,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
-- `ConfigurationSaving.Enabled` did nothing and is removed from the docs and the example. Only `FolderName` and `FileName` are read.
-
-- **Settings are kept by configs, not saved on their own**: the font, the watermark and keybind-list switches and their positions, the island position, the clock zone, and the background music and volume are part of the configs the player creates. The font starts at the default until a config loads. The cloud sort lasts for the session.
-
 - `Keybind` `Callback` gets the held modifiers as a second argument, `{ Ctrl = true, ... }`, empty for a plain key.
 - `Keybind` `OnChanged` and `Get()` return the combo text for a combo, and the `KeyCode` for a plain key as before.
 - Keybinds and toggle bindings do not fire while a text box has focus.
@@ -82,10 +76,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
-
-- **Configs and switches stay in sync**: loading a config (manually, on autoload or on reset) always runs each feature's callback for a value that changed. Before, `LoadAutoload(true)` and `LoadConfig(name, true)` skipped the callbacks, so a switch showed off while its feature kept running. The second argument is gone from `LoadConfig`, `LoadAutoload` and `ResetConfig`; an extra argument in an old script is ignored.
-- **No writes on their own**: building the window no longer writes `configsettings.txt`, and nothing a player changes is written until they create or save a config.
-- **Autoload only points at a created config**: `Window:SetAutoload` refuses a name that was never saved, so autoload can only pick a config the player made.
 
 - A capture no longer swallows the next press of the same key. The window's hide key ignored any press of that key within 0.2 seconds of a capture.
 
