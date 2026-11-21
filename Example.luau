@@ -2,6 +2,7 @@
 -- Push Source.luau to main first, or this loads an old copy (or a 404).
 -- To test a local copy instead: loadstring(readfile("HawkTokaiLib/Source.luau"))()
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
+local Config = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"))()(Library) -- configs, the config manager and the cloud configs
 
 -- Runtime variables exist only after Junkie authenticates this script. Outside
 -- Junkie (for example in a local test) they are nil and the license card is hidden.
@@ -45,7 +46,7 @@ local Window = Library:CreateWindow({
     Name = "Example",
     LoadingSubtitle = "Loading",
     ToggleUIKeybind = "RightControl", -- a KeyCode name or Enum.KeyCode
-    ConfigurationSaving = { Enabled = true },
+    ConfigurationSaving = { FolderName = "HawkTokaiLibUI" }, -- configs are written only when you press Save
     ToggleButton = { Platform = "Both", Icon = "layout-grid" }, -- "Both" also shows it on PC
     Backdrop = { Weather = "None", Tint = 0.45 }, -- "Snow", "Rain", "Hell Fire", "Sakura", "Fireflies", "Matrix" or "None"
     -- UIScale = 1,           -- 0.6 to 1.5, on top of the automatic fit
