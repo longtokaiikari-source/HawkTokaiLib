@@ -1,5 +1,6 @@
 -- tests/sequence_test.lua: every NumberSequence and ColorSequence in Source.luau must start at time 0 and end at time 1,
--- or Roblox refuses to build it (a dialog with a bad gradient never opens). Run from the project folder.
+-- or Roblox refuses to build it. A white sheen whose transparency fades must not sit on a panel: it would fade the
+-- panel's own background. Run from the project folder.
 local file = io.open("Source.luau", "r") or io.open("../Source.luau", "r")
 assert(file, "run this from the project folder")
 local source = file:read("*a")
@@ -30,6 +31,23 @@ local function scan(kind)
 end
 scan("NumberSequence")
 scan("ColorSequence")
+
+local lines = {}
+for line in (source .. "\n"):gmatch("(.-)\n") do
+    lines[#lines + 1] = line
+end
+for index, line in ipairs(lines) do
+    if line:find("Color = ColorSequence.new(Color3.new(1, 1, 1))", 1, true) then
+        for other = index, math.min(index + 6, #lines) do
+            if lines[other]:find("Transparency = NumberSequence.new", 1, true) then
+                failures = failures + 1
+                print(("line %d: a white sheen with a fading transparency sits on a panel and fades its background"):format(index))
+                break
+            end
+        end
+    end
+end
+
 print(("checked %d sequences"):format(checked))
 print(failures == 0 and "SEQUENCE PASS" or ("SEQUENCE FAILED " .. failures))
 os.exit(failures == 0 and 0 or 1)
