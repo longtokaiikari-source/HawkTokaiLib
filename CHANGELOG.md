@@ -60,6 +60,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
+- **Home cards**: every card heading has an icon tile, a bold title and a short line under it. The cards share one 12 px corner, and long titles are cut at the end instead of pushing past the card. The egg input is unchanged.
+- **Home banner**: a little taller, the avatar is bigger and sits inside a thin accent ring, the greeting is in the accent colour, and Home cards have 12 px between them.
 - **Configs are an addon**: the config code, the config manager, the Home config line and the cloud configs moved from `Source.luau` to `addons/Config.luau`. Load it after the library, as the example does. The API names are unchanged. The library hands an addon its helpers through `Library._ui`, its window and tab classes through `Library._classes`, and two hooks through `Library._flagHooks` and `Library._homeCards`.
 
 - **Clean console**: problems the library works around (a download that failed, an icon missing from the set, a font this client lacks, an internal guard that caught an error) are kept in `Library:GetDiagnostics()` instead of printed. Warnings remain for your own callback errors, a protected script that fails to load, and a wrong `SetMusic` id.
@@ -95,6 +97,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
+
+- **Page margins**: every page list keeps its 24 px side margins in its position and size, not in a UIPadding. Cards that span the list (scale 1) used to run past the right margin and get cut off by the scrolling list.
 
 - **Themes on any executor**: saving, listing, loading, the default theme and delete no longer depend on `isfile`, `isfolder` or `listfiles` being right. A name with `/` or other unsafe characters is refused.
 - **Executions counter and background picture**: they read their files directly, so the count no longer resets to 0 and a picture is not downloaded again on an executor that answers `isfile` wrongly.

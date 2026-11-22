@@ -10929,8 +10929,10 @@ end
 
 local function buildContainer(owner, parent, top, emptyIcon, emptyText)
     local list = create("ScrollingFrame", {
-        Position = UDim2.fromOffset(0, top),
-        Size = UDim2.new(1, 0, 1, -top),
+        -- The 24 px side margins sit in the position and size, not in a UIPadding: cards that are as wide
+        -- as the list (scale 1) then end at the margin instead of running past it and being clipped.
+        Position = UDim2.fromOffset(24, top),
+        Size = UDim2.new(1, -48, 1, -top),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 2,
@@ -10941,7 +10943,7 @@ local function buildContainer(owner, parent, top, emptyIcon, emptyText)
         CanvasSize = UDim2.new(),
         Parent = parent,
     })
-    Library._space(padding(list, 24, 24, 2, 24), { 24, 24, 2, 24 })
+    Library._space(padding(list, 0, 0, 2, 24), { 0, 0, 2, 24 })
     Library._space(create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 8),
@@ -16415,6 +16417,10 @@ function Window:_homeCard(parent, order)
     card.AutomaticSize = Enum.AutomaticSize.Y
     padding(card, 16, 16, 14, 14)
     create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = card })
+    local cardCorner = card:FindFirstChildOfClass("UICorner")
+    if cardCorner then
+        cardCorner.CornerRadius = UDim.new(0, 12)
+    end
     -- The border lights up while the pointer is over the card.
     local cardStroke = card:FindFirstChildOfClass("UIStroke")
     if cardStroke then
@@ -16428,28 +16434,60 @@ function Window:_homeCard(parent, order)
     return card
 end
 
--- A small caps heading at the top of a Home card.
-function Window:_homeCaption(parent, text, order)
-    local caption = label({
-        Size = UDim2.new(1, 0, 0, 22),
-        Text = string.upper(text),
-        TextSize = 10,
-        TextColor3 = Theme.Muted,
-        TextYAlignment = Enum.TextYAlignment.Top,
+-- The heading at the top of a Home card: an accent icon tile, a bold title and a short line under it.
+-- Returns the title label, so the card can change its text later.
+function Window:_homeCaption(parent, text, order, icon, subtitle)
+    local row = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 38),
+        BackgroundTransparency = 1,
         LayoutOrder = order,
         Parent = parent,
     })
-    padding(caption, 10, 0, 0, 0)
-    -- A short accent bar leads each caption.
-    local bar = create("Frame", {
+    local tile = create("Frame", {
         Position = UDim2.fromOffset(0, 5),
-        Size = UDim2.fromOffset(3, 11),
+        Size = UDim2.fromOffset(28, 28),
         BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.84,
         BorderSizePixel = 0,
-        Parent = caption,
+        Parent = row,
     })
-    corner(bar, UDim.new(1, 0))
-    return caption
+    corner(tile, UDim.new(0, 8))
+    if icon then
+        local image = create("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(16, 16),
+            BackgroundTransparency = 1,
+            ImageColor3 = Theme.Accent,
+            ScaleType = Enum.ScaleType.Fit,
+            Parent = tile,
+        })
+        applyIcon(image, icon)
+    end
+    local title = label({
+        Position = UDim2.fromOffset(38, 2),
+        Size = UDim2.new(1, -38, 0, 18),
+        Text = text,
+        TextSize = 13,
+        TextColor3 = Theme.Text,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = row,
+    })
+    title.FontFace = Fonts.Bold
+    if subtitle then
+        label({
+            Position = UDim2.fromOffset(38, 20),
+            Size = UDim2.new(1, -38, 0, 14),
+            Text = subtitle,
+            TextSize = 11,
+            TextColor3 = Theme.Muted,
+            TextYAlignment = Enum.TextYAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            Parent = row,
+        })
+    end
+    return title
 end
 
 -- A rounded chip of an icon and short text. Returns the chip, its label and
@@ -16534,7 +16572,7 @@ local function timeGreeting()
 end
 
 function Window:_homeProfile(list, opts, order)
-    local banner = panelCard(list, 140, order)
+    local banner = panelCard(list, 152, order)
     banner.ClipsDescendants = true
     create("UIGradient", {
         Color = ColorSequence.new(Theme.Surface2, Theme.Surface2:Lerp(Theme.Accent, 0.12)),
@@ -16563,20 +16601,31 @@ function Window:_homeProfile(list, opts, order)
     -- A soft accent halo sits behind the avatar, so the bust stands out from the card.
     local halo = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(1, -86, 1, -70),
-        Size = UDim2.fromOffset(176, 176),
+        Position = UDim2.new(1, -91, 1, -75),
+        Size = UDim2.fromOffset(190, 190),
         BackgroundColor3 = Theme.Accent,
         BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         Parent = banner,
     })
     corner(halo, UDim.new(1, 0))
+    -- A thin ring just outside the halo gives the avatar a clean edge.
+    local ring = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, -91, 1, -75),
+        Size = UDim2.fromOffset(172, 172),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Parent = banner,
+    })
+    corner(ring, UDim.new(1, 0))
+    create("UIStroke", { Color = Theme.Accent, Transparency = 0.7, Thickness = 1, Parent = ring })
     -- The avatar bust stands on the banner's right edge and fades in from
     -- the left, so it reads as part of the card rather than a framed photo.
     local bust = create("ImageLabel", {
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -16, 1, 0),
-        Size = UDim2.fromOffset(140, 140),
+        Size = UDim2.fromOffset(150, 150),
         BackgroundTransparency = 1,
         Image = "rbxthumb://type=AvatarBust&id=" .. tostring(LocalPlayer.UserId) .. "&w=420&h=420",
         ScaleType = Enum.ScaleType.Fit,
@@ -16621,7 +16670,7 @@ function Window:_homeProfile(list, opts, order)
         Size = textWidth + UDim2.fromOffset(0, 14),
         Text = string.upper(opts.Welcome or timeGreeting()),
         TextSize = 10,
-        TextColor3 = Theme.Muted,
+        TextColor3 = Theme.Accent,
         Parent = banner,
     })
     local nameLabel = label({
@@ -17060,7 +17109,7 @@ function Window:_homeLinks(parent, opts, order)
         return nil, function() end
     end
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "Links", 0)
+    self:_homeCaption(card, "Links", 0, "link", "Community and resources")
     for index, link in ipairs(links) do
         local action = type(link.Callback) == "function"
         self:_homeLink(card, index, link.Icon or "link", link.Title or "", link.Text or "", action and "arrow-up-right" or "copy", function()
@@ -18055,7 +18104,7 @@ function Window:_homeClock(parent, opts, order)
     self._clockOffset = offset
 
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "World clock", 0)
+    self:_homeCaption(card, "World clock", 0, "clock", "Local time, pick a zone")
 
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 104),
@@ -18534,7 +18583,7 @@ end
 -- then a +N pill. It redraws only when someone joins or leaves.
 function Window:_homeServer(list, opts, order)
     local card = self:_homeCard(list, order)
-    local caption = self:_homeCaption(card, "In server", 0)
+    local caption = self:_homeCaption(card, "In server", 0, "users", "Players here right now")
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 40),
         BackgroundTransparency = 1,
@@ -18643,7 +18692,7 @@ function Window:_homeTip(parent, opts, order)
         }
     end
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "Tip", 0)
+    self:_homeCaption(card, "Tip", 0, "lightbulb", "A tip for today")
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 44),
         BackgroundColor3 = Theme.Accent,
@@ -18699,7 +18748,7 @@ function Window:_homeShortcuts(list, opts, order)
         return nil
     end
     local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Shortcuts", 0)
+    self:_homeCaption(card, "Shortcuts", 0, "keyboard", "Keys and what they do")
     local grid = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -18759,6 +18808,11 @@ function Window:_buildHome(opts)
     overview._noSearch = true
     overview._order = 100
     local list = overview.List
+    -- Cards on the Home breathe: a little more room between them than the other tabs.
+    local homeLayout = list:FindFirstChildOfClass("UIListLayout")
+    if homeLayout then
+        homeLayout.Padding = UDim.new(0, 12)
+    end
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
     for _, card in ipairs(Library._homeCards) do
