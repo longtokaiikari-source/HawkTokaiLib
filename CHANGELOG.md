@@ -12,14 +12,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
-- **Load report**: a load says how many settings it applied, how many wait for controls this script does not have yet, and how many did not fit. The load and autoload notices show it.
-- **Backups and Restore**: a save that replaces a file keeps the old one under `backups/`. The config manager's Restore button, or `Window:RestoreBackup(name)`, puts it back.
-- **Refresh**: the config manager has a Refresh button that rereads the list, like Obsidian's Refresh List.
-- **Home config status**: a line under the banner shows the loaded config, whether it has unsaved changes, and the autoload config. `Home = { ConfigStatus = false }` hides it.
-
-- **Autoload notice**: at start the player is told that the autoload config loaded, or why it did not.
-- `Window:SetConfigIgnore(list)` leaves flags out of configs, and `Window:SetLoadingOrder(order)` sets the element types values apply in. Both follow Obsidian's save manager.
-
 - **Config safety**: the status line shows `(unsaved changes)` when the settings differ from the loaded config. **Load** asks before it discards unsaved changes, **Create** asks before it overwrites a config with the same name, and the status line says so when the executor has no file functions. `Window:HasUnsavedChanges()` is new.
 
 - **Key combos**: a keybind or `BindToggle` takes a key with Ctrl, Shift or Alt, such as `"Ctrl+K"` or `"Shift+F3"`. Plain keys work as before and are saved the same way.
@@ -60,11 +52,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
-- **Configs are an addon**: the config code, the config manager, the Home config line and the cloud configs moved from `Source.luau` to `addons/Config.luau`. Load it after the library, as the example does. The API names are unchanged. The library hands an addon its helpers through `Library._ui`, its window and tab classes through `Library._classes`, and two hooks through `Library._flagHooks` and `Library._homeCards`.
-
-- **Clean console**: problems the library works around (a download that failed, an icon missing from the set, a font this client lacks, an internal guard that caught an error) are kept in `Library:GetDiagnostics()` instead of printed. Warnings remain for your own callback errors, a protected script that fails to load, and a wrong `SetMusic` id.
-- **Home**: the config line under the banner shows a status dot: green when saved, amber when there are unsaved changes, grey when no config is loaded.
-
 - `ConfigurationSaving.Enabled` did nothing and is removed from the docs and the example. Only `FolderName` and `FileName` are read.
 
 - **Settings are kept by configs, not saved on their own**: the font, the watermark and keybind-list switches and their positions, the island position, the clock zone, and the background music and volume are part of the configs the player creates. The font starts at the default until a config loads. The cloud sort lasts for the session.
@@ -95,14 +82,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
-
-- **Themes on any executor**: saving, listing, loading, the default theme and delete no longer depend on `isfile`, `isfolder` or `listfiles` being right. A name with `/` or other unsafe characters is refused.
-- **Executions counter and background picture**: they read their files directly, so the count no longer resets to 0 and a picture is not downloaded again on an executor that answers `isfile` wrongly.
-
-- **Home**: the tier chip showed the library logo, which is a full-colour mark, in red. It now shows a tier icon in the accent colour.
-- **Home**: the name and avatar switches read as the opposite of the content they control. They are now labelled "Hide name" and "Hide avatar".
-
-- **Configs on any executor**: loading, autoload, delete and reset no longer depend on `isfile`, `isfolder` or `listfiles` answering right. A config is read from its file, the picker lists the configs the library wrote, and reset removes them by name. Before, an executor that answered those wrongly could not list, load or set autoload, so autoload did nothing after a re-run.
 
 - **Configs and switches stay in sync**: loading a config (manually, on autoload or on reset) always runs each feature's callback for a value that changed. Before, `LoadAutoload(true)` and `LoadConfig(name, true)` skipped the callbacks, so a switch showed off while its feature kept running. The second argument is gone from `LoadConfig`, `LoadAutoload` and `ResetConfig`; an extra argument in an old script is ignored.
 - **No writes on their own**: building the window no longer writes `configsettings.txt`, and nothing a player changes is written until they create or save a config.

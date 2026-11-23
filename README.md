@@ -25,7 +25,6 @@ Windows, tabs, sub tabs, collapsible groupboxes and fourteen elements, all with 
 
 ```lua
 local HawkTokaiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
-local Config = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"))()(Library)
 
 local Window = HawkTokaiLib:CreateWindow({
     Name = "My Hub",
@@ -460,7 +459,6 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 | `StatColors` | boolean | `true` | Tint `FPS`, `Ping` and `Memory` green, amber or red by how healthy they are (FPS 50+ / 30+, ping under 90 / 180 ms, memory under 1.5 / 3 GB). |
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |
-| `ConfigStatus` | boolean | `true` | The config line under the banner. `false` hides it. |
 | `Clock` | boolean \| table | `true` | World clock card under the stats. `false` hides it. A table can set `Offset`. The GMT offset is picked on the card and saved in `configsettings.txt` beside the configs, so it comes back next time. |
 | `KeyInfo` | table | — | Shows the time left in the profile card, where `Expiry` would go. Pass `ExpiresAt` (Unix seconds), `Tier`, `Premium` and `Keyless`. The protected script passes Junkie's runtime variables here. |
 | `Clock.Offset` | number | `7` | Starting GMT offset in hours, for example `5.5` for GMT+05:30. A saved choice wins over it. |
@@ -1671,14 +1669,6 @@ Toggles, sliders, steppers, dropdowns, inputs, keybinds and colour pickers creat
 
 ## Configs
 
-Configs live in `addons/Config.luau`, not in the library file. Load it right after the library and before you create the window (the example does this):
-
-```lua
-local Config = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"))()(Library)
-```
-
-Without it the config API does not exist; the rest of the library works the same.
-
 > Save what the player sets to a config they create, load it back, and pick one to autoload. Nothing is saved on its own.
 
 ```lua
@@ -1704,7 +1694,7 @@ The config manager is a groupbox with, from top to bottom:
 - **Refresh list**
 - a **share** section: **Copy code** puts the current settings on the clipboard as a code, and **Import code** applies a pasted code and saves it. It's saved under the name in the name box, or else the name inside the code (with ` (2)`, ` (3)`... added rather than overwriting a config you already have).
 
-Save with nothing picked creates a config from the typed name. The status line shows `(unsaved changes)` once the settings differ from the loaded config. **Load** asks first when there are unsaved changes, and **Create** asks before it replaces a config with the same name. At start the player is told whether the autoload config loaded, or why it did not. A load says how many settings it applied. Every save that replaces a file keeps the old one under `backups/`, so **Restore** can put it back. The Home tab has a line under the banner that shows the loaded config, whether it has unsaved changes, and the autoload config. Without `writefile` and `readfile` the status line says the configs need them. The picker lists the configs the library wrote, even where the executor cannot list a folder, and Delete and Reset remove them by name as well. **Rename** renames the picked config to the typed name and moves the loaded name and autoloads with it. **Reset** puts every flagged element back to the value it was created with and deletes the script's whole `FolderName` folder (configs, saved themes, the default theme, autoload, settings, execution count), after a confirm. Names can't contain `\ / : * ? " < > |`.
+Save with nothing picked creates a config from the typed name. The status line shows `(unsaved changes)` once the settings differ from the loaded config. **Load** asks first when there are unsaved changes, and **Create** asks before it replaces a config with the same name. Without `writefile` and `readfile` the status line says the configs need them. **Rename** renames the picked config to the typed name and moves the loaded name and autoloads with it. **Reset** puts every flagged element back to the value it was created with and deletes the script's whole `FolderName` folder (configs, saved themes, the default theme, autoload, settings, execution count), after a confirm. Names can't contain `\ / : * ? " < > |`.
 
 `LoadAutoload` can run before every element exists. Values for flags that no element has claimed yet are held and applied as soon as an element with that flag is created, and saving writes them back, so a config never loses settings for elements that only exist some of the time (a game-specific tab, say).
 
@@ -1747,10 +1737,6 @@ There is no `Enabled` option. Older scripts that pass one still run; it does not
 | `Window:ResetConfig()` | Put every flagged element back to its starting value. |
 | `Window:ClearWorkspace()` | Delete the script's `FolderName` folder and everything in it. Returns `false` if some files could not be removed. |
 | `Window:ListConfigs()` | Saved names, sorted without regard to case. |
-| `Window:SetConfigIgnore(list)` | Flags listed here are left out of configs: a save does not write them and a load leaves them as they are. |
-| `Window:SetLoadingOrder(order)` | Element types that values apply in first, e.g. `{ "Dropdown", "Toggle" }`. Types not listed apply last. |
-| `Window:RestoreBackup(name)` | Puts back the file that the last save of `name` replaced. Load it to apply it. |
-| `Library:GetDiagnostics()` | Problems the library worked around (a failed download, an icon missing from the set, a font this client lacks), in order. They are kept, not printed, so the console stays clean. |
 | `Window.LoadedConfig` | Name of the loaded config, or `nil`. |
 | `Window:HasUnsavedChanges()` | `true` when the settings differ from the state the loaded config was last loaded or saved with. |
 | `Window:ExportConfig(name?)` | Share code (the config JSON) for a saved config, or for the current settings when `name` is `nil`. |

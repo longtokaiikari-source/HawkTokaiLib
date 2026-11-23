@@ -2,7 +2,6 @@
 -- Push Source.luau to main first, or this loads an old copy (or a 404).
 -- To test a local copy instead: loadstring(readfile("HawkTokaiLib/Source.luau"))()
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"))()
-local Config = loadstring(game:HttpGet("https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"))()(Library) -- configs, the config manager and the cloud configs
 
 -- Runtime variables exist only after Junkie authenticates this script. Outside
 -- Junkie (for example in a local test) they are nil and the license card is hidden.
