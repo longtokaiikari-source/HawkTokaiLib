@@ -1524,6 +1524,8 @@ function Window:CloudConfigs(opts)
             Visible = visible ~= false,
             Parent = parent,
         })
+        -- 2 px at each side, so the store cards' side lines are not cut off at the edge of the list.
+        create("UIPadding", { PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2), Parent = frame })
         frame:SetAttribute("NoDrag", true)
         return frame
     end
