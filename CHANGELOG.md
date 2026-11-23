@@ -12,12 +12,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
-- **Config safety**: the status line shows `(unsaved changes)` when the settings differ from the loaded config. **Load** asks before it discards unsaved changes, **Create** asks before it overwrites a config with the same name, and the status line says so when the executor has no file functions. `Window:HasUnsavedChanges()` is new.
-
-- **Key combos**: a keybind or `BindToggle` takes a key with Ctrl, Shift or Alt, such as `"Ctrl+K"` or `"Shift+F3"`. Plain keys work as before and are saved the same way.
-- **Keybind capture**: Backspace or Delete clears a keybind, Escape cancels, and a modifier pressed on its own does not bind.
-- **Keybind conflicts**: a keybind that takes a key already used by another keybind or a toggle binding shows an amber chip and a notice naming the other one.
-- **Window toggle key**: `ToggleUIKeybind` and `Window:SetKeybind` take combos too.
 - **Home world clock**: an analogue face with turning hour, minute and second hands, the digital time, the city of the chosen GMT offset and the date. The hands and the digits come from one UTC time plus the offset.
 - **Home**: an In server card with headshots of the players, a rotating Tip card (`Home.Tips`), a Shortcuts card (`Home.Shortcuts`), and a time-of-day greeting in the banner unless `Welcome` is set.
 - **Executor check** before the key gate. It runs the UNC tests and stops the load below 70 (`UNC = { Fail = 70, Warn = 80 }`), shows a banner from 70 to 79, and loads normally from 80. `UNC = false` skips it. `Library:GetExecutorScore()` returns the score.
@@ -52,14 +46,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
-- `ConfigurationSaving.Enabled` did nothing and is removed from the docs and the example. Only `FolderName` and `FileName` are read.
-
-- **Settings are kept by configs, not saved on their own**: the font, the watermark and keybind-list switches and their positions, the island position, the clock zone, and the background music and volume are part of the configs the player creates. The font starts at the default until a config loads. The cloud sort lasts for the session.
-
-- `Keybind` `Callback` gets the held modifiers as a second argument, `{ Ctrl = true, ... }`, empty for a plain key.
-- `Keybind` `OnChanged` and `Get()` return the combo text for a combo, and the `KeyCode` for a plain key as before.
-- Keybinds and toggle bindings do not fire while a text box has focus.
-
 - **Sliders**: the filled part runs from a deeper accent at the start to the bright accent at the knob, and the knob has a light ring so it stands clear of the track.
 - **Dialogs**: the icon and a hairline along the top take the dialog's type colour (success, warning or error), and the card has a faint sheen.
 - **Groupbox headers**: the icon sits in a small accent-tinted tile, and a hairline separates the header from the body on every tab.
@@ -83,16 +69,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
-- **Configs and switches stay in sync**: loading a config (manually, on autoload or on reset) always runs each feature's callback for a value that changed. Before, `LoadAutoload(true)` and `LoadConfig(name, true)` skipped the callbacks, so a switch showed off while its feature kept running. The second argument is gone from `LoadConfig`, `LoadAutoload` and `ResetConfig`; an extra argument in an old script is ignored.
-- **No writes on their own**: building the window no longer writes `configsettings.txt`, and nothing a player changes is written until they create or save a config.
-- **Autoload only points at a created config**: `Window:SetAutoload` refuses a name that was never saved, so autoload can only pick a config the player made.
-
-- A capture no longer swallows the next press of the same key. The window's hide key ignored any press of that key within 0.2 seconds of a capture.
-
-- **Console clean-up**: a stand-in run of the example in a minimal and a full executor found no errors. Expected fallbacks no longer print: a missing icon warns once per name, an executor without file functions stays quiet about custom fonts and the egg, an empty font name means the default font, a character whose rig cannot be read shows nothing. The unload trace lines used for diagnosis are removed.
-- **Example**: the ESP tab builds inside a protected call, so an error in the ESP cannot take the Settings tab or the Unload button with it.
-- **Dialogs and panels**: the light on the dialog card was a gradient on the card itself, which faded the whole card, so the dialog looked see-through. The light is now a layer of its own that fades in with the dialog. Home cards and the watermark pill had the same fade and are solid again.
-- **Dialogs**: the card's sheen used a gradient that did not reach full strength, so Roblox refused to build the dialog and Unload never asked. Fixed. A dialog that cannot open now shows an error notification.
 - **Dialogs**: if a dialog fails while it is being built, its half-built overlay is removed, so it cannot block every click, and the error is printed. Unload prints a short trace (started, removed) so a failure shows where it stopped.
 - **Dialogs**: the buttons and the backdrop ignore input for a quarter of a second after a dialog opens, so the click that opened it (Unload, for one) cannot also press Confirm. Unload asks first again.
 - **Unload**: the window is now removed even when Unload runs on a thread that lost access to the GUI. The window is hidden first, then destroyed, and the library's own screen guis are removed with the last window, so nothing stays on screen or clickable. The Example's toggle button now shows on PC too.

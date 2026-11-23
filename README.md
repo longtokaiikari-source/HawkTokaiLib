@@ -28,7 +28,7 @@ local HawkTokaiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/
 
 local Window = HawkTokaiLib:CreateWindow({
     Name = "My Hub",
-    ConfigurationSaving = { FolderName = "MyHub" },
+    ConfigurationSaving = { Enabled = true, FolderName = "MyHub" },
 })
 
 local Main = Window:CreateTab({ Name = "Main", Icon = "swords" })
@@ -106,6 +106,7 @@ local Window = HawkTokaiLib:CreateWindow({
         Id = "risk-v1",
     },
     ConfigurationSaving = {
+        Enabled = true,
         FolderName = "MyHub",
     },
     Home = {
@@ -134,7 +135,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `Name` | string | `"HawkTokaiLib"` | Title in the sidebar header. Also names the ScreenGui. |
 | `LoadingSubtitle` | string | — | Small line under the title. |
 | `Icon` | string \| number \| table | HawkTokaiLib mark (full colour) | Lucide name, asset id, or `{ Image, RectOffset, RectSize, Tint }`. See [Icons](#icons). |
-| `ToggleUIKeybind` | string \| KeyCode | `"RightControl"` | Hides and shows the window. Combos such as `"Ctrl+K"` work too. `"RightShift"`, `"LeftAlt"`, `"Insert"`, `"F1"`, or an `Enum.KeyCode`. |
+| `ToggleUIKeybind` | string \| KeyCode | `"RightControl"` | Hides and shows the window. `"RightShift"`, `"LeftAlt"`, `"Insert"`, `"F1"`, or an `Enum.KeyCode`. |
 | `Size` | UDim2 | `760 × 520` | Starting size. |
 | `MinSize` | Vector2 | `480 × 360` | Smallest size the resize grip allows. |
 | `MaxSize` | Vector2 | unlimited | Largest size the resize grip allows. |
@@ -211,7 +212,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetBackdropTint(amount)` | Tint strength, `0` to `1`. |
 | `SetDim(bool)` | Turn the tint on or off. The weather keeps running. |
 | `SetWeatherDensity(n)` / `SetWeatherSpeed(n)` | Particle count and speed multipliers. |
-| `SetKeybind(keyCode)` | Change the hide key, as a KeyCode or a combo such as `"Ctrl+K"`. Updates the chip on the home tab. |
+| `SetKeybind(keyCode)` | Change the hide key. Updates the chip on the home tab. |
 | `SetWatermark(text)` / `SetWatermark({ Text, FPS, Ping, Time, Corner })` | A small corner readout. A string sets its text; a table also switches on live FPS, ping and clock readouts. The clock uses the GMT offset chosen on the Home clock. `Corner` is `"TopRight"` (default), `"TopLeft"`, `"BottomRight"` or `"BottomLeft"`. Nothing shows until you call it. |
 | `SetWatermarkVisible(visible)` | Show or hide the readout without losing its text or settings. |
 | `SetWatermarkEnabled(enabled)` / `IsWatermarkEnabled()` | The player's choice in the Configs tab (Overlays group). Saved beside the configs, and a choice of off always wins over `SetWatermarkVisible`. |
@@ -219,7 +220,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 | `SetMusicPlaying(playing)` / `IsMusicPlaying()` | Plays or pauses the track. The choice is saved beside the configs. |
 | `SetMusicVolume(volume)` / `GetMusicVolume()` | Volume from 0 to 1, saved beside the configs. |
 | `SetKeybindListEnabled(enabled)` / `IsKeybindListEnabled()` | The same for the keybind list. Both overlays can be dragged, and the place is saved beside the configs. |
-| `BindToggle(toggle, key, mode?)` | Bind a key, or a combo such as `"Ctrl+J"`, to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
+| `BindToggle(toggle, key, mode?)` | Bind a key to a Toggle handle. `"Toggle"` (default) flips it on each press; `"Hold"` keeps it on while the key is down. Pass `nil` as the key to unbind. |
 | `SetKeybindListVisible(visible)` | Show or hide an overlay that lists every key bound with `BindToggle`, with its mode and whether the toggle is on. |
 | `SetKeepOnScreen(enabled)` | Turn the viewport clamp on or off. |
 | `SetDragStyle(style)` / `GetDragStyle()` | Set or read the drag style (see `DragStyle`). `SetDragSkeleton(enabled)` still works as an on/off switch. |
@@ -1288,7 +1289,7 @@ local Keybind = Tab:CreateKeybind({
 Keybind:Set(Enum.KeyCode.G)
 ```
 
-Click the chip and press a key to rebind. Hold Ctrl, Shift or Alt with the key to bind a combo such as `"Ctrl+K"`. Backspace or Delete clears it to None, and Escape cancels. A key that another keybind or toggle binding also uses shows an amber chip and a notice.
+Click the chip and press a key to rebind. Escape cancels.
 
 ### Properties
 
@@ -1296,10 +1297,10 @@ Click the chip and press a key to rebind. Hold Ctrl, Shift or Alt with the key t
 | --- | --- | --- | --- |
 | `Name` | string | `"Keybind"` | The label. |
 | `Desc` | string | — | Hint text under the label. |
-| `CurrentKeybind` | string \| KeyCode | — | The initial key, or a combo such as `"Ctrl+K"`. |
+| `CurrentKeybind` | string \| KeyCode | — | The initial key. |
 | `Flag` | string | — | The save key. |
-| `Callback` | function | — | `Callback(key, mods)`: runs when the key is pressed and no text box has focus. `mods` has `Ctrl`, `Shift` and `Alt` set to true while they are held, and is empty for a plain key. |
-| `OnChanged` | function | — | Runs when the user rebinds it, with the `KeyCode`, or the combo text such as `"Ctrl+K"`. |
+| `Callback` | function | — | Runs when the key is pressed and no text box has focus. |
+| `OnChanged` | function | — | Runs when the user rebinds it. |
 
 ### Handle
 
@@ -1669,12 +1670,12 @@ Toggles, sliders, steppers, dropdowns, inputs, keybinds and colour pickers creat
 
 ## Configs
 
-> Save what the player sets to a config they create, load it back, and pick one to autoload. Nothing is saved on its own.
+> Save every flagged element to a file, load it back, and pick one to autoload.
 
 ```lua
 local Window = HawkTokaiLib:CreateWindow({
     Name = "HawkTokaiLib",
-    ConfigurationSaving = { FolderName = "MyHub" },
+    ConfigurationSaving = { Enabled = true, FolderName = "MyHub" },
 })
 
 local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
@@ -1694,7 +1695,7 @@ The config manager is a groupbox with, from top to bottom:
 - **Refresh list**
 - a **share** section: **Copy code** puts the current settings on the clipboard as a code, and **Import code** applies a pasted code and saves it. It's saved under the name in the name box, or else the name inside the code (with ` (2)`, ` (3)`... added rather than overwriting a config you already have).
 
-Save with nothing picked creates a config from the typed name. The status line shows `(unsaved changes)` once the settings differ from the loaded config. **Load** asks first when there are unsaved changes, and **Create** asks before it replaces a config with the same name. Without `writefile` and `readfile` the status line says the configs need them. **Rename** renames the picked config to the typed name and moves the loaded name and autoloads with it. **Reset** puts every flagged element back to the value it was created with and deletes the script's whole `FolderName` folder (configs, saved themes, the default theme, autoload, settings, execution count), after a confirm. Names can't contain `\ / : * ? " < > |`.
+Save with nothing picked creates a config from the typed name. **Rename** renames the picked config to the typed name and moves the loaded name and autoloads with it. **Reset** puts every flagged element back to the value it was created with and deletes the script's whole `FolderName` folder (configs, saved themes, the default theme, autoload, settings, execution count), after a confirm. Names can't contain `\ / : * ? " < > |`.
 
 `LoadAutoload` can run before every element exists. Values for flags that no element has claimed yet are held and applied as soon as an element with that flag is created, and saving writes them back, so a config never loses settings for elements that only exist some of the time (a game-specific tab, say).
 
@@ -1707,10 +1708,10 @@ A config file and a share code are the same readable JSON, so a code is just the
 ```
 
 - `Folder` is the window's `FolderName`. Importing a code made for another folder asks first, and then only applies the flags that match by name and type.
-- `Config` is the flags as their own JSON string. Each flag is `{ "Value": ..., "Type": ... }`. Colours are `{ "Hex": "rrggbb" }`, keybinds are key names (`"RightShift"`), and combos are their text (`"Ctrl+K"`), and a dropdown with nothing picked has no `Value`.
+- `Config` is the flags as their own JSON string. Each flag is `{ "Value": ..., "Type": ... }`. Colours are `{ "Hex": "rrggbb" }`, keybinds are key names (`"RightShift"`), and a dropdown with nothing picked has no `Value`.
 - Old `<name>:<base64>` codes and older config files (bare flag tables, colours as RGB arrays) still load, and are rewritten in the new format on the next save.
 
-Configs only change when you press **Create** or **Save** (or call `SaveConfig`). Nothing is written automatically. A config carries the window's own choices too: the font, the watermark and keybind-list switches and their positions, the island position, the clock zone, and the background music and its volume. They come back only when that config loads or autoloads. The small state the library keeps beside the configs, in `<folder>/configsettings.txt`, is the autoload mode, the cloud installs, favourites and recent items, and the welcome notices. Loading a config never changes it. *This account* keeps the autoload in `autoload_<UserId>.txt`, so other accounts on the same PC don't load it. Switching modes moves the current autoload across.
+Configs only change when you press **Create** or **Save** (or call `SaveConfig`); nothing is written automatically. The autoload mode lives in `<folder>/configsettings.txt`, apart from the configs, so loading a config never flips it. *This account* keeps the autoload in `autoload_<UserId>.txt`, so other accounts on the same PC don't load it. Switching modes moves the current autoload across.
 
 Requires `writefile` / `readfile`.
 
@@ -1721,8 +1722,6 @@ Requires `writefile` / `readfile`.
 | `FolderName` | string | `"HawkTokaiLibUI"` | Folder in the executor workspace, holding the configs, the saved key and the library's own files. Can be nested, like `"MyHub/Game"`; missing folders are made. |
 | `FileName` | string | none | Optional config used when `SaveConfig` / `LoadConfig` get no name. With none set, there is no default config: only configs you create exist. |
 
-There is no `Enabled` option. Older scripts that pass one still run; it does nothing, and nothing is saved on its own.
-
 `CreateConfigManager` takes `Name`, `Icon`, `Side` and `Placeholder`. Called on a groupbox it adds its rows there instead of making its own.
 
 ### Handle
@@ -1730,19 +1729,18 @@ There is no `Enabled` option. Older scripts that pass one still run; it does not
 | Member | Description |
 | --- | --- |
 | `Window:SaveConfig(name?)` | Write `<folder>/<name>.json`. Returns `ok, err`. |
-| `Window:LoadConfig(name?)` | Apply a saved config and mark it loaded. Every changed value runs its feature's callback. |
+| `Window:LoadConfig(name?, skipCallbacks?)` | Apply a saved config and mark it loaded. |
 | `Window:DeleteConfig(name)` | Remove the file. |
 | `Window:RenameConfig(name, newName)` | Rename a config, carrying the loaded name and autoloads along. Refuses to overwrite. |
 | `Window:ConfigExists(name)` | Whether `<folder>/<name>.json` exists. |
-| `Window:ResetConfig()` | Put every flagged element back to its starting value. |
+| `Window:ResetConfig(skipCallbacks?)` | Put every flagged element back to its starting value. |
 | `Window:ClearWorkspace()` | Delete the script's `FolderName` folder and everything in it. Returns `false` if some files could not be removed. |
 | `Window:ListConfigs()` | Saved names, sorted without regard to case. |
 | `Window.LoadedConfig` | Name of the loaded config, or `nil`. |
-| `Window:HasUnsavedChanges()` | `true` when the settings differ from the state the loaded config was last loaded or saved with. |
 | `Window:ExportConfig(name?)` | Share code (the config JSON) for a saved config, or for the current settings when `name` is `nil`. |
 | `Window:DecodeConfig(code)` | Read a code without applying it. Returns `flags, { Folder, Name, Version }`, or `nil, err`. |
 | `Window:ImportConfig(code, saveAs?, force?)` | Apply a code. `saveAs` is a name, `true` for the name inside the code, or `nil` to only apply it. Codes for another `Folder` fail unless `force`. Returns `ok, err, savedName`. |
-| `Window:SetAutoload(name?, scope?)` / `GetAutoload(scope?)` / `LoadAutoload()` | The config loaded on start. Its switches and their features always match. `nil` clears it. `scope` is `"Global"` or `"Account"`, defaulting to the current mode. |
+| `Window:SetAutoload(name?, scope?)` / `GetAutoload(scope?)` / `LoadAutoload(skipCallbacks?)` | The config loaded on start. `nil` clears it. `scope` is `"Global"` or `"Account"`, defaulting to the current mode. |
 | `Window:SetAutoloadMode(mode)` / `GetAutoloadMode()` | `"Global"` (all accounts) or `"Account"` (this account). |
 | `Window:OnConfigChanged(fn)` | Runs `fn` after a load, delete, import or autoload change. Returns a disconnect function. |
 | `Tab:CreateConfigManager(opts)` | Returns `Create / Save / Load / Delete / Rename / Reset / SetAutoload / ClearAutoload / ToggleAutoload / SetAutoloadMode / Export / Import / Refresh`. |
