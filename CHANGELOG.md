@@ -12,11 +12,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Added
 
-- **Home rebuilt**: the cards run in a new order: profile, config line, quick actions, stats, activity, world clock, server, game and links, shortcuts, executor, tip, notes. The egg input stays last, bottom right.
-- **Quick actions**: hide the window, save the loaded config, load autoload, open Settings, copy the Discord link, reset the stats. A step that needs something missing (the config addon, a config loaded first) says so in a notice.
-- **Activity feed**: the last eight things that happened this session: notices, players joining and leaving, hiding the name or the avatar, the window hidden, stats reset. Newest first, with how long ago.
-- **Notes**: a note pad on the Home that keeps what you type while the script runs.
-
 - **Load report**: a load says how many settings it applied, how many wait for controls this script does not have yet, and how many did not fit. The load and autoload notices show it.
 - **Backups and Restore**: a save that replaces a file keeps the old one under `backups/`. The config manager's Restore button, or `Window:RestoreBackup(name)`, puts it back.
 - **Refresh**: the config manager has a Refresh button that rereads the list, like Obsidian's Refresh List.
@@ -65,8 +60,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Changed
 
-- **Home cards**: every card heading has an icon tile, a bold title and a short line under it. The cards share one 12 px corner, and long titles are cut at the end instead of pushing past the card. The egg input is unchanged.
-- **Home banner**: a little taller, the avatar is bigger and sits inside a thin accent ring, the greeting is in the accent colour, and Home cards have 12 px between them.
 - **Configs are an addon**: the config code, the config manager, the Home config line and the cloud configs moved from `Source.luau` to `addons/Config.luau`. Load it after the library, as the example does. The API names are unchanged. The library hands an addon its helpers through `Library._ui`, its window and tab classes through `Library._classes`, and two hooks through `Library._flagHooks` and `Library._homeCards`.
 
 - **Clean console**: problems the library works around (a download that failed, an icon missing from the set, a font this client lacks, an internal guard that caught an error) are kept in `Library:GetDiagnostics()` instead of printed. Warnings remain for your own callback errors, a protected script that fails to load, and a wrong `SetMusic` id.
@@ -102,14 +95,6 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 - **Execs**: the count on the home card is read again on every stats tick, so a run from another session shows up.
 
 ### Fixed
-
-- **Avatar boxes match**: the banner's avatar box was tinted accent blue, unlike the other avatar boxes. It now uses the same surface and thin border as the in-server heads, and the island's face does too.
-- **Hidden avatar icon**: the stand-in icon sat 14 px off the centre of its circle. It is centred now.
-
-- **Hide avatar** now hides the avatars in the In server card too, our own included. They swap for the user icon, like the banner avatar.
-- **Card side lines**: the page lists keep 2 px on each side, so the side lines of cards, rows and the sub-tab strip sit clear of the list's edge and are no longer cut off. The store list in the Cloud tab gets the same 2 px.
-
-- **Page margins**: every page list keeps its 24 px side margins in its position and size, not in a UIPadding. Cards that span the list (scale 1) used to run past the right margin and get cut off by the scrolling list.
 
 - **Themes on any executor**: saving, listing, loading, the default theme and delete no longer depend on `isfile`, `isfolder` or `listfiles` being right. A name with `/` or other unsafe characters is refused.
 - **Executions counter and background picture**: they read their files directly, so the count no longer resets to 0 and a picture is not downloaded again on an executor that answers `isfile` wrongly.

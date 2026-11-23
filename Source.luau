@@ -10929,10 +10929,8 @@ end
 
 local function buildContainer(owner, parent, top, emptyIcon, emptyText)
     local list = create("ScrollingFrame", {
-        -- The 24 px side margins sit in the position and size, not in a UIPadding: cards that are as wide
-        -- as the list (scale 1) then end at the margin instead of running past it and being clipped.
-        Position = UDim2.fromOffset(24, top),
-        Size = UDim2.new(1, -48, 1, -top),
+        Position = UDim2.fromOffset(0, top),
+        Size = UDim2.new(1, 0, 1, -top),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 2,
@@ -10943,7 +10941,7 @@ local function buildContainer(owner, parent, top, emptyIcon, emptyText)
         CanvasSize = UDim2.new(),
         Parent = parent,
     })
-    Library._space(padding(list, 2, 2, 2, 24), { 2, 2, 2, 24 })
+    Library._space(padding(list, 24, 24, 2, 24), { 24, 24, 2, 24 })
     Library._space(create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 8),
@@ -15209,8 +15207,6 @@ function Tab:_setupSubTabs()
     corner(highlight, UDim.new(0, 8))
     stroke(highlight, Theme.Stroke)
     local row = create("Frame", {
-        -- Starts 2 px in, so the tabs' side lines are not cut off at the edge of the strip.
-        Position = UDim2.fromOffset(2, 0),
         Size = UDim2.new(0, 0, 1, 0),
         AutomaticSize = Enum.AutomaticSize.X,
         BackgroundTransparency = 1,
@@ -16183,15 +16179,6 @@ function Window:_trackAvatar(image, placeholder)
     self:_renderIdentity(true)
 end
 
-function Window:_untrackAvatar(image)
-    local list = self._identity.Avatars
-    for index = #list, 1, -1 do
-        if list[index].Image == image then
-            table.remove(list, index)
-        end
-    end
-end
-
 function Window:_renderIdentity(instant)
     for _, entry in ipairs(self._identity.Names) do
         if entry.Kind == "User" then
@@ -16208,21 +16195,13 @@ function Window:_renderIdentity(instant)
 end
 
 function Window:SetHideName(hidden)
-    local changed = (self._hideName == true) ~= (hidden == true)
     self._hideName = hidden == true
     self:_renderIdentity()
-    if changed then
-        self:_logActivity(self._hideName and "Name hidden" or "Name shown", "eye-off")
-    end
 end
 
 function Window:SetHideAvatar(hidden)
-    local changed = (self._hideAvatar == true) ~= (hidden == true)
     self._hideAvatar = hidden == true
     self:_renderIdentity()
-    if changed then
-        self:_logActivity(self._hideAvatar and "Avatar hidden" or "Avatar shown", "user-x")
-    end
 end
 
 local function avatar(window, parent, props, ringColor, ringTransparency, ringThickness)
@@ -16436,10 +16415,6 @@ function Window:_homeCard(parent, order)
     card.AutomaticSize = Enum.AutomaticSize.Y
     padding(card, 16, 16, 14, 14)
     create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = card })
-    local cardCorner = card:FindFirstChildOfClass("UICorner")
-    if cardCorner then
-        cardCorner.CornerRadius = UDim.new(0, 12)
-    end
     -- The border lights up while the pointer is over the card.
     local cardStroke = card:FindFirstChildOfClass("UIStroke")
     if cardStroke then
@@ -16453,60 +16428,28 @@ function Window:_homeCard(parent, order)
     return card
 end
 
--- The heading at the top of a Home card: an accent icon tile, a bold title and a short line under it.
--- Returns the title label, so the card can change its text later.
-function Window:_homeCaption(parent, text, order, icon, subtitle)
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 38),
-        BackgroundTransparency = 1,
+-- A small caps heading at the top of a Home card.
+function Window:_homeCaption(parent, text, order)
+    local caption = label({
+        Size = UDim2.new(1, 0, 0, 22),
+        Text = string.upper(text),
+        TextSize = 10,
+        TextColor3 = Theme.Muted,
+        TextYAlignment = Enum.TextYAlignment.Top,
         LayoutOrder = order,
         Parent = parent,
     })
-    local tile = create("Frame", {
+    padding(caption, 10, 0, 0, 0)
+    -- A short accent bar leads each caption.
+    local bar = create("Frame", {
         Position = UDim2.fromOffset(0, 5),
-        Size = UDim2.fromOffset(28, 28),
+        Size = UDim2.fromOffset(3, 11),
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.84,
         BorderSizePixel = 0,
-        Parent = row,
+        Parent = caption,
     })
-    corner(tile, UDim.new(0, 8))
-    if icon then
-        local image = create("ImageLabel", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5),
-            Size = UDim2.fromOffset(16, 16),
-            BackgroundTransparency = 1,
-            ImageColor3 = Theme.Accent,
-            ScaleType = Enum.ScaleType.Fit,
-            Parent = tile,
-        })
-        applyIcon(image, icon)
-    end
-    local title = label({
-        Position = UDim2.fromOffset(38, 2),
-        Size = UDim2.new(1, -38, 0, 18),
-        Text = text,
-        TextSize = 13,
-        TextColor3 = Theme.Text,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        Parent = row,
-    })
-    title.FontFace = Fonts.Bold
-    if subtitle then
-        label({
-            Position = UDim2.fromOffset(38, 20),
-            Size = UDim2.new(1, -38, 0, 14),
-            Text = subtitle,
-            TextSize = 11,
-            TextColor3 = Theme.Muted,
-            TextYAlignment = Enum.TextYAlignment.Center,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            Parent = row,
-        })
-    end
-    return title
+    corner(bar, UDim.new(1, 0))
+    return caption
 end
 
 -- A rounded chip of an icon and short text. Returns the chip, its label and
@@ -16591,7 +16534,7 @@ local function timeGreeting()
 end
 
 function Window:_homeProfile(list, opts, order)
-    local banner = panelCard(list, 152, order)
+    local banner = panelCard(list, 140, order)
     banner.ClipsDescendants = true
     create("UIGradient", {
         Color = ColorSequence.new(Theme.Surface2, Theme.Surface2:Lerp(Theme.Accent, 0.12)),
@@ -16620,31 +16563,20 @@ function Window:_homeProfile(list, opts, order)
     -- A soft accent halo sits behind the avatar, so the bust stands out from the card.
     local halo = create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(1, -91, 1, -75),
-        Size = UDim2.fromOffset(190, 190),
-        BackgroundColor3 = Theme.Surface3,
-        BackgroundTransparency = 0,
+        Position = UDim2.new(1, -86, 1, -70),
+        Size = UDim2.fromOffset(176, 176),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         Parent = banner,
     })
     corner(halo, UDim.new(1, 0))
-    -- A thin ring just outside the halo gives the avatar a clean edge.
-    local ring = create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(1, -91, 1, -75),
-        Size = UDim2.fromOffset(172, 172),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Parent = banner,
-    })
-    corner(ring, UDim.new(1, 0))
-    stroke(ring, Theme.Stroke, 0, 1)
     -- The avatar bust stands on the banner's right edge and fades in from
     -- the left, so it reads as part of the card rather than a framed photo.
     local bust = create("ImageLabel", {
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -16, 1, 0),
-        Size = UDim2.fromOffset(150, 150),
+        Size = UDim2.fromOffset(140, 140),
         BackgroundTransparency = 1,
         Image = "rbxthumb://type=AvatarBust&id=" .. tostring(LocalPlayer.UserId) .. "&w=420&h=420",
         ScaleType = Enum.ScaleType.Fit,
@@ -16660,7 +16592,7 @@ function Window:_homeProfile(list, opts, order)
     })
     local bustPlaceholder = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
+        Position = UDim2.fromScale(0.6, 0.55),
         Size = UDim2.fromOffset(40, 40),
         BackgroundTransparency = 1,
         ImageColor3 = Theme.Muted,
@@ -16689,7 +16621,7 @@ function Window:_homeProfile(list, opts, order)
         Size = textWidth + UDim2.fromOffset(0, 14),
         Text = string.upper(opts.Welcome or timeGreeting()),
         TextSize = 10,
-        TextColor3 = Theme.Accent,
+        TextColor3 = Theme.Muted,
         Parent = banner,
     })
     local nameLabel = label({
@@ -17128,7 +17060,7 @@ function Window:_homeLinks(parent, opts, order)
         return nil, function() end
     end
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "Links", 0, "link", "Community and resources")
+    self:_homeCaption(card, "Links", 0)
     for index, link in ipairs(links) do
         local action = type(link.Callback) == "function"
         self:_homeLink(card, index, link.Icon or "link", link.Title or "", link.Text or "", action and "arrow-up-right" or "copy", function()
@@ -18123,7 +18055,7 @@ function Window:_homeClock(parent, opts, order)
     self._clockOffset = offset
 
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "World clock", 0, "clock", "Local time, pick a zone")
+    self:_homeCaption(card, "World clock", 0)
 
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 104),
@@ -18602,7 +18534,7 @@ end
 -- then a +N pill. It redraws only when someone joins or leaves.
 function Window:_homeServer(list, opts, order)
     local card = self:_homeCard(list, order)
-    local caption = self:_homeCaption(card, "In server", 0, "users", "Players here right now")
+    local caption = self:_homeCaption(card, "In server", 0)
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 40),
         BackgroundTransparency = 1,
@@ -18634,7 +18566,6 @@ function Window:_homeServer(list, opts, order)
         end
         lastKey = key
         for _, item in ipairs(shown) do
-            self:_untrackAvatar(item)
             item:Destroy()
         end
         shown = {}
@@ -18658,19 +18589,6 @@ function Window:_homeServer(list, opts, order)
                 Parent = row,
             })
             corner(head, UDim.new(1, 0))
-            -- Hide avatar swaps every avatar for the user icon, the in-server heads included, our own too.
-            local headIcon = create("ImageLabel", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromScale(0.5, 0.5),
-                BackgroundTransparency = 1,
-                ImageColor3 = Theme.Muted,
-                ImageTransparency = 1,
-                ScaleType = Enum.ScaleType.Fit,
-                Parent = head,
-            })
-            applyIcon(headIcon, "user")
-            self:_trackAvatar(head, headIcon)
             if player == LocalPlayer then
                 stroke(head, Theme.Accent, 0, 2)
             else
@@ -18725,7 +18643,7 @@ function Window:_homeTip(parent, opts, order)
         }
     end
     local card = self:_homeCard(parent, order)
-    self:_homeCaption(card, "Tip", 0, "lightbulb", "A tip for today")
+    self:_homeCaption(card, "Tip", 0)
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 44),
         BackgroundColor3 = Theme.Accent,
@@ -18781,7 +18699,7 @@ function Window:_homeShortcuts(list, opts, order)
         return nil
     end
     local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Shortcuts", 0, "keyboard", "Keys and what they do")
+    self:_homeCaption(card, "Shortcuts", 0)
     local grid = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -18803,232 +18721,6 @@ function Window:_homeShortcuts(list, opts, order)
 end
 
 -- One line under the banner: the loaded config, whether it has unsaved changes, and the autoload config.
-
--- Seconds since an entry, as a short phrase for the activity feed.
-local function agoText(seconds)
-    if seconds < 60 then
-        return math.floor(seconds) .. "s ago"
-    elseif seconds < 3600 then
-        return math.floor(seconds / 60) .. "m ago"
-    end
-    return math.floor(seconds / 3600) .. "h ago"
-end
-
--- Records one thing that happened this session: a notice, a player joining or leaving, a toggle, a window hidden.
-function Window:_logActivity(text, icon)
-    self._activity = self._activity or {}
-    table.insert(self._activity, 1, { Text = tostring(text), Icon = icon or "dot", At = os.clock() })
-    while #self._activity > 8 do
-        table.remove(self._activity)
-    end
-    if self._activityRefresh then
-        self._activityRefresh()
-    end
-end
-
--- Quick actions: what a player does most, one tap each. A step that needs something missing (the config addon,
--- a config loaded first) says so in a notice instead of doing nothing.
-function Window:_homeQuick(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Quick actions", 0, "zap", "The things you do most, one tap each")
-    local grid = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    create("UIGridLayout", {
-        CellSize = UDim2.new(0.5, -5, 0, 40),
-        CellPadding = UDim2.fromOffset(10, 8),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = grid,
-    })
-    local function action(index, text, icon, onClick)
-        local button = create("TextButton", {
-            -- The grid positions its cells but does not size them, so each button takes the cell's size.
-            Size = UDim2.new(0.5, -5, 0, 40),
-            Text = "",
-            AutoButtonColor = false,
-            BackgroundColor3 = Theme.Surface3,
-            BorderSizePixel = 0,
-            LayoutOrder = index,
-            Parent = grid,
-        })
-        corner(button, UDim.new(0, 8))
-        stroke(button, Theme.Stroke, 0.3)
-        local glyph = create("ImageLabel", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 12, 0.5, 0),
-            Size = UDim2.fromOffset(16, 16),
-            BackgroundTransparency = 1,
-            ImageColor3 = Theme.Accent,
-            ScaleType = Enum.ScaleType.Fit,
-            Parent = button,
-        })
-        applyIcon(glyph, icon)
-        label({
-            Position = UDim2.new(0, 36, 0, 0),
-            Size = UDim2.new(1, -44, 1, 0),
-            Text = text,
-            TextSize = 13,
-            TextColor3 = Theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            Parent = button,
-        })
-        button.MouseButton1Click:Connect(onClick)
-        return button
-    end
-    action(1, "Hide window", "eye-off", function()
-        self:Toggle(false)
-        self:_logActivity("Window hidden", "eye-off")
-    end)
-    action(2, "Save config", "save", function()
-        if not self.SaveConfig then
-            self:Notify({ Title = "Config addon not loaded", Content = "Load addons/Config.luau to save configs." })
-        elseif not self.LoadedConfig then
-            self:Notify({ Title = "No config loaded", Content = "Make one in Configs first, then save it here." })
-        else
-            self:SaveConfig(self.LoadedConfig)
-        end
-    end)
-    action(3, "Load autoload", "rotate-ccw", function()
-        if not self.LoadAutoload then
-            self:Notify({ Title = "Config addon not loaded", Content = "Load addons/Config.luau to use autoload." })
-        else
-            self:LoadAutoload()
-        end
-    end)
-    action(4, "Open Settings", "settings", function()
-        for _, tab in ipairs(self.Tabs) do
-            if tab.Name == "Settings" then
-                self:SelectTab(tab)
-                return
-            end
-        end
-    end)
-    action(6, "Reset stats", "timer", function()
-        if self._resetStats then
-            self._resetStats()
-        end
-        self:_logActivity("Stats reset", "timer")
-    end)
-    action(5, "Copy Discord", "message-circle", function()
-        if type(setclipboard) == "function" and Library.InviteLink then
-            pcall(setclipboard, Library.InviteLink)
-            self:Notify({ Title = "Discord link copied", Content = Library.InviteLink })
-        else
-            self:Notify({ Title = "Clipboard unavailable", Content = "This executor has no setclipboard." })
-        end
-    end)
-end
-
--- The activity feed: the last few things that happened this session, newest first.
-function Window:_homeActivity(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Activity", 0, "activity", "What happened this session")
-    local feed = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = feed })
-    local shown = {}
-    local function render()
-        if not feed.Parent then
-            return
-        end
-        for _, item in ipairs(shown) do
-            item:Destroy()
-        end
-        shown = {}
-        local entries = self._activity or {}
-        if #entries == 0 then
-            shown[1] = label({
-                Size = UDim2.new(1, 0, 0, 22),
-                Text = "Nothing yet. Hide something, save a config or wait for a player.",
-                TextSize = 12,
-                TextColor3 = Theme.Muted,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                LayoutOrder = 1,
-                Parent = feed,
-            })
-            return
-        end
-        local now = os.clock()
-        for index, entry in ipairs(entries) do
-            local row = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 22),
-                BackgroundTransparency = 1,
-                LayoutOrder = index,
-                Parent = feed,
-            })
-            local glyph = create("ImageLabel", {
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 0, 0.5, 0),
-                Size = UDim2.fromOffset(14, 14),
-                BackgroundTransparency = 1,
-                ImageColor3 = Theme.Accent,
-                ScaleType = Enum.ScaleType.Fit,
-                Parent = row,
-            })
-            applyIcon(glyph, entry.Icon)
-            label({
-                Position = UDim2.fromOffset(22, 0),
-                Size = UDim2.new(1, -92, 1, 0),
-                Text = entry.Text,
-                TextSize = 12,
-                TextColor3 = Theme.Text,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Parent = row,
-            })
-            label({
-                Position = UDim2.new(1, -66, 0, 0),
-                Size = UDim2.fromOffset(66, 22),
-                Text = agoText(now - entry.At),
-                TextSize = 11,
-                TextColor3 = Theme.Muted,
-                TextXAlignment = Enum.TextXAlignment.Right,
-                Parent = row,
-            })
-            shown[#shown + 1] = row
-        end
-    end
-    self._activityRefresh = render
-    render()
-end
-
--- A note pad that keeps what you type while the script runs.
-function Window:_homeNotes(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Notes", 0, "file-text", "Kept while this session runs")
-    local box = create("TextBox", {
-        Size = UDim2.new(1, 0, 0, 78),
-        BackgroundColor3 = Theme.Surface3,
-        BorderSizePixel = 0,
-        ClearTextOnFocus = false,
-        MultiLine = true,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextSize = 13,
-        TextColor3 = Theme.Text,
-        PlaceholderText = "A server to remember, a key, a reminder...",
-        PlaceholderColor3 = Theme.Muted,
-        Text = self._homeNote or "",
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    corner(box, UDim.new(0, 8))
-    padding(box, 10, 10, 8, 8)
-    box.FocusLost:Connect(function()
-        self._homeNote = box.Text
-    end)
-end
 
 function Window:_buildHome(opts)
     -- Values from the Loader (RunProtected) win over the protected script's Home options,
@@ -19067,11 +18759,6 @@ function Window:_buildHome(opts)
     overview._noSearch = true
     overview._order = 100
     local list = overview.List
-    -- Cards on the Home breathe: a little more room between them than the other tabs.
-    local homeLayout = list:FindFirstChildOfClass("UIListLayout")
-    if homeLayout then
-        homeLayout.Padding = UDim.new(0, 12)
-    end
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
     for _, card in ipairs(Library._homeCards) do
@@ -19080,26 +18767,17 @@ function Window:_buildHome(opts)
             Library._diagnose("a Home card failed: " .. tostring(err))
         end
     end
-    self:_homeEgg(list, opts, 13)
-    self:_homeQuick(list, 3)
-    local refreshStats, resetStats = self:_homeStats(list, opts, 4, tab)
-    self._resetStats = resetStats
-    self:_homeActivity(list, 5)
-    self:_homeClock(list, opts, 6)
-    local refreshServer = self:_homeServer(list, opts, 7)
-    Players.PlayerAdded:Connect(function(player)
-        self:_logActivity(tostring(player.Name) .. " joined", "user-plus")
-    end)
-    Players.PlayerRemoving:Connect(function(player)
-        self:_logActivity(tostring(player.Name) .. " left", "user-minus")
-    end)
+    self:_homeEgg(list, opts, 10)
+    local refreshStats, resetStats = self:_homeStats(list, opts, 3, tab)
+    self:_homeClock(list, opts, 4)
+    local refreshServer = self:_homeServer(list, opts, 5)
 
     -- Server and links side by side, stacked when narrow.
     local split = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 8,
+        LayoutOrder = 6,
         Parent = list,
     })
     local splitLayout = create("UIListLayout", {
@@ -19136,10 +18814,9 @@ function Window:_buildHome(opts)
     split:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSplit)
     task.defer(fitSplit)
 
-    self:_homeShortcuts(list, opts, 9)
-    self:_homeExecutor(list, opts, 10)
-    self:_homeTip(list, opts, 11)
-    self:_homeNotes(list, 12)
+    self:_homeShortcuts(list, opts, 7)
+    self:_homeExecutor(list, opts, 8)
+    self:_homeTip(list, opts, 9)
 
     if type(pages) == "table" then
         for _, page in ipairs(pages) do
@@ -20844,7 +20521,7 @@ function Window:_buildMiniBar()
     })
     local face = create("ImageLabel", {
         Size = UDim2.fromOffset(48, 48),
-        BackgroundColor3 = Theme.Surface3,
+        BackgroundColor3 = Color3.fromRGB(38, 38, 41),
         BorderSizePixel = 0,
         Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(LocalPlayer.UserId) .. "&w=150&h=150",
         Parent = top,
@@ -22586,9 +22263,6 @@ end
 
 function Window:Notify(opts)
     opts = normalize(opts, { Text = "Content", Message = "Content", Image = "Icon" })
-    if opts.Title then
-        self:_logActivity(opts.Title, "bell")
-    end
     if self.Minimized and self._islandActivity then
         self._islandActivity(opts)
     end
