@@ -793,10 +793,14 @@ do
 	-- The 2D box. Full is a box with a black outline under the coloured line. Corner draws eight
 	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside. The colour follows
 	-- the visible check, and the lines fade with the distance when Distance fade is on.
+	-- Corner radius of the 2D box, in pixels: the box and its black outline share it, and the outline follows the curve.
+	local BOX_CORNER = 4
 	function P.Box2D(object, scene)
 		local frame = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 2, Parent = scene.Container })
+		create("UICorner", { CornerRadius = UDim.new(0, BOX_CORNER), Parent = frame })
 		local stroke = create("UIStroke", { Parent = frame })
 		local outline = create("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 1, Parent = scene.Container })
+		create("UICorner", { CornerRadius = UDim.new(0, BOX_CORNER), Parent = outline })
 		local outlineStroke = create("UIStroke", { Color = Color3.new(0, 0, 0), Parent = outline })
 		local pool = P.LinePool(scene.Container)
 		local component = P.NewComponent({ frame, outline }, { pool })
@@ -945,15 +949,23 @@ do
 		return Color3.new(from.R + (to.R - from.R) * t, from.G + (to.G - from.G) * t, from.B + (to.B - from.B) * t)
 	end
 	ESP.HealthColor = P.HealthColor
+	-- The bar's colours: green at the full end, yellow in the middle, red at the empty end.
+	local VerticalBar = ColorSequence.new({ ColorSequenceKeypoint.new(0, HealthGreen), ColorSequenceKeypoint.new(0.5, HealthYellow), ColorSequenceKeypoint.new(1, HealthRed) })
+	local HorizontalBar = ColorSequence.new({ ColorSequenceKeypoint.new(0, HealthRed), ColorSequenceKeypoint.new(0.5, HealthYellow), ColorSequenceKeypoint.new(1, HealthGreen) })
 	-- A health bar beside the 2D box: a black outline around a dark track, and a fill that takes its colour from the health.
 	-- Gradient colours the fill by health; off keeps it green. The health number sits beside the bar.
 	function P.Health(object, scene)
 		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.1, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
-		local track = create("Frame", { Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.fromRGB(22, 22, 26), BackgroundTransparency = 0.2, BorderSizePixel = 0, ZIndex = 4, Parent = back })
+		local track = create("Frame", { Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 4, Parent = back })
+		create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = back })
+		create("UICorner", { CornerRadius = UDim.new(0, 1), Parent = track })
+		local colours = create("UIGradient", { Parent = track })
+		-- the part of the bar that is missing is covered with the dark track colour, so the colour showing at any height is the one for that health
 		local fill = create("Frame", {
-			AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = HealthGreen, BorderSizePixel = 0, ZIndex = 5, Parent = track,
+			AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 0),
+			BackgroundColor3 = Color3.fromRGB(22, 22, 26), BorderSizePixel = 0, ZIndex = 5, Parent = track,
 		})
+		create("UICorner", { CornerRadius = UDim.new(0, 1), Parent = fill })
 		local number = create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(44, 14),
@@ -984,26 +996,39 @@ do
 				back.Position = UDim2.fromOffset(minX - 1, maxY + 2)
 				back.Size = UDim2.fromOffset(maxX - minX + 2, 6)
 				track.Size = UDim2.fromOffset(maxX - minX, 4)
-				fill.AnchorPoint = Vector2.new(0, 0)
-				fill.Position = UDim2.fromScale(0, 0)
-				fill.Size = UDim2.fromScale(fraction, 1)
-				number.Position = UDim2.fromOffset(maxX + 18, maxY + 5)
+				-- the empty part is on the right: the colours run red on the left to green on the right
+				fill.AnchorPoint = Vector2.new(1, 0)
+				fill.Position = UDim2.fromScale(1, 0)
+				fill.Size = UDim2.fromScale(1 - fraction, 1)
+				colours.Color = HorizontalBar
+				colours.Rotation = 0
+				number.AnchorPoint = Vector2.new(0, 0.5)
+				number.TextXAlignment = Enum.TextXAlignment.Left
+				number.Position = UDim2.fromOffset(maxX + 6, maxY + 5)
 			else
 				local onLeft = settings.Health.Side ~= "Right"
 				local x = onLeft and (minX - 8) or (maxX + 3)
 				back.Position = UDim2.fromOffset(x, minY)
 				back.Size = UDim2.fromOffset(5, maxY - minY)
 				track.Size = UDim2.fromOffset(3, maxY - minY - 2)
-				fill.AnchorPoint = Vector2.new(0, 1)
-				fill.Position = UDim2.fromScale(0, 1)
-				fill.Size = UDim2.fromScale(1, fraction)
-				number.Position = UDim2.fromOffset(onLeft and (x - 26) or (x + 30), (minY + maxY) / 2)
+				-- the empty part is at the bottom: the colours run green at the top to red at the bottom
+				fill.AnchorPoint = Vector2.new(0, 0)
+				fill.Position = UDim2.fromScale(0, 0)
+				fill.Size = UDim2.fromScale(1, 1 - fraction)
+				colours.Color = VerticalBar
+				colours.Rotation = 90
+				-- the number sits right against the bar: right-aligned on the left side, left-aligned on the right
+				number.AnchorPoint = Vector2.new(onLeft and 1 or 0, 0.5)
+				number.TextXAlignment = onLeft and Enum.TextXAlignment.Right or Enum.TextXAlignment.Left
+				number.Position = UDim2.fromOffset(onLeft and (x - 4) or (x + 9), (minY + maxY) / 2)
 			end
 			number.Text = tostring(math.floor(humanoid.Health))
 			if settings.Health.Gradient == false then
-				fill.BackgroundColor3 = HealthGreen
+				track.BackgroundColor3 = HealthGreen
+				colours.Enabled = false
 			else
-				fill.BackgroundColor3 = P.HealthColor(fraction)
+				track.BackgroundColor3 = Color3.new(1, 1, 1)
+				colours.Enabled = true
 			end
 		end
 		return component

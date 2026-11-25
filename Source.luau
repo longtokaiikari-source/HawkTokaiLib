@@ -1287,6 +1287,27 @@ local function reserveRight(title, descLabel, width)
     if descLabel then
         descLabel.Size = UDim2.new(1, -(14 + width), 0, descLabel.Size.Y.Offset)
     end
+    -- When the element is too narrow for its control, a title or description has no room left and
+    -- Roblox draws only its "..." ellipsis beside the control. Such a line hides until there is room.
+    local host = (descLabel or title) and (descLabel or title).Parent
+    if not host then
+        return
+    end
+    local function fit()
+        local size = host.AbsoluteSize
+        if not size or size.X <= 0 then
+            return -- not laid out yet: keep the line as it was made
+        end
+        local room = size.X - (14 + width) - 14
+        if title then
+            title.Visible = room >= 24
+        end
+        if descLabel then
+            descLabel.Visible = room >= 60
+        end
+    end
+    host:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+    fit()
 end
 
 local Tab = {}

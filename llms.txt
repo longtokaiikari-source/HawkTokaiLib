@@ -164,7 +164,7 @@ Minimizing folds the window into a Dynamic Island at the top of the screen. Play
 - [README: Configs](README.md#configs): file format, share codes, autoload per account.
 - [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
 
-- Box2D.Style: "Full" (default, black outline under the line) or "Corner" (eight corner lines). Tracer.To: "Feet" (default), "Center", "Head". Health.Side: "Left" (default), "Right", "Bottom"; Health.Gradient defaults on.
+- Box2D.Style: "Full" (default, rounded corners and a black outline under the line) or "Corner" (eight corner lines). Tracer.To: "Feet" (default), "Center", "Head". Health.Side: "Left" (default), "Right", "Bottom"; Health.Gradient defaults on (green, yellow and red along the bar).
 
 ## Player list
 - `Tab:PlayerList({ Name, Height, Actions })`: live list of the players in the server. Actions = { { Name, Callback(player) } }. Rows follow joins and leaves; distances refresh every 2 seconds. Returns a handle with Refresh().
