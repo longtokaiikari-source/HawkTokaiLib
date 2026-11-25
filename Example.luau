@@ -255,7 +255,7 @@ Progress:CreateStatus({ Name = "Experience", Value = "6200/10000", Style = "Bar"
 Progress:CreateStatus({ Name = "Balance", Value = 125000, Style = "Row", Pin = true })
 
 local Health = Status:AddLeftGroupbox({ Name = "Health", Icon = "heart-pulse" })
-local States = { { "Running", "Success" }, { "Waiting", "Warning" }, { "Stopped", "Error" } }
+local States = { { "Running", "Success" }, { "Waiting", "Warning" }, { "Stopped", "Muted" } }
 Health:CreateStatus({ Name = "State", Style = "Dot", Update = function()
     local State = States[math.floor(os.clock() / 3) % #States + 1]
     return State[1], State[2] -- a second string return sets the tone

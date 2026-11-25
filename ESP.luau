@@ -1119,13 +1119,14 @@ do
 		local points = {}
 		for _, name in names do
 			local part = model:FindFirstChild(name)
-			if part then
+			-- only something with a 3D position can be ray-cast at; a GUI child that shares the name is skipped
+			if part and typeof(part.Position) == "Vector3" then
 				table.insert(points, part)
 			end
 		end
 		if #points == 0 then
 			local root = P.PrimaryPart(model)
-			if root then
+			if root and typeof(root.Position) == "Vector3" then
 				table.insert(points, root)
 			end
 		end

@@ -455,7 +455,7 @@ The game card has Rejoin, Server Hop, Copy Job ID, Copy Universe and Join Lowest
 | `Tier` | string \| false | `"Free"` | Badge on the player card. `false` hides it. |
 | `TierIcon` | string | window icon | Icon in the badge. |
 | `Expiry` | number \| string \| function | — | Under the badge. A unix time counts down (`11h 57m`), a string is shown as is, a function is called every second. |
-| `Stats` | table | not used | Not used any more: the Home shows four fixed tiles (FPS, ping, players, session). |
+| `Stats` | table | `{ "Players", "Execs", "Session", "FPS", "Ping" }` | The figures the stats card shows, in order. |
 | `StatColors` | boolean | `true` | Tint `FPS`, `Ping` and `Memory` green, amber or red by how healthy they are (FPS 50+ / 30+, ping under 90 / 180 ms, memory under 1.5 / 3 GB). |
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |

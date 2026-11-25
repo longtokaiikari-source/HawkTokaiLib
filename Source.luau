@@ -152,14 +152,14 @@ end
 Library.Theme = {
     Background = Color3.fromRGB(15, 18, 26),
     Surface = Color3.fromRGB(18, 22, 31),
-    Surface2 = Color3.fromRGB(33, 34, 38),
-    Surface3 = Color3.fromRGB(45, 48, 56),
-    Stroke = Color3.fromRGB(52, 56, 66),
-    StrokeHover = Color3.fromRGB(85, 90, 102),
-    Accent = Color3.fromRGB(161, 169, 225),
+    Surface2 = Color3.fromRGB(22, 26, 37),
+    Surface3 = Color3.fromRGB(37, 44, 60),
+    Stroke = Color3.fromRGB(34, 40, 55),
+    StrokeHover = Color3.fromRGB(70, 84, 112),
+    Accent = Color3.fromRGB(128, 160, 246),
     AccentDark = Color3.fromRGB(14, 18, 30),
-    Text = Color3.fromRGB(240, 240, 240),
-    Muted = Color3.fromRGB(165, 165, 165),
+    Text = Color3.fromRGB(228, 232, 242),
+    Muted = Color3.fromRGB(116, 126, 148),
     Warning = Color3.fromRGB(240, 176, 108),
     Success = Color3.fromRGB(150, 220, 170),
     Error = Color3.fromRGB(240, 120, 120),
@@ -3217,7 +3217,7 @@ function Tab:Dropdown(opts)
                     return
                 end
                 if selected[option] then
-                    if not multi and opts.AllowNone == false then
+                    if not multi and opts.AllowNone ~= true then
                         setOpen(false)
                         return
                     end
@@ -16209,21 +16209,13 @@ function Window:_renderIdentity(instant)
 end
 
 function Window:SetHideName(hidden)
-    local changed = (self._hideName == true) ~= (hidden == true)
     self._hideName = hidden == true
     self:_renderIdentity()
-    if changed then
-        self:_logActivity(self._hideName and "Name hidden" or "Name shown", "eye-off")
-    end
 end
 
 function Window:SetHideAvatar(hidden)
-    local changed = (self._hideAvatar == true) ~= (hidden == true)
     self._hideAvatar = hidden == true
     self:_renderIdentity()
-    if changed then
-        self:_logActivity(self._hideAvatar and "Avatar hidden" or "Avatar shown", "user-x")
-    end
 end
 
 local function avatar(window, parent, props, ringColor, ringTransparency, ringThickness)
@@ -16618,28 +16610,26 @@ function Window:_homeProfile(list, opts, order)
         Parent = stripe,
     })
 
-    -- The avatar: a circle with the same surface and thin border as every other avatar box. The picture is clipped
-    -- to the circle, and the stand-in icon sits at its centre.
-    local avatarBox = create("Frame", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -18, 0.5, 0),
-        Size = UDim2.fromOffset(136, 136),
-        BackgroundColor3 = Theme.Surface3,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
+    -- The avatar bust stands on the banner's right edge and fades in from
+    -- the left, so it reads as part of the card rather than a framed photo.
+    local bust = create("ImageLabel", {
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -16, 1, 0),
+        Size = UDim2.fromOffset(140, 140),
+        BackgroundTransparency = 1,
+        Image = "rbxthumb://type=AvatarBust&id=" .. tostring(LocalPlayer.UserId) .. "&w=420&h=420",
+        ScaleType = Enum.ScaleType.Fit,
         Parent = banner,
     })
-    corner(avatarBox, UDim.new(1, 0))
-    stroke(avatarBox, Theme.Stroke, 0, 1)
-    local avatarImage = create("ImageLabel", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(LocalPlayer.UserId) .. "&w=420&h=420",
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = avatarBox,
+    create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.45, 0),
+            NumberSequenceKeypoint.new(1, 0),
+        }),
+        Parent = bust,
     })
-    corner(avatarImage, UDim.new(1, 0))
-    local avatarPlaceholder = create("ImageLabel", {
+    local bustPlaceholder = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(40, 40),
@@ -16647,10 +16637,10 @@ function Window:_homeProfile(list, opts, order)
         ImageColor3 = Theme.Muted,
         ImageTransparency = 1,
         ScaleType = Enum.ScaleType.Fit,
-        Parent = avatarBox,
+        Parent = bust,
     })
-    applyIcon(avatarPlaceholder, "user")
-    self:_trackAvatar(avatarImage, avatarPlaceholder)
+    applyIcon(bustPlaceholder, "user")
+    self:_trackAvatar(bust, bustPlaceholder)
 
     -- Five quick taps on the avatar show the hidden egg input (see Window:_eggTap).
     local tapArea = create("TextButton", {
@@ -16658,7 +16648,7 @@ function Window:_homeProfile(list, opts, order)
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false,
-        Parent = avatarBox,
+        Parent = bust,
     })
     tapArea.MouseButton1Click:Connect(function()
         self:_eggTap()
@@ -18293,7 +18283,7 @@ end
 -- then a +N pill. It redraws only when someone joins or leaves.
 function Window:_homeServer(list, opts, order)
     local card = self:_homeCard(list, order)
-    local caption = self:_homeCaption(card, "In server", 0, "users", "Players here right now")
+    local caption = self:_homeCaption(card, "In server", 0)
     local row = create("Frame", {
         Size = UDim2.new(1, 0, 0, 40),
         BackgroundTransparency = 1,
@@ -18349,7 +18339,11 @@ function Window:_homeServer(list, opts, order)
                 Parent = row,
             })
             corner(head, UDim.new(1, 0))
-            -- Hide avatar swaps every avatar for the user icon, the in-server heads included, our own too.
+            if player == LocalPlayer then
+                stroke(head, Theme.Accent, 0, 2)
+            else
+                stroke(head, Theme.Stroke, 0, 1)
+            end
             local headIcon = create("ImageLabel", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.fromScale(0.5, 0.5),
@@ -18361,11 +18355,8 @@ function Window:_homeServer(list, opts, order)
                 Parent = head,
             })
             applyIcon(headIcon, "user")
-            self:_trackAvatar(head, headIcon)
             if player == LocalPlayer then
-                stroke(head, Theme.Accent, 0, 2)
-            else
-                stroke(head, Theme.Stroke, 0, 1)
+                self:_trackAvatar(head, headIcon)
             end
             shown[#shown + 1] = head
         end
@@ -18506,402 +18497,316 @@ local function agoText(seconds)
 end
 
 -- Records one thing that happened this session: a notice, a player joining or leaving, a toggle, a window hidden.
-function Window:_logActivity(text, icon)
-    self._activity = self._activity or {}
-    table.insert(self._activity, 1, { Text = tostring(text), Icon = icon or "dot", At = os.clock() })
-    while #self._activity > 8 do
-        table.remove(self._activity)
-    end
-    if self._activityRefresh then
-        self._activityRefresh()
-    end
-end
 
 
 -- The activity feed: the last few things that happened this session, newest first.
-function Window:_homeActivity(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Activity", 0, "activity", "What happened this session")
-    local feed = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = feed })
-    -- At least as tall as the notes pad beside it, so the two cards in the row line up.
-    create("UISizeConstraint", { MinSize = Vector2.new(0, 78), Parent = feed })
-    local shown = {}
-    local function render()
-        if not feed.Parent then
-            return
-        end
-        for _, item in ipairs(shown) do
-            item:Destroy()
-        end
-        shown = {}
-        local entries = self._activity or {}
-        if #entries == 0 then
-            shown[1] = label({
-                Size = UDim2.new(1, 0, 0, 22),
-                Text = "Nothing yet. Hide something, save a config or wait for a player.",
-                TextSize = 12,
-                TextColor3 = Theme.Muted,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                LayoutOrder = 1,
-                Parent = feed,
-            })
-            return
-        end
-        local now = os.clock()
-        for index, entry in ipairs(entries) do
-            local row = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 22),
-                BackgroundTransparency = 1,
-                LayoutOrder = index,
-                Parent = feed,
-            })
-            local glyph = create("ImageLabel", {
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 0, 0.5, 0),
-                Size = UDim2.fromOffset(14, 14),
-                BackgroundTransparency = 1,
-                ImageColor3 = Theme.Accent,
-                ScaleType = Enum.ScaleType.Fit,
-                Parent = row,
-            })
-            applyIcon(glyph, entry.Icon)
-            label({
-                Position = UDim2.fromOffset(22, 0),
-                Size = UDim2.new(1, -92, 1, 0),
-                Text = entry.Text,
-                TextSize = 12,
-                TextColor3 = Theme.Text,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                Parent = row,
-            })
-            label({
-                Position = UDim2.new(1, -66, 0, 0),
-                Size = UDim2.fromOffset(66, 22),
-                Text = agoText(now - entry.At),
-                TextSize = 11,
-                TextColor3 = Theme.Muted,
-                TextXAlignment = Enum.TextXAlignment.Right,
-                Parent = row,
-            })
-            shown[#shown + 1] = row
-        end
-    end
-    self._activityRefresh = render
-    render()
-end
 
 -- A note pad that keeps what you type while the script runs.
-function Window:_homeNotes(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Notes", 0, "file-text", "Kept while this session runs")
-    local box = create("TextBox", {
-        Size = UDim2.new(1, 0, 0, 78),
-        BackgroundColor3 = Theme.Surface3,
-        BorderSizePixel = 0,
-        ClearTextOnFocus = false,
-        MultiLine = true,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextSize = 13,
-        TextColor3 = Theme.Text,
-        PlaceholderText = "A server to remember, a key, a reminder...",
-        PlaceholderColor3 = Theme.Muted,
-        Text = self._homeNote or "",
-        LayoutOrder = 1,
-        Parent = card,
-    })
-    corner(box, UDim.new(0, 8))
-    padding(box, 10, 10, 8, 8)
-    box.FocusLost:Connect(function()
-        self._homeNote = box.Text
-    end)
-end
 
 -- One row of two cells: side by side on a wide Home, one above the other on a narrow one.
-function Window:_homeRow(list, order, buildLeft, buildRight)
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = order,
-        Parent = list,
-    })
-    local layout = create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        Padding = UDim.new(0, 12),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = row,
-    })
-    local function cell(index)
-        local frame = create("Frame", {
-            Size = UDim2.new(0.5, -6, 0, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundTransparency = 1,
-            LayoutOrder = index,
-            Parent = row,
-        })
-        create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
-        return frame
-    end
-    local left, right = cell(1), cell(2)
-    buildLeft(left)
-    buildRight(right)
-    local function fit()
-        local wide = row.AbsoluteSize.X / self.Scale.Scale >= 540
-        layout.FillDirection = wide and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
-        local size = wide and UDim2.new(0.5, -6, 0, 0) or UDim2.new(1, 0, 0, 0)
-        left.Size = size
-        right.Size = size
-    end
-    row:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-    task.defer(fit)
-end
 
 -- The live numbers as four tiles: FPS and ping with a bar history, the players in the server and the session.
-function Window:_homeTiles(list, order, opts)
+
+-- Friends: how many you have, how many are online, how many are in this server, and how many are offline.
+-- The list is read page by page every 25 seconds, off the frame loop; a failed read keeps the last numbers.
+
+function Window:_homeStats(list, opts, order, tab)
+    local show = opts.Stats or { "Players", "Execs", "Session", "FPS", "Ping" }
+    -- FPS and ping get large readouts with a bar history; every other stat
+    -- is a small figure in the row under them.
     local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Live", 0, "activity", "Refreshed every second")
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
+    local graphs = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 76),
         BackgroundTransparency = 1,
         LayoutOrder = 1,
         Parent = card,
     })
-    create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        Padding = UDim.new(0, 8),
+    create("UIGridLayout", {
+        CellPadding = UDim2.fromOffset(24, 0),
+        CellSize = UDim2.new(0.5, -12, 0, 76),
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = row,
+        Parent = graphs,
     })
-    local BARS = 14
-    local tinted = opts.StatColors ~= false
-    local function tile(index, heading, sub, bars)
-        local box = create("Frame", {
-            Size = UDim2.new(0.25, -6, 0, 104),
-            BackgroundColor3 = Theme.Surface3,
-            BorderSizePixel = 0,
-            LayoutOrder = index,
-            Parent = row,
-        })
-        corner(box, UDim.new(0, 10))
-        padding(box, 10, 10, 8, 8)
-        label({
-            Size = UDim2.new(1, 0, 0, 12),
-            Text = heading,
-            TextSize = 10,
-            TextColor3 = Theme.Muted,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = box,
-        })
-        local value = label({
-            Position = UDim2.fromOffset(0, 16),
-            Size = UDim2.new(1, 0, 0, 28),
-            Text = "—",
-            TextSize = 22,
-            TextColor3 = Theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = box,
-        })
-        value.FontFace = Fonts.Bold
-        if bars then
-            local strip = create("Frame", {
-                Position = UDim2.fromOffset(0, 50),
-                Size = UDim2.new(1, 0, 0, 20),
-                BackgroundTransparency = 1,
-                Parent = box,
-            })
-            bars.cells = {}
-            for i = 1, BARS do
-                bars.cells[i] = create("Frame", {
-                    AnchorPoint = Vector2.new(0, 1),
-                    Position = UDim2.new((i - 1) / BARS, 0, 1, 0),
-                    Size = UDim2.new(1 / BARS, -2, 0.1, 0),
-                    BackgroundColor3 = Theme.Accent,
-                    BorderSizePixel = 0,
-                    Parent = strip,
-                })
+    local rule = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Theme.Stroke,
+        BorderSizePixel = 0,
+        LayoutOrder = 2,
+        Parent = card,
+    })
+    local figures = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        LayoutOrder = 3,
+        Parent = card,
+    })
+    padding(figures, 0, 0, 12, 0)
+    local figureGrid = create("UIGridLayout", {
+        CellPadding = UDim2.fromOffset(0, 8),
+        CellSize = UDim2.new(0.25, 0, 0, 36),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = figures,
+    })
+    local values, sparks = {}, {}
+    local graphCount, figureCount = 0, 0
+    for index, name in ipairs(show) do
+        local kind = STAT_TYPES[name]
+        if kind and not values[name] then
+            if name == "FPS" or name == "Ping" then
+                graphCount += 1
+                values[name], sparks[name] = self:_homeGraph(graphs, index, kind[1], kind[2], name == "FPS" and 60 or 100)
+            else
+                figureCount += 1
+                values[name] = self:_homeFigure(figures, index, kind[2])
             end
         end
-        label({
-            Position = UDim2.new(0, 0, 1, -12),
-            Size = UDim2.new(1, 0, 0, 12),
-            Text = sub,
-            TextSize = 10,
-            TextColor3 = Theme.Muted,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = box,
-        })
-        return value
     end
-    local fpsBars, pingBars = {}, {}
-    local fpsValue = tile(1, "FPS", "frames per second", fpsBars)
-    local pingValue = tile(2, "PING", "to the server", pingBars)
-    local playersValue = tile(3, "PLAYERS", "in this server", nil)
-    local sessionValue = tile(4, "SESSION", "this session", nil)
+    graphs.Visible = graphCount > 0
+    figures.Visible = figureCount > 0
+    rule.Visible = graphCount > 0 and figureCount > 0
+    if graphCount == 0 then
+        padding(figures, 0, 0, 0, 0)
+    end
+    local function fitFigures()
+        local width = figures.AbsoluteSize.X / self.Scale.Scale
+        local columns = math.clamp(figureCount, 1, width >= 440 and 5 or 3)
+        figureGrid.CellSize = UDim2.new(1 / columns, 0, 0, 36)
+    end
+    figures:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitFigures)
+    task.defer(fitFigures)
 
-    local fpsHistory, pingHistory = {}, {}
-    for i = 1, BARS do
-        fpsHistory[i] = 0
-        pingHistory[i] = 0
+    if values.Executor then
+        values.Executor.Text = detectExecutor()
     end
-    local function push(history, value)
-        table.remove(history, 1)
-        history[BARS] = value
+    if values.Game then
+        values.Game.Text = "Loading"
+        task.spawn(function()
+            values.Game.Text = detectGameName()
+        end)
     end
-    local function draw(bars, history, ceiling, good, bad, lowerIsBetter)
-        for i, cell in ipairs(bars.cells) do
-            local sample = history[i]
-            cell.Size = UDim2.new(1 / BARS, -2, math.clamp(sample / ceiling, 0.1, 1), 0)
-            cell.BackgroundColor3 = tinted and Library._healthColor(sample, good, bad, lowerIsBetter) or Theme.Accent
+    if values.Region then
+        values.Region.Text = "Loading"
+        detectRegion(function(region)
+            values.Region.Text = region
+        end)
+    end
+    local execFolder = opts.StatsFolder or self.ConfigFolder
+    if values.Execs then
+        local executions = bumpExecutions(execFolder)
+        values.Execs.Text = executions and tostring(executions) or "—"
+    end
+    if values.Friends then
+        local friends = {}
+        local function recount()
+            local total = 0
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local known = friends[player.UserId]
+                    if known == nil then
+                        local ok, result = pcall(function()
+                            return LocalPlayer:IsFriendsWith(player.UserId)
+                        end)
+                        known = ok and result == true
+                        friends[player.UserId] = known
+                    end
+                    if known then
+                        total += 1
+                    end
+                end
+            end
+            values.Friends.Text = tostring(total)
         end
+        task.spawn(recount)
+        table.insert(self._connections, Players.PlayerAdded:Connect(function()
+            task.spawn(recount)
+        end))
+        table.insert(self._connections, Players.PlayerRemoving:Connect(function()
+            task.defer(recount)
+        end))
     end
 
+    local session = values.Session or values.Uptime
     local started = os.clock()
     local frames = 0
     self:_listen("Render", function()
         frames += 1
     end)
+    -- FPS, ping and memory are tinted by how healthy they are, unless the
+    -- script turns that off with StatColors = false.
+    local tinted = opts.StatColors ~= false
+    local function tint(valueLabel, color)
+        if tinted and valueLabel.TextColor3 ~= color then
+            tween(valueLabel, { TextColor3 = color }, 0.3)
+        end
+    end
+    local lastRead = os.clock()
     return function()
-        local fps = frames
+        -- frames per real second since the last read; a read with no real window (the first one) gives no sample
+        local now = os.clock()
+        local elapsed = now - lastRead
+        lastRead = now
+        local fps = elapsed >= 0.2 and math.floor(frames / elapsed + 0.5) or nil
+        if values.FPS and fps then
+            values.FPS.Text = tostring(fps)
+            tint(values.FPS, Library._healthColor(fps, 50, 30))
+            sparks.FPS(fps, Library._healthColor(fps, 50, 30))
+        end
         frames = 0
-        push(fpsHistory, fps)
-        fpsValue.Text = tostring(fps)
-        draw(fpsBars, fpsHistory, 60, 50, 30)
-        local ok, ping = pcall(function()
-            return math.floor(LocalPlayer:GetNetworkPing() * 1000)
-        end)
-        ping = ok and ping or 0
-        push(pingHistory, ping)
-        pingValue.Text = ping .. "ms"
-        draw(pingBars, pingHistory, 250, 90, 180, true)
-        playersValue.Text = #Players:GetPlayers() .. "/" .. Players.MaxPlayers
-        sessionValue.Text = formatDuration(os.clock() - started)
-        if tinted then
-            fpsValue.TextColor3 = Library._healthColor(fps, 50, 30)
-            pingValue.TextColor3 = Library._healthColor(ping, 90, 180, true)
+        if values.Ping then
+            local ok, ping = pcall(function()
+                return math.floor(LocalPlayer:GetNetworkPing() * 1000)
+            end)
+            ping = ok and ping or 0
+            values.Ping.Text = ping .. "ms"
+            tint(values.Ping, Library._healthColor(ping, 90, 180, true))
+            sparks.Ping(ping, Library._healthColor(ping, 90, 180, true))
+        end
+        if values.Players then
+            values.Players.Text = #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+        end
+        if session then
+            session.Text = formatDuration(os.clock() - started)
+        end
+        if values.Execs then
+            local current = Library._readExecutions(execFolder)
+            if current then
+                values.Execs.Text = tostring(current)
+            end
+        end
+        if values.Time then
+            values.Time.Text = os.date(opts.TimeFormat or "%H:%M")
+        end
+        if values.ServerAge then
+            values.ServerAge.Text = formatDuration(workspace.DistributedGameTime)
+        end
+        if values.Memory then
+            local ok, memory = pcall(function()
+                return StatsService:GetTotalMemoryUsageMb()
+            end)
+            values.Memory.Text = ok and string.format("%d MB", memory) or "—"
+            tint(values.Memory, ok and Library._healthColor(memory, 1500, 3000, true) or Theme.Text)
         end
     end, function()
         frames = 0
     end
 end
 
--- Friends: how many you have, how many are online, how many are in this server, and how many are offline.
--- The list is read page by page every 25 seconds, off the frame loop; a failed read keeps the last numbers.
-function Window:_homeFriends(list, order)
-    local card = self:_homeCard(list, order)
-    self:_homeCaption(card, "Friends", 0, "users", "Read from your friends list, every 25 seconds")
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
+function Window:_homeGraph(parent, order, icon, title, ceiling)
+    local cell = create("Frame", {
         BackgroundTransparency = 1,
-        LayoutOrder = 1,
-        Parent = card,
+        LayoutOrder = order,
+        Parent = parent,
+    })
+    local holder = glowIcon(cell, icon, Theme.Muted, UDim2.new(0, 0, 0, 7))
+    holder.Size = UDim2.fromOffset(12, 12)
+    label({
+        Position = UDim2.fromOffset(18, 0),
+        Size = UDim2.new(1, -18, 0, 14),
+        Text = string.upper(title),
+        TextSize = 10,
+        TextColor3 = Theme.Muted,
+        Parent = cell,
+    })
+    local value = label({
+        Position = UDim2.fromOffset(0, 16),
+        Size = UDim2.new(1, 0, 0, 28),
+        Text = "…",
+        TextSize = 24,
+        FontFace = Fonts.Bold,
+        RichText = true,
+        Parent = cell,
+    })
+    local track = create("Frame", {
+        Position = UDim2.fromOffset(0, 50),
+        Size = UDim2.new(1, 0, 0, 26),
+        BackgroundTransparency = 1,
+        Parent = cell,
     })
     create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
-        Padding = UDim.new(0, 8),
+        VerticalAlignment = Enum.VerticalAlignment.Bottom,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = row,
+        Padding = UDim.new(0, 2),
+        Parent = track,
     })
-    local function figure(index, heading)
-        local box = create("Frame", {
-            Size = UDim2.new(0.25, -6, 0, 60),
-            BackgroundColor3 = Theme.Surface3,
+    local COUNT = 24
+    local bars, samples, colors = {}, {}, {}
+    for index = 1, COUNT do
+        local bar = create("Frame", {
+            Size = UDim2.new(1 / COUNT, -2, 0, 2),
+            BackgroundColor3 = Theme.Surface2,
+            BackgroundTransparency = 0.5,
             BorderSizePixel = 0,
             LayoutOrder = index,
-            Parent = row,
+            Parent = track,
         })
-        corner(box, UDim.new(0, 10))
-        padding(box, 10, 10, 8, 8)
-        label({
-            Size = UDim2.new(1, 0, 0, 12),
-            Text = heading,
-            TextSize = 10,
-            TextColor3 = Theme.Muted,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = box,
-        })
-        local value = label({
-            Position = UDim2.fromOffset(0, 16),
-            Size = UDim2.new(1, 0, 0, 24),
-            Text = "—",
-            TextSize = 18,
-            TextColor3 = Theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = box,
-        })
-        value.FontFace = Fonts.Bold
-        return value
+        corner(bar, UDim.new(0, 2))
+        bars[index] = bar
     end
-    local figures = {
-        all = figure(1, "ALL"),
-        online = figure(2, "ONLINE"),
-        inServer = figure(3, "IN SERVER"),
-        offline = figure(4, "OFFLINE"),
-    }
-    local cooldown, busy = 0, false
-    local function read()
-        busy = true
-        local ok, friends, online = pcall(function()
-            local pages = Players:GetFriendsAsync(LocalPlayer.UserId)
-            local everyone = {}
-            while true do
-                for _, friend in pages:GetCurrentPage() do
-                    table.insert(everyone, friend)
-                end
-                if pages.IsFinished then
-                    break
-                end
-                pages:AdvanceToNextPageAsync()
-            end
-            return everyone, LocalPlayer:GetFriendsOnline()
-        end)
-        if ok then
-            local present = {}
-            for _, player in ipairs(Players:GetPlayers()) do
-                present[player.UserId] = true
-            end
-            local inServer = 0
-            for _, friend in ipairs(friends) do
-                if present[friend.Id] then
-                    inServer += 1
-                end
-            end
-            local stats = {
-                all = #friends,
-                online = #online,
-                inServer = inServer,
-                offline = #friends - #online,
-            }
-            self._friendStats = stats
-            figures.all.Text = tostring(stats.all)
-            figures.online.Text = tostring(stats.online)
-            figures.inServer.Text = tostring(stats.inServer)
-            figures.offline.Text = tostring(stats.offline)
+    -- Each sample keeps the colour it was read with. The newest bar is full strength and older ones fade,
+    -- so the whole history reads at a glance instead of only the last bar.
+    local function push(sample, color)
+        table.insert(samples, sample)
+        table.insert(colors, color or Theme.Muted)
+        if #samples > COUNT then
+            table.remove(samples, 1)
+            table.remove(colors, 1)
         end
-        busy = false
+        local top = ceiling or 1
+        for _, s in ipairs(samples) do
+            top = math.max(top, s)
+        end
+        local offset = COUNT - #samples
+        for index, bar in ipairs(bars) do
+            local at = index - offset
+            local s = samples[at]
+            local age = COUNT - index
+            local height = s and math.max(s / top, 0.1) or 0
+            tween(bar, {
+                Size = UDim2.new(1 / COUNT, -2, height, s and 0 or 2),
+                BackgroundColor3 = s and colors[at] or Theme.Surface2,
+                BackgroundTransparency = s and math.min(0.05 + age * 0.04, 0.65) or 0.5,
+            }, 0.35, Enum.EasingStyle.Quint)
+        end
     end
-    return function()
-        if busy then
-            return
-        end
-        if cooldown > 0 then
-            cooldown -= 1
-            return
-        end
-        cooldown = 25
-        task.spawn(read)
-    end
+    return value, push
+end
+
+function Window:_homeFigure(parent, order, title)
+    local cell = create("Frame", {
+        BackgroundTransparency = 1,
+        LayoutOrder = order,
+        Parent = parent,
+    })
+    -- A thin accent bar beside each figure, so the row reads as a set of tiles.
+    local bar = create("Frame", {
+        Position = UDim2.fromOffset(0, 3),
+        Size = UDim2.fromOffset(2, 30),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        Parent = cell,
+    })
+    corner(bar, UDim.new(1, 0))
+    local value = label({
+        Position = UDim2.fromOffset(10, 0),
+        Size = UDim2.new(1, -18, 0, 20),
+        Text = "…",
+        TextSize = 16,
+        FontFace = Fonts.Bold,
+        RichText = true,
+        Parent = cell,
+    })
+    label({
+        Position = UDim2.fromOffset(10, 21),
+        Size = UDim2.new(1, -18, 0, 14),
+        Text = string.upper(title),
+        TextSize = 10,
+        TextColor3 = Theme.Muted,
+        Parent = cell,
+    })
+    return value
 end
 
 function Window:_buildHome(opts)
@@ -18941,42 +18846,26 @@ function Window:_buildHome(opts)
     overview._noSearch = true
     overview._order = 100
     local list = overview.List
-    -- Cards on the Home breathe: a little more room between them than the other tabs.
-    local homeLayout = list:FindFirstChildOfClass("UIListLayout")
-    if homeLayout then
-        homeLayout.Padding = UDim.new(0, 12)
-    end
 
     local refreshExpiry = self:_homeProfile(list, opts, 1)
+    -- config cards from the addons, after the profile card
     for _, card in ipairs(Library._homeCards) do
         local ok, err = pcall(card, self, list, opts)
         if not ok then
             Library._diagnose("a Home card failed: " .. tostring(err))
         end
     end
-    self:_homeEgg(list, opts, 12)
-    local refreshTiles, resetTiles = self:_homeTiles(list, 3, opts)
-    local refreshFriends = self:_homeFriends(list, 4)
-    self:_homeRow(list, 5, function(cell)
-        self:_homeActivity(cell, 1)
-    end, function(cell)
-        self:_homeNotes(cell, 1)
-    end)
-    self:_homeClock(list, opts, 6)
-    local refreshServer = self:_homeServer(list, opts, 7)
-    Players.PlayerAdded:Connect(function(player)
-        self:_logActivity(tostring(player.Name) .. " joined", "user-plus")
-    end)
-    Players.PlayerRemoving:Connect(function(player)
-        self:_logActivity(tostring(player.Name) .. " left", "user-minus")
-    end)
+    self:_homeEgg(list, opts, 10)
+    local refreshStats, resetStats = self:_homeStats(list, opts, 3, tab)
+    self:_homeClock(list, opts, 4)
+    local refreshServer = self:_homeServer(list, opts, 5)
 
     -- Server and links side by side, stacked when narrow.
     local split = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        LayoutOrder = 8,
+        LayoutOrder = 6,
         Parent = list,
     })
     local splitLayout = create("UIListLayout", {
@@ -19013,9 +18902,9 @@ function Window:_buildHome(opts)
     split:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSplit)
     task.defer(fitSplit)
 
-    self:_homeShortcuts(list, opts, 9)
-    self:_homeExecutor(list, opts, 10)
-    self:_homeTip(list, opts, 11)
+    self:_homeShortcuts(list, opts, 7)
+    self:_homeExecutor(list, opts, 8)
+    self:_homeTip(list, opts, 9)
 
     if type(pages) == "table" then
         for _, page in ipairs(pages) do
@@ -19024,21 +18913,19 @@ function Window:_buildHome(opts)
     end
 
     refreshExpiry()
-    refreshTiles()
-    refreshFriends()
+    refreshStats()
     refreshGame()
     task.spawn(function()
         while not self._destroyed and tab._page.Parent do
             task.wait(1)
             if self.Open and self.CurrentTab == tab then
-                refreshTiles()
+                refreshStats()
                 refreshExpiry()
                 refreshGame()
                 refreshFeatures()
                 refreshServer()
-                refreshFriends()
             else
-                resetTiles()
+                resetStats()
             end
         end
     end)
@@ -22464,9 +22351,6 @@ end
 
 function Window:Notify(opts)
     opts = normalize(opts, { Text = "Content", Message = "Content", Image = "Icon" })
-    if opts.Title then
-        self:_logActivity(opts.Title, "bell")
-    end
     if self.Minimized and self._islandActivity then
         self._islandActivity(opts)
     end
