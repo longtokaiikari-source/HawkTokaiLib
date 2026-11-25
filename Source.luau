@@ -15347,13 +15347,28 @@ function Tab:SubTab(opts, icon)
         Parent = button,
     })
     if opts.Icon then
+        -- the icon sits on a small rounded tile; the tile takes the accent when the sub tab is selected
+        local tile = create("Frame", {
+            Size = UDim2.fromOffset(22, 22),
+            BackgroundColor3 = Theme.Surface3,
+            BackgroundTransparency = 0.5,
+            BorderSizePixel = 0,
+            LayoutOrder = 1,
+            Parent = button,
+        })
+        corner(tile, UDim.new(0, 7))
+        local tileStroke = stroke(tile, Theme.Accent, 1)
+        tileStroke.Transparency = 1
+        sub._tile = tile
+        sub._tileStroke = tileStroke
         local image = create("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(14, 14),
             BackgroundTransparency = 1,
             ImageColor3 = Theme.Muted,
             ScaleType = Enum.ScaleType.Fit,
-            LayoutOrder = 1,
-            Parent = button,
+            Parent = tile,
         })
         applyIcon(image, opts.Icon)
         if image:GetAttribute("CustomIcon") then
@@ -15375,11 +15390,17 @@ function Tab:SubTab(opts, icon)
     button.MouseEnter:Connect(function()
         if self.CurrentSubTab ~= sub then
             tween(sub._label, { TextColor3 = Theme.Text }, 0.12)
+            if sub._tile then
+                tween(sub._tile, { BackgroundTransparency = 0.3 }, 0.12)
+            end
         end
     end)
     button.MouseLeave:Connect(function()
         if self.CurrentSubTab ~= sub then
             tween(sub._label, { TextColor3 = Theme.Muted }, 0.2)
+            if sub._tile then
+                tween(sub._tile, { BackgroundTransparency = 0.5 }, 0.2)
+            end
         end
     end)
     button.MouseButton1Click:Connect(function()
@@ -15427,10 +15448,18 @@ function Tab:SelectSubTab(sub, instant)
         if previous._iconImage then
             tintIcon(previous._iconImage, Theme.Muted, false, fade)
         end
+        if previous._tile then
+            tween(previous._tile, { BackgroundColor3 = Theme.Surface3, BackgroundTransparency = 0.5 }, fade)
+            tween(previous._tileStroke, { Transparency = 1 }, fade)
+        end
     end
     tween(sub._label, { TextColor3 = Theme.Text }, fade)
     if sub._iconImage then
         tintIcon(sub._iconImage, Theme.Accent, true, fade)
+    end
+    if sub._tile then
+        tween(sub._tile, { BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.82 }, fade)
+        tween(sub._tileStroke, { Transparency = 0.5 }, fade)
     end
     self:_placeSubHighlight(sub, instant)
 

@@ -1972,7 +1972,7 @@ do
 		P.Bind("ESP_FriendColor", function() return config.FriendColor end)
 
 		-- One page for each feature.
-		local pagePlayers = tab:CreateSubTab({ Name = "Players" })
+		local pagePlayers = tab:CreateSubTab({ Name = "Players", Icon = "users" })
 		local gPlayers = pagePlayers:AddLeftGroupbox({ Name = "Players", Icon = "users" })
 		gPlayers:CreateToggle({ Name = "Hide teammates", CurrentValue = players.HideTeammates, Flag = "ESP_HideTeammates", Callback = function(value)
 			players.HideTeammates = value == true
@@ -1994,8 +1994,8 @@ do
 		gPlayers:CreateSlider({ Name = "Nearest players", Desc = "Only this many players nearest the camera keep their ESP; 0 keeps everyone", Range = { 0, 30 }, Increment = 1, CurrentValue = config.NearestLimit or 0, Flag = "ESP_NearestLimit", Callback = function(value)
 			config.NearestLimit = value
 		end })
-		local pageNames = tab:CreateSubTab({ Name = "Names" })
-		local gNames = pageNames:AddLeftGroupbox({ Name = "Names" })
+		local pageNames = tab:CreateSubTab({ Name = "Boxes", Icon = "box" })
+		local gNames = pageNames:AddRightGroupbox({ Name = "Names", Icon = "type" })
 		gNames:CreateToggle({ Name = "Names", CurrentValue = config.Billboards, Flag = "ESP_Names", Callback = function(value)
 			config.Billboards = value == true
 		end })
@@ -2026,7 +2026,7 @@ do
 		gNames:CreateToggle({ Name = "Team name", Desc = "Adds the team name after the name", CurrentValue = config.TeamName == true, Flag = "ESP_TeamName", Callback = function(value)
 			config.TeamName = value == true
 		end })
-		local pageBoxes = tab:CreateSubTab({ Name = "Boxes" })
+		local pageBoxes = pageNames
 		local gBoxes = pageBoxes:AddLeftGroupbox({ Name = "Boxes", Icon = "box" })
 		gBoxes:CreateDropdown({ Name = "2D box", Options = { "Off", "Full", "Corner", "Filled" }, CurrentOption = settings.Box2D.Enabled ~= true and "Off" or settings.Box2D.Style == "Corner" and "Corner" or settings.Box2D.Filled == true and "Filled" or "Full", Flag = "ESP_Box2DMode", Callback = function(value)
 			local choice = type(value) == "table" and value[1] or value
@@ -2049,8 +2049,8 @@ do
 			ESP:ApplyTemplate()
 		end })
 
-		local pageHighlight = tab:CreateSubTab({ Name = "Highlight" })
-		local gHighlight = pageHighlight:AddLeftGroupbox({ Name = "Highlight" })
+		local pageHighlight = tab:CreateSubTab({ Name = "Highlight", Icon = "sparkles" })
+		local gHighlight = pageHighlight:AddLeftGroupbox({ Name = "Highlight", Icon = "sparkles" })
 		gHighlight:CreateToggle({ Name = "Enable highlight", Desc = "Off until you turn it on", CurrentValue = config.Highlighters == true, Flag = "ESP_Highlighters", Callback = function(value)
 			config.Highlighters = value == true
 		end })
@@ -2077,8 +2077,8 @@ do
 			ESP:ApplyTemplate()
 		end })
 
-		local pageTracers = tab:CreateSubTab({ Name = "Tracers" })
-		local gTracers = pageTracers:AddLeftGroupbox({ Name = "Tracers" })
+		local pageTracers = tab:CreateSubTab({ Name = "Lines", Icon = "git-branch" })
+		local gTracers = pageTracers:AddLeftGroupbox({ Name = "Tracers", Icon = "git-branch" })
 		gTracers:CreateToggle({ Name = "Enable tracers", CurrentValue = settings.Tracer.Enabled, Flag = "ESP_Tracer", Callback = function(value)
 			settings.Tracer.Enabled = value == true
 			ESP:ApplyTemplate()
@@ -2098,8 +2098,8 @@ do
 			ESP:ApplyTemplate()
 		end })
 
-		local pageHealth = tab:CreateSubTab({ Name = "Health" })
-		local gHealth = pageHealth:AddLeftGroupbox({ Name = "Health" })
+		local pageHealth = tab:CreateSubTab({ Name = "Health", Icon = "heart-pulse" })
+		local gHealth = pageHealth:AddLeftGroupbox({ Name = "Health", Icon = "heart-pulse" })
 		gHealth:CreateDropdown({ Name = "Health bar", Options = { "Off", "Left", "Right", "Bottom" }, CurrentOption = settings.Health.Enabled ~= true and "Off" or settings.Health.Side or "Left", Flag = "ESP_HealthMode", Callback = function(value)
 			local choice = type(value) == "table" and value[1] or value
 			settings.Health.Enabled = choice ~= "Off"
@@ -2120,8 +2120,8 @@ do
 			ESP.GlobalConfig.DamageText = value == true
 		end })
 
-		local pageSkeleton = tab:CreateSubTab({ Name = "Skeleton" })
-		local gSkeleton = pageSkeleton:AddLeftGroupbox({ Name = "Skeleton" })
+		local pageSkeleton = pageHealth
+		local gSkeleton = pageSkeleton:AddRightGroupbox({ Name = "Skeleton", Icon = "person-standing" })
 		gSkeleton:CreateToggle({ Name = "Enable skeleton", CurrentValue = settings.Skeleton.Enabled, Flag = "ESP_Skeleton", Callback = function(value)
 			settings.Skeleton.Enabled = value == true
 			ESP:ApplyTemplate()
@@ -2130,8 +2130,8 @@ do
 			ESP.GlobalConfig.HeadDots = value == true
 		end })
 
-		local pageArrows = tab:CreateSubTab({ Name = "Arrows" })
-		local gArrows = pageArrows:AddLeftGroupbox({ Name = "Arrows" })
+		local pageArrows = pageTracers
+		local gArrows = pageArrows:AddRightGroupbox({ Name = "Arrows", Icon = "navigation" })
 		gArrows:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
 			settings.Arrow.Size = value
 			ESP:ApplyTemplate()
@@ -2145,8 +2145,8 @@ do
 			ESP:ApplyTemplate()
 		end })
 
-		local pageVisibility = tab:CreateSubTab({ Name = "Visibility" })
-		local gVisibility = pageVisibility:AddLeftGroupbox({ Name = "Visibility" })
+		local pageVisibility = pagePlayers
+		local gVisibility = pageVisibility:AddRightGroupbox({ Name = "Visibility", Icon = "eye" })
 		gVisibility:CreateToggle({ Name = "Wall check", Desc = "Green when any part of a player can be seen, red when none can", CurrentValue = ESP.GlobalConfig.VisibleCheck == true, Flag = "ESP_VisibleCheck", Callback = function(value)
 			ESP.GlobalConfig.VisibleCheck = value == true
 		end })
@@ -2163,8 +2163,8 @@ do
 		gVisibility:CreateSlider({ Name = "Check every", Desc = "Frames between two looks at a player, so the visible check costs less", Range = { 1, 10 }, Increment = 1, Suffix = " frames", CurrentValue = config.VisibleEvery or 1, Flag = "ESP_VisibleEvery", Callback = function(value)
 			config.VisibleEvery = value
 		end })
-		local pageOverlay = tab:CreateSubTab({ Name = "Overlay" })
-		local gOverlay = pageOverlay:AddLeftGroupbox({ Name = "Overlay", Icon = "crosshair" })
+		local pageOverlay = pageHighlight
+		local gOverlay = pageOverlay:AddRightGroupbox({ Name = "Overlay", Icon = "crosshair" })
 		gOverlay:CreateToggle({ Name = "FOV circle", CurrentValue = ESP.GlobalConfig.FOV == true, Flag = "ESP_FOV", Callback = function(value)
 			ESP.GlobalConfig.FOV = value == true
 		end })
@@ -2184,8 +2184,8 @@ do
 		gOverlay:CreateSlider({ Name = "Radar size", Range = { 80, 220 }, Increment = 10, Suffix = " px", CurrentValue = config.RadarSize or 110, Flag = "ESP_RadarSize", Callback = function(value)
 			config.RadarSize = value
 		end })
-		local pageColours = tab:CreateSubTab({ Name = "Colours" })
-		local gColours = pageColours:AddLeftGroupbox({ Name = "Colours" })
+		local pageColours = tab:CreateSubTab({ Name = "Colours", Icon = "palette" })
+		local gColours = pageColours:AddLeftGroupbox({ Name = "Colours", Icon = "palette" })
 		gColours:CreateColorPicker({ Name = "Enemy color", Color = settings.Color, Flag = "ESP_Color", Callback = function(value)
 			settings.Color = value
 			ESP:ApplyTemplate()
@@ -2213,13 +2213,13 @@ do
 		gColours:CreateColorPicker({ Name = "Friend colour", Color = config.FriendColor, Flag = "ESP_FriendColor", Callback = function(value)
 			config.FriendColor = value
 		end })
-		local pagePreview = tab:CreateSubTab({ Name = "Preview" })
+		local pagePreview = tab:CreateSubTab({ Name = "Preview", Icon = "monitor" })
 		local gPreview = pagePreview:AddLeftGroupbox({ Name = "Preview", Icon = "box" })
 		local view = gPreview:CreateViewport({ Name = "Preview", Desc = "The same ESP, on a model", Model = "Avatar", Height = 260, SpinSpeed = 20 })
 		ESP:AttachPreview(view)
 		-- Presets: the settings as text. Copy keeps them in the clipboard; Apply reads the text box back into the ESP.
-		local pagePresets = tab:CreateSubTab({ Name = "Presets" })
-		local gPresets = pagePresets:AddLeftGroupbox({ Name = "Preset" })
+		local pagePresets = pageColours
+		local gPresets = pagePresets:AddRightGroupbox({ Name = "Preset", Icon = "bookmark" })
 		local presetText = ""
 		gPresets:CreateInput({ Name = "Preset text", Placeholder = "paste a preset here", Callback = function(text)
 			presetText = tostring(text or "")
