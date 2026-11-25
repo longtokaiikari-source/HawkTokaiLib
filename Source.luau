@@ -18974,6 +18974,7 @@ function Window:Tab(opts, icon)
         Size = UDim2.new(1, hasIcon and -46 or -22, 1, 0),
         Text = tab.Name,
         TextSize = 13,
+        FontFace = Fonts.Medium,
         TextColor3 = Theme.Muted,
         Parent = button,
     })
@@ -18998,6 +18999,7 @@ function Window:Tab(opts, icon)
         Size = UDim2.new(1, -titleX, 0, 24),
         Text = opts.PageTitle or tab.Name,
         TextSize = 22,
+        FontFace = Fonts.SemiBold,
         Parent = page,
     })
     if opts.Desc then
@@ -19013,6 +19015,15 @@ function Window:Tab(opts, icon)
     end
     local listTop = opts.Desc and 70 or 58
     tab._headerBottom = listTop
+    -- A hairline under the header, so the title reads apart from the cards below it.
+    tab._divider = create("Frame", {
+        Position = UDim2.new(0, 24, 0, listTop - 8),
+        Size = UDim2.new(1, -48, 0, 1),
+        BackgroundColor3 = Theme.Stroke,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Parent = page,
+    })
     tab._iconName = opts.Icon
     buildContainer(tab, page, listTop, opts.Icon or "layout-grid", opts.EmptyText or "Nothing here yet")
 
@@ -19753,6 +19764,7 @@ function Window:SelectTab(tab)
 
     if previous then
         tween(previous._label, { TextColor3 = Theme.Muted }, 0.3)
+        tween(previous._button, { BackgroundTransparency = 1 }, 0.3)
         if previous._icon then
             tintIcon(previous._icon, Theme.Muted, false, 0.3)
         end
@@ -19770,7 +19782,7 @@ function Window:SelectTab(tab)
         end)
     end
 
-    tween(tab._button, { BackgroundTransparency = 1 }, 0.2)
+    tween(tab._button, { BackgroundTransparency = 0.2 }, 0.2)
     tween(tab._stroke, { Transparency = 1 }, 0.2)
     tween(tab._label, { TextColor3 = Theme.Text }, 0.3)
     if tab._icon then
