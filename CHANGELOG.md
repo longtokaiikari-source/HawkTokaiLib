@@ -111,6 +111,8 @@ Every notable change to HawkTokaiLib is listed here, newest first. The format fo
 
 ### Fixed
 
+- **Home banner black**: the banner had a colour gradient on a card that is already dark, and Roblox multiplies a gradient with the card colour, so the banner came out near black. The gradient is gone and the banner is the same navy as the other cards, as in the old base.
+
 - **FPS graph**: FPS is frames per real second, and the first read gives no sample, so the graph no longer starts with a red bar.
 
 - **ESP stopped after a re-press**: pressing the selected option of a single-select dropdown cleared it, and the callback got nil. The ESP type then failed every frame. A single-select dropdown now keeps its value unless `AllowNone = true`.

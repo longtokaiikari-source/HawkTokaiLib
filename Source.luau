@@ -16586,11 +16586,6 @@ end
 function Window:_homeProfile(list, opts, order)
     local banner = panelCard(list, 152, order)
     banner.ClipsDescendants = true
-    create("UIGradient", {
-        Color = ColorSequence.new(Theme.Surface2, Theme.Surface2:Lerp(Theme.Accent, 0.12)),
-        Rotation = 0,
-        Parent = banner,
-    })
 
     -- A thin accent line along the top, inset and fading to the right.
     local stripe = create("Frame", {
