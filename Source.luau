@@ -529,7 +529,7 @@ Library.Touch = TOUCH
 
 local SIDEBAR_WIDTH = 188
 local HEADER_HEIGHT = 62
-local TAB_TILE_HEIGHT = 34
+local TAB_TILE_HEIGHT = 38
 local CARD_HEIGHT = TOUCH and 54 or 48
 local CARD_HEIGHT_DESC = TOUCH and 70 or 64
 local DROPDOWN_OPTION_HEIGHT = TOUCH and 40 or 34
@@ -7688,20 +7688,19 @@ function Library.Window(_, opts)
         Position = UDim2.fromOffset(8, 2),
         Size = UDim2.new(1, -16, 0, TAB_TILE_HEIGHT),
         BackgroundColor3 = Theme.Surface3,
-        BackgroundTransparency = 0.35,
+        BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
         Visible = false,
         Parent = tabList,
     })
-    corner(indicator, UDim.new(0, 7))
-    -- The active tab is just a quiet neutral fill with white text; the bar
-    -- is kept for callers but stays hidden.
+    corner(indicator, UDim.new(0, 9))
+    -- The active tab sits on a neutral fill, with a short accent bar on its left edge.
     local pill = create("Frame", {
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(2, 14),
+        Size = UDim2.fromOffset(3, 14),
         BackgroundColor3 = Theme.Accent,
-        Visible = false,
+        Visible = true,
         BorderSizePixel = 0,
         Parent = indicator,
     })
@@ -18947,21 +18946,36 @@ function Window:Tab(opts, icon)
         LayoutOrder = #self.Tabs + 1,
         Parent = self._tabStack,
     })
-    corner(button, UDim.new(0, 7))
+    corner(button, UDim.new(0, 9))
     local buttonStroke = stroke(button, Theme.Stroke, 1)
     buttonStroke.Enabled = false
     tab._button = button
 
     local hasIcon = opts.Icon ~= nil
     if hasIcon then
+        -- the icon sits on a small rounded tile; the tile takes the accent when the tab is selected
+        local tile = create("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 12, 0.5, 0),
+            Size = UDim2.fromOffset(26, 26),
+            BackgroundColor3 = Theme.Surface3,
+            BackgroundTransparency = 0.5,
+            BorderSizePixel = 0,
+            Parent = button,
+        })
+        corner(tile, UDim.new(0, 8))
+        local tileStroke = stroke(tile, Theme.Accent, 1)
+        tileStroke.Transparency = 1
+        tab._tile = tile
+        tab._tileStroke = tileStroke
         local iconImage = create("ImageLabel", {
             AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new(0, 20, 0.5, 0),
+            Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(16, 16),
             BackgroundTransparency = 1,
             ImageColor3 = Theme.Muted,
             ScaleType = Enum.ScaleType.Fit,
-            Parent = button,
+            Parent = tile,
         })
         applyIcon(iconImage, opts.Icon)
         if iconImage:GetAttribute("CustomIcon") then
@@ -18970,8 +18984,8 @@ function Window:Tab(opts, icon)
         tab._icon = iconImage
     end
     tab._label = label({
-        Position = UDim2.fromOffset(hasIcon and 38 or 14, 0),
-        Size = UDim2.new(1, hasIcon and -46 or -22, 1, 0),
+        Position = UDim2.fromOffset(hasIcon and 46 or 14, 0),
+        Size = UDim2.new(1, hasIcon and -54 or -22, 1, 0),
         Text = tab.Name,
         TextSize = 13,
         FontFace = Fonts.Medium,
@@ -19034,6 +19048,9 @@ function Window:Tab(opts, icon)
     button.MouseEnter:Connect(function()
         if self.CurrentTab ~= tab and not usingTouch() then
             tween(button, { BackgroundTransparency = 0.75 }, 0.2, Enum.EasingStyle.Quint)
+            if tab._tile then
+                tween(tab._tile, { BackgroundTransparency = 0.3 }, 0.2)
+            end
             tween(tab._label, { TextColor3 = Theme.Text }, 0.2)
             if tab._icon then
                 tintIcon(tab._icon, Theme.Text, true, 0.2)
@@ -19044,6 +19061,9 @@ function Window:Tab(opts, icon)
         release()
         if self.CurrentTab ~= tab then
             tween(button, { BackgroundTransparency = 1 }, 0.3, Enum.EasingStyle.Quint)
+            if tab._tile then
+                tween(tab._tile, { BackgroundTransparency = 0.5 }, 0.3)
+            end
             tween(tab._label, { TextColor3 = Theme.Muted }, 0.3)
             if tab._icon then
                 tintIcon(tab._icon, Theme.Muted, false, 0.3)
@@ -19765,6 +19785,10 @@ function Window:SelectTab(tab)
     if previous then
         tween(previous._label, { TextColor3 = Theme.Muted }, 0.3)
         tween(previous._button, { BackgroundTransparency = 1 }, 0.3)
+        if previous._tile then
+            tween(previous._tile, { BackgroundColor3 = Theme.Surface3, BackgroundTransparency = 0.5 }, 0.3)
+            tween(previous._tileStroke, { Transparency = 1 }, 0.3)
+        end
         if previous._icon then
             tintIcon(previous._icon, Theme.Muted, false, 0.3)
         end
@@ -19782,11 +19806,15 @@ function Window:SelectTab(tab)
         end)
     end
 
-    tween(tab._button, { BackgroundTransparency = 0.2 }, 0.2)
+    tween(tab._button, { BackgroundTransparency = 1 }, 0.2)
     tween(tab._stroke, { Transparency = 1 }, 0.2)
     tween(tab._label, { TextColor3 = Theme.Text }, 0.3)
     if tab._icon then
-        tintIcon(tab._icon, Theme.Text, true, 0.3)
+        tintIcon(tab._icon, Theme.Accent, true, 0.3)
+    end
+    if tab._tile then
+        tween(tab._tile, { BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.82 }, 0.3)
+        tween(tab._tileStroke, { Transparency = 0.5 }, 0.3)
     end
 
     self:_placeIndicator(tab)
