@@ -2314,14 +2314,15 @@ function Tab:Slider(opts)
         Parent = track,
     })
     corner(fill, UDim.new(1, 0))
-    -- The filled part runs from a deeper accent at the start to the bright accent at the knob.
-    create("UIGradient", {
-        Color = ColorSequence.new({
+    -- The filled part runs from a deeper accent at the start to the bright accent at the knob. A colour sequence cannot be
+    -- bound to the theme, so the ramp is rebuilt whenever the theme changes.
+    local ramp = create("UIGradient", { Parent = fill })
+    onTheme(fill, function()
+        ramp.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Theme.Accent:Lerp(Theme.AccentDark, 0.35)),
             ColorSequenceKeypoint.new(1, Theme.Accent),
-        }),
-        Parent = fill,
-    })
+        })
+    end)
 
     local knobGlow = create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),

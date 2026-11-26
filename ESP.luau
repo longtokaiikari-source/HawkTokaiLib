@@ -99,7 +99,7 @@ do
 		OutlineTransparency = 0,
 		HighlightDepth = "Through walls",
 		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom", To = "Feet" },
-		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300, Size = 12, Shape = "Triangle", Placement = "Edge", Margin = 60, Outline = true, ScaleByDistance = false, FadeByDistance = false, MaxDistance = 0, Pulse = false },
+		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300, Size = 12, Shape = "Arrow", Placement = "Edge", Margin = 60, Outline = true, ScaleByDistance = false, FadeByDistance = false, MaxDistance = 0, Pulse = false },
 		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false, Style = "Full" },
 		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Style = "Full" },
 		Skeleton = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
@@ -336,7 +336,7 @@ do
 		function pool.Begin()
 			pool.Used = 0
 		end
-		function pool.Line(a, b, color, thickness, transparency)
+		function pool.Line(a, b, color, thickness, transparency, rounded)
 			pool.Used += 1
 			local item = pool.Items[pool.Used]
 			if not item then
@@ -348,6 +348,9 @@ do
 			if length < 0.5 then
 				item.Visible = false
 				return
+			end
+			if rounded and not item:FindFirstChildOfClass("UICorner") then
+				create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = item })
 			end
 			local mid = (a + b) * 0.5
 			item.Position = UDim2.fromOffset(mid.X, mid.Y)
@@ -478,14 +481,51 @@ do
 	end
 	-- The name sits above the box and the distance below it. Without a box, both sit over the
 	-- head, so the character still gets its text.
-	-- The horizontal speed of a character, in studs per second, from its root part. Falling does not count.
-	function P.SpeedOf(model)
-		local root = model and model:FindFirstChild("HumanoidRootPart")
-		local velocity = root and root.AssemblyLinearVelocity
-		if not velocity then
-			return 0
+	-- The root part of a target: its humanoid root, its primary part, a torso or root part, or any part with a position.
+	function P.RootOf(model)
+		if model == nil then
+			return nil
 		end
-		return math.sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z)
+		local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or model:FindFirstChild("Root") or model:FindFirstChild("RootPart")
+		if root == nil or typeof(root.Position) ~= "Vector3" then
+			root = model:FindFirstChildWhichIsA("BasePart")
+		end
+		return root
+	end
+
+	-- The horizontal speed of a target, in studs per second. A root part with a velocity reports it. A target that a script
+	-- moves (an NPC, or a part set in CFrame) reports none, so its speed comes from how far it moved between frames.
+	function P.SpeedOf(object)
+		local model = object.CurrentSettings.Model
+		local root = P.RootOf(model)
+		local velocity = root and root.AssemblyLinearVelocity
+		local fromVelocity = velocity and math.sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z) or 0
+		if fromVelocity > 0.5 then
+			return fromVelocity
+		end
+		return object._motion and object._motion.speed or 0
+	end
+
+	-- Measures how far a target moved since its last sample, for P.SpeedOf. Called once per frame.
+	function P.Sample(object)
+		local world = object._LastWorld
+		if world == nil then
+			return
+		end
+		local now = os.clock()
+		local state = object._motion
+		if state == nil or now - state.t > 1 then
+			object._motion = { pos = world, t = now, speed = state and state.speed or 0 }
+			return
+		end
+		local dt = now - state.t
+		if dt < 0.05 then
+			return
+		end
+		local dx, dz = world.X - state.pos.X, world.Z - state.pos.Z
+		state.speed = state.speed * 0.6 + (math.sqrt(dx * dx + dz * dz) / dt) * 0.4
+		state.pos = world
+		state.t = now
 	end
 
 	function P.Billboard(object, scene)
@@ -567,7 +607,7 @@ do
 				parts[#parts + 1] = metres and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
 			end
 			if ESP.GlobalConfig.Speed == true then
-				local speed = P.SpeedOf(settings.Model) * (metres and 0.28 or 1)
+				local speed = P.SpeedOf(object) * (metres and 0.28 or 1)
 				parts[#parts + 1] = string.format("%d %s", math.floor(speed + 0.5), metres and "m/s" or "st/s")
 			end
 			local text = table.concat(parts, " ")
@@ -710,10 +750,10 @@ do
 		end
 		return Vector2.new(x, maxY)
 	end
-	-- A screen-edge arrow for a target that is off the screen or behind the camera. It sits on the edge of the
-	-- screen (or on a ring around the centre), pointing along the target's direction in the camera's own frame. It is
-	-- drawn with lines: a filled triangle, a chevron or a classic arrow, with a black outline under the coloured line.
-	-- The name and the distance sit just behind the arrow, kept inside the screen.
+	-- A screen-edge arrow for a target that is off the screen or behind the camera. It sits on the screen's edge (or on a
+	-- ring round the centre) and points along the target's direction in the camera's own frame. The shaft and the wings are
+	-- lines with round ends; the head is a rounded diamond, or the arrow is a round dot. The name and the distance sit just
+	-- behind the arrow, kept inside the screen.
 	function P.Arrow(object, scene)
 		local pool = P.LinePool(scene.Container)
 		local black = Color3.new(0, 0, 0)
@@ -725,67 +765,69 @@ do
 			TextSize = 13,
 			TextStrokeTransparency = 0,
 			Visible = false,
-			ZIndex = 6,
+			ZIndex = 7,
 			Parent = scene.Container,
 		})
 		create("UIStroke", { Parent = label })
-		local component = P.NewComponent({ label }, { pool })
+		local headBack = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = black, BorderSizePixel = 0, Visible = false, ZIndex = 5, Parent = scene.Container })
+		local head = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, Visible = false, ZIndex = 6, Parent = scene.Container })
+		local headBackCorner = create("UICorner", { Parent = headBack })
+		local headCorner = create("UICorner", { Parent = head })
+		local component = P.NewComponent({ label, headBack, head }, { pool })
 		local lastText = nil
 
-		-- one segment of the arrow, with a black outline under it when the outline is on
+		-- one line of the arrow, with a black line under it when the outline is on; both have round ends
 		local function segment(a, b, color, thickness, transparency, outline)
 			if outline then
-				pool.Line(a, b, black, thickness + 1.5, transparency)
+				pool.Line(a, b, black, thickness + 2, transparency, true)
 			end
-			pool.Line(a, b, color, thickness, transparency)
+			pool.Line(a, b, color, thickness, transparency, true)
 		end
 
-		-- a filled triangle: parallel lines from the base to the tip, each a little shorter than the one before
-		local function shapeTriangle(pos, dx, dy, half, color, outline, transparency)
+		-- the head (a rounded square turned to point along the arrow) or the dot: one frame, with a black frame under it
+		local function place(centre, size, angle, radius, color, outline, transparency)
+			head.Position = UDim2.fromOffset(centre.X, centre.Y)
+			head.Size = UDim2.fromOffset(size, size)
+			head.Rotation = angle
+			head.BackgroundColor3 = color
+			head.BackgroundTransparency = transparency
+			headCorner.CornerRadius = radius
+			headBack.Position = UDim2.fromOffset(centre.X, centre.Y)
+			headBack.Size = UDim2.fromOffset(size + 3, size + 3)
+			headBack.Rotation = angle
+			headBack.BackgroundTransparency = transparency
+			headBackCorner.CornerRadius = radius
+			headBack.Visible = outline
+			head.Visible = true
+		end
+
+		-- the classic arrow: a round shaft that ends in a diamond head
+		local function shapeArrow(pos, dx, dy, half, color, outline, transparency)
+			local headSize = half * 1.5
+			local reach = headSize / math.sqrt(2) -- the diamond's corner is this far from its centre
 			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
-			local base = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
+			local centre = Vector2.new(tip.X - dx * reach, tip.Y - dy * reach)
+			local neck = Vector2.new(centre.X - dx * reach * 0.6, centre.Y - dy * reach * 0.6)
+			local tail = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
+			segment(tail, neck, color, 2.6, transparency, outline)
+			place(centre, headSize, math.deg(math.atan2(dy, dx)) - 45, UDim.new(0, math.max(1, headSize * 0.18)), color, outline, transparency)
+		end
+
+		-- the chevron: two round wings that meet at the tip
+		local function shapeChevron(pos, dx, dy, half, color, outline, transparency)
+			head.Visible = false
+			headBack.Visible = false
+			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
+			local base = Vector2.new(pos.X - dx * half * 0.3, pos.Y - dy * half * 0.3)
 			local px, py = -dy, dx
 			local spread = half * 0.85
-			local left = Vector2.new(base.X + px * spread, base.Y + py * spread)
-			local right = Vector2.new(base.X - px * spread, base.Y - py * spread)
-			local rows = math.max(3, math.floor(half / 1.6))
-			for row = 0, rows do
-				local t = row / rows
-				local along = Vector2.new(base.X + (tip.X - base.X) * t, base.Y + (tip.Y - base.Y) * t)
-				local width = spread * (1 - t)
-				if width > 0.3 then
-					pool.Line(Vector2.new(along.X + px * width, along.Y + py * width), Vector2.new(along.X - px * width, along.Y - py * width), color, 2, transparency)
-				end
-			end
-			if outline then
-				pool.Line(tip, left, black, 3, transparency)
-				pool.Line(left, right, black, 3, transparency)
-				pool.Line(right, tip, black, 3, transparency)
-			end
-			pool.Line(tip, left, color, 1.2, transparency)
-			pool.Line(left, right, color, 1.2, transparency)
-			pool.Line(right, tip, color, 1.2, transparency)
+			segment(tip, Vector2.new(base.X + px * spread, base.Y + py * spread), color, 2.6, transparency, outline)
+			segment(tip, Vector2.new(base.X - px * spread, base.Y - py * spread), color, 2.6, transparency, outline)
 		end
 
-		-- a chevron: two wings that meet at the tip
-		local function shapeChevron(pos, dx, dy, half, color, outline, transparency)
-			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
-			local base = Vector2.new(pos.X - dx * half * 0.4, pos.Y - dy * half * 0.4)
-			local px, py = -dy, dx
-			local spread = half * 0.8
-			segment(tip, Vector2.new(base.X + px * spread, base.Y + py * spread), color, 2, transparency, outline)
-			segment(tip, Vector2.new(base.X - px * spread, base.Y - py * spread), color, 2, transparency, outline)
-		end
-
-		-- the classic arrow: a shaft and two wings
-		local function shapeArrow(pos, dx, dy, half, color, outline, transparency)
-			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
-			local tail = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
-			local base = Vector2.new(tip.X - dx * half * 0.9, tip.Y - dy * half * 0.9)
-			local wing = half * 0.6
-			segment(tail, tip, color, 1.5, transparency, outline)
-			segment(tip, Vector2.new(base.X - dy * wing, base.Y + dx * wing), color, 1.5, transparency, outline)
-			segment(tip, Vector2.new(base.X + dy * wing, base.Y - dx * wing), color, 1.5, transparency, outline)
+		-- the dot: a round marker where the target is
+		local function shapeDot(pos, half, color, outline, transparency)
+			place(pos, half * 1.7, 0, UDim.new(1, 0), color, outline, transparency)
 		end
 
 		local function clampRange(value, low, high)
@@ -810,6 +852,8 @@ do
 			label.Visible = false
 			if not shown then
 				pool.End()
+				head.Visible = false
+				headBack.Visible = false
 				return
 			end
 			-- Where the target sits in the camera's frame: right is +X and up is +Y. The screen's Y grows downwards.
@@ -849,13 +893,13 @@ do
 			local color = P.Tint(object, P.ColorOf(settings.Color))
 			local transparency = options.FadeByDistance and math.clamp(distance / 500, 0, 0.7) or 0
 			local outline = options.Outline ~= false
-			local shape = options.Shape or "Triangle"
-			if shape == "Arrow" then
-				shapeArrow(pos, dx, dy, half, color, outline, transparency)
-			elseif shape == "Chevron" then
+			local shape = options.Shape or "Arrow"
+			if shape == "Chevron" then
 				shapeChevron(pos, dx, dy, half, color, outline, transparency)
+			elseif shape == "Dot" then
+				shapeDot(pos, half, color, outline, transparency)
 			else
-				shapeTriangle(pos, dx, dy, half, color, outline, transparency)
+				shapeArrow(pos, dx, dy, half, color, outline, transparency)
 			end
 			pool.End()
 			-- The name and the distance sit just behind the arrow, towards the centre, kept inside the screen.
@@ -868,7 +912,8 @@ do
 				label.Text = text
 				lastText = text
 			end
-			local back = Vector2.new(pos.X - dx * (half + 10), pos.Y - dy * (half + 10))
+			local reach = half * 1.6 + 8
+			local back = Vector2.new(pos.X - dx * reach, pos.Y - dy * reach)
 			label.Position = UDim2.fromOffset(clampRange(back.X, 120, size.X - 120), clampRange(back.Y, 10, size.Y - 10))
 			label.TextColor3 = color
 			label.Visible = ESP.GlobalConfig.Billboards == true
@@ -1041,6 +1086,52 @@ do
 	local HorizontalBar = ColorSequence.new({ ColorSequenceKeypoint.new(0, HealthRed), ColorSequenceKeypoint.new(0.5, HealthYellow), ColorSequenceKeypoint.new(1, HealthGreen) })
 	-- A health bar beside the 2D box: a black outline around a dark track, and a fill that takes its colour from the health.
 	-- Gradient colours the fill by health; off keeps it green. The health number sits beside the bar.
+	-- The health of a target as (current, maximum), or nil when it shows none. A humanoid counts first. Otherwise the
+	-- health a game keeps itself, as attributes or number values on the model ("Health", "HP", ...) with "MaxHealth" or
+	-- "MaxHP" beside it. A target that gives only a current value takes the highest value seen as its maximum.
+	local HEALTH_NAMES = { "Health", "health", "HP", "Hp", "hp", "CurrentHealth", "Current_Health", "Health_Current", "CurHealth" }
+	local MAX_NAMES = { "MaxHealth", "MaxHP", "maxHealth", "MaxHp", "Max_Health", "Health_Max", "MaxHealth_Value" }
+	local function numberNamed(model, name)
+		local attribute = model:GetAttribute(name)
+		if type(attribute) == "number" then
+			return attribute
+		end
+		local child = model:FindFirstChild(name)
+		if child and (child:IsA("NumberValue") or child:IsA("IntValue")) then
+			return child.Value
+		end
+		return nil
+	end
+	function P.HealthOf(model, object)
+		if model == nil then
+			return nil
+		end
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.MaxHealth > 0 then
+			return humanoid.Health, humanoid.MaxHealth
+		end
+		local current, maximum
+		for _, name in ipairs(HEALTH_NAMES) do
+			current = numberNamed(model, name)
+			if current then
+				break
+			end
+		end
+		for _, name in ipairs(MAX_NAMES) do
+			maximum = numberNamed(model, name)
+			if maximum then
+				break
+			end
+		end
+		if current == nil then
+			return nil
+		end
+		if maximum == nil or maximum <= 0 then
+			object._maxSeen = math.max(object._maxSeen or 0, current)
+			maximum = object._maxSeen
+		end
+		return current, maximum
+	end
 	function P.Health(object, scene)
 		local back = create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.1, BorderSizePixel = 0, Visible = false, ZIndex = 4, Parent = scene.Container })
 		local track = create("Frame", { Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 4, Parent = back })
@@ -1070,15 +1161,15 @@ do
 		component.Fill = fill
 		function component.Update()
 			local settings = object.CurrentSettings
-			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
+			local health, maxHealth = P.HealthOf(settings.Model, object)
 			local minX, minY, maxX, maxY = P.Box(object)
-			local shown = component.Visible and minX ~= nil and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and humanoid ~= nil
+			local shown = component.Visible and minX ~= nil and ESP.GlobalConfig.Health == true and settings.Health.Enabled == true and health ~= nil
 			back.Visible = shown == true
 			number.Visible = shown == true and ESP.GlobalConfig.HealthText == true
 			if not shown then
 				return
 			end
-			local fraction = humanoid.MaxHealth > 0 and math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1) or 0
+			local fraction = maxHealth and maxHealth > 0 and math.clamp(health / maxHealth, 0, 1) or 0
 			if settings.Health.Side == "Bottom" then
 				back.Position = UDim2.fromOffset(minX - 1, maxY + 2)
 				back.Size = UDim2.fromOffset(maxX - minX + 2, 6)
@@ -1109,7 +1200,7 @@ do
 				number.TextXAlignment = onLeft and Enum.TextXAlignment.Right or Enum.TextXAlignment.Left
 				number.Position = UDim2.fromOffset(onLeft and (x - 4) or (x + 9), (minY + maxY) / 2)
 			end
-			number.Text = tostring(math.floor(humanoid.Health))
+			number.Text = tostring(math.floor(health))
 			if settings.Health.Gradient == false then
 				track.BackgroundColor3 = HealthGreen
 				colours.Enabled = false
@@ -1139,15 +1230,14 @@ do
 		end
 		function component.Update()
 			local settings = object.CurrentSettings
-			local humanoid = settings.Model:FindFirstChildOfClass("Humanoid")
-			if ESP.GlobalConfig.DamageText ~= true or humanoid == nil then
+			local health = P.HealthOf(settings.Model, object)
+			if ESP.GlobalConfig.DamageText ~= true or health == nil then
 				clearPopups()
-				lastHealth = humanoid and humanoid.Health or nil
+				lastHealth = health
 				return
 			end
 			local now = ESP.Clock or 0
 			local minX, minY, maxX, maxY = P.Box(object)
-			local health = humanoid.Health
 			local change = lastHealth ~= nil and (health - lastHealth) or 0
 			if math.abs(change) >= 1 and component.Visible and minX ~= nil then
 				local label = create("TextLabel", {
@@ -1234,6 +1324,17 @@ do
 			-- only something with a 3D position can be ray-cast at; a GUI child that shares the name is skipped
 			if part and typeof(part.Position) == "Vector3" then
 				table.insert(points, part)
+			end
+		end
+		if #points < 2 then
+			-- a model with other part names (an NPC, a custom rig): check its own parts instead, a few of them
+			for _, child in ipairs(model:GetChildren()) do
+				if #points >= 6 then
+					break
+				end
+				if child:IsA("BasePart") and typeof(child.Position) == "Vector3" then
+					table.insert(points, child)
+				end
 			end
 		end
 		if #points == 0 then
@@ -1599,6 +1700,7 @@ do
 			local screen, inFront = P.Project(scene, P.Pivot(rootInstance).Position)
 			object._LastScreenPos = { screen, inFront }
 			object._LastWorld = P.Pivot(rootInstance).Position
+			P.Sample(object)
 			if ESP.GlobalConfig.FriendColours == true and object._Player and object._Friend == nil then
 				local ok, friend = pcall(function()
 					return Players.LocalPlayer:IsFriendsWith(object._Player.UserId)
@@ -2256,7 +2358,7 @@ do
             settings.Arrow.Enabled = value == true
             ESP:ApplyTemplate()
         end })
-        gArrows:CreateDropdown({ Name = "Shape", Options = { "Triangle", "Chevron", "Arrow" }, CurrentOption = settings.Arrow.Shape or "Triangle", Flag = "ESP_ArrowShape", Callback = function(value)
+        gArrows:CreateDropdown({ Name = "Shape", Options = { "Arrow", "Chevron", "Dot" }, CurrentOption = settings.Arrow.Shape or "Arrow", Flag = "ESP_ArrowShape", Callback = function(value)
             if type(value) == "table" then
                 value = value[1]
             end
