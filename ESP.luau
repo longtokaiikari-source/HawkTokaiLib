@@ -99,7 +99,7 @@ do
 		OutlineTransparency = 0,
 		HighlightDepth = "Through walls",
 		Tracer = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0, From = "Bottom", To = "Feet" },
-		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300, Size = 12 },
+		Arrow = { Enabled = false, Color = Color3.new(1, 1, 1), CenterOffset = 300, Size = 12, Shape = "Triangle", Placement = "Edge", Margin = 60, Outline = true, ScaleByDistance = false, FadeByDistance = false, MaxDistance = 0, Pulse = false },
 		Box2D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Filled = false, Style = "Full" },
 		Box3D = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0, Style = "Full" },
 		Skeleton = { Enabled = false, Color = Color3.new(1, 1, 1), Thickness = 1, Transparency = 0 },
@@ -710,11 +710,13 @@ do
 		end
 		return Vector2.new(x, maxY)
 	end
-	-- A screen-edge arrow for a target that is off the screen or behind the camera. It is drawn with lines, in the
-	-- style of the rest of the ESP: a black outline under the coloured line, and the name and distance behind it.
-	-- The direction comes from where the target sits in the camera's own frame, so it is right behind the camera too.
+	-- A screen-edge arrow for a target that is off the screen or behind the camera. It sits on the edge of the
+	-- screen (or on a ring around the centre), pointing along the target's direction in the camera's own frame. It is
+	-- drawn with lines: a filled triangle, a chevron or a classic arrow, with a black outline under the coloured line.
+	-- The name and the distance sit just behind the arrow, kept inside the screen.
 	function P.Arrow(object, scene)
 		local pool = P.LinePool(scene.Container)
+		local black = Color3.new(0, 0, 0)
 		local label = create("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(240, 16),
@@ -729,14 +731,81 @@ do
 		create("UIStroke", { Parent = label })
 		local component = P.NewComponent({ label }, { pool })
 		local lastText = nil
+
+		-- one segment of the arrow, with a black outline under it when the outline is on
+		local function segment(a, b, color, thickness, transparency, outline)
+			if outline then
+				pool.Line(a, b, black, thickness + 1.5, transparency)
+			end
+			pool.Line(a, b, color, thickness, transparency)
+		end
+
+		-- a filled triangle: parallel lines from the base to the tip, each a little shorter than the one before
+		local function shapeTriangle(pos, dx, dy, half, color, outline, transparency)
+			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
+			local base = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
+			local px, py = -dy, dx
+			local spread = half * 0.85
+			local left = Vector2.new(base.X + px * spread, base.Y + py * spread)
+			local right = Vector2.new(base.X - px * spread, base.Y - py * spread)
+			local rows = math.max(3, math.floor(half / 1.6))
+			for row = 0, rows do
+				local t = row / rows
+				local along = Vector2.new(base.X + (tip.X - base.X) * t, base.Y + (tip.Y - base.Y) * t)
+				local width = spread * (1 - t)
+				if width > 0.3 then
+					pool.Line(Vector2.new(along.X + px * width, along.Y + py * width), Vector2.new(along.X - px * width, along.Y - py * width), color, 2, transparency)
+				end
+			end
+			if outline then
+				pool.Line(tip, left, black, 3, transparency)
+				pool.Line(left, right, black, 3, transparency)
+				pool.Line(right, tip, black, 3, transparency)
+			end
+			pool.Line(tip, left, color, 1.2, transparency)
+			pool.Line(left, right, color, 1.2, transparency)
+			pool.Line(right, tip, color, 1.2, transparency)
+		end
+
+		-- a chevron: two wings that meet at the tip
+		local function shapeChevron(pos, dx, dy, half, color, outline, transparency)
+			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
+			local base = Vector2.new(pos.X - dx * half * 0.4, pos.Y - dy * half * 0.4)
+			local px, py = -dy, dx
+			local spread = half * 0.8
+			segment(tip, Vector2.new(base.X + px * spread, base.Y + py * spread), color, 2, transparency, outline)
+			segment(tip, Vector2.new(base.X - px * spread, base.Y - py * spread), color, 2, transparency, outline)
+		end
+
+		-- the classic arrow: a shaft and two wings
+		local function shapeArrow(pos, dx, dy, half, color, outline, transparency)
+			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
+			local tail = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
+			local base = Vector2.new(tip.X - dx * half * 0.9, tip.Y - dy * half * 0.9)
+			local wing = half * 0.6
+			segment(tail, tip, color, 1.5, transparency, outline)
+			segment(tip, Vector2.new(base.X - dy * wing, base.Y + dx * wing), color, 1.5, transparency, outline)
+			segment(tip, Vector2.new(base.X + dy * wing, base.Y - dx * wing), color, 1.5, transparency, outline)
+		end
+
+		local function clampRange(value, low, high)
+			if high < low then
+				return (low + high) / 2
+			end
+			return math.max(low, math.min(high, value))
+		end
+
 		function component.Update()
 			local settings = object.CurrentSettings
+			local options = settings.Arrow
 			local world = object._LastWorld
 			local screen = object._LastScreenPos
 			local camera = scene.Camera()
 			local size = scene.Size()
+			local distance = object._LastDistance or 0
 			local onScreen = screen ~= nil and screen[2] == true and screen[1].X >= 0 and screen[1].X <= size.X and screen[1].Y >= 0 and screen[1].Y <= size.Y
-			local shown = component.Visible and world ~= nil and camera ~= nil and not onScreen and ESP.GlobalConfig.Arrows == true and settings.Arrow.Enabled == true
+			local inRange = (options.MaxDistance or 0) <= 0 or distance <= options.MaxDistance
+			local shown = component.Visible and world ~= nil and camera ~= nil and not onScreen and inRange and ESP.GlobalConfig.Arrows == true and options.Enabled == true
 			pool.Begin()
 			label.Visible = false
 			if not shown then
@@ -752,43 +821,61 @@ do
 			if length > 0.001 then
 				dx, dy = right / length, -up / length
 			end
+			local half = options.Size or 12
+			if options.ScaleByDistance then
+				half = half * clampRange(150 / math.max(distance, 1), 0.6, 1.5)
+			end
+			if options.Pulse and distance < 60 then
+				half = half * (1 + 0.12 * math.sin(os.clock() * 6))
+			end
 			local center = Vector2.new(size.X / 2, size.Y / 2)
-			local ring = math.min((settings.Arrow.CenterOffset or 300) * size.Y / 1080, math.min(size.X, size.Y) / 2 - 40)
-			local pos = Vector2.new(center.X + dx * ring, center.Y + dy * ring)
-			local half = settings.Arrow.Size or 12
-			local tip = Vector2.new(pos.X + dx * half, pos.Y + dy * half)
-			local tail = Vector2.new(pos.X - dx * half, pos.Y - dy * half)
-			local base = Vector2.new(tip.X - dx * half * 0.9, tip.Y - dy * half * 0.9)
-			local wing = half * 0.6
-			local leftWing = Vector2.new(base.X - dy * wing, base.Y + dx * wing)
-			local rightWing = Vector2.new(base.X + dy * wing, base.Y - dx * wing)
+			local pos
+			if options.Placement == "Ring" then
+				local ring = math.min((options.CenterOffset or 300) * size.Y / 1080, math.min(size.X, size.Y) / 2 - 40)
+				pos = Vector2.new(center.X + dx * ring, center.Y + dy * ring)
+			else
+				-- on the edge: walk from the centre along the direction until the arrow reaches the margin
+				local margin = (options.Margin or 60) + half * 1.2
+				local hx = math.max(size.X / 2 - margin, 0)
+				local hy = math.max(size.Y / 2 - margin, 0)
+				local tx = math.abs(dx) > 0.0001 and hx / math.abs(dx) or math.huge
+				local ty = math.abs(dy) > 0.0001 and hy / math.abs(dy) or math.huge
+				local t = math.min(tx, ty)
+				if t == math.huge then
+					t = 0
+				end
+				pos = Vector2.new(center.X + dx * t, center.Y + dy * t)
+			end
 			local color = P.Tint(object, P.ColorOf(settings.Color))
-			local black = Color3.new(0, 0, 0)
-			-- The black outline first, then the coloured line over it, as the box does.
-			pool.Line(tail, tip, black, 3, 0)
-			pool.Line(tip, leftWing, black, 3, 0)
-			pool.Line(tip, rightWing, black, 3, 0)
-			pool.Line(tail, tip, color, 1.5, 0)
-			pool.Line(tip, leftWing, color, 1.5, 0)
-			pool.Line(tip, rightWing, color, 1.5, 0)
+			local transparency = options.FadeByDistance and math.clamp(distance / 500, 0, 0.7) or 0
+			local outline = options.Outline ~= false
+			local shape = options.Shape or "Triangle"
+			if shape == "Arrow" then
+				shapeArrow(pos, dx, dy, half, color, outline, transparency)
+			elseif shape == "Chevron" then
+				shapeChevron(pos, dx, dy, half, color, outline, transparency)
+			else
+				shapeTriangle(pos, dx, dy, half, color, outline, transparency)
+			end
 			pool.End()
-			-- The name and the distance sit behind the tail, towards the centre, so they stay on the screen.
+			-- The name and the distance sit just behind the arrow, towards the centre, kept inside the screen.
 			local text = tostring(settings.Name)
 			if ESP.GlobalConfig.Distance == true then
-				local studs = object._LastDistance or 0
-				local meters = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(studs * 0.28)) or string.format("[%d]", math.floor(studs))
+				local meters = ESP.GlobalConfig.Meters ~= false and string.format("[%dm]", math.floor(distance * 0.28)) or string.format("[%d]", math.floor(distance))
 				text = text .. " " .. meters
 			end
 			if text ~= lastText then
 				label.Text = text
 				lastText = text
 			end
-			label.Position = UDim2.fromOffset(tail.X - dx * 14, tail.Y - dy * 14)
+			local back = Vector2.new(pos.X - dx * (half + 10), pos.Y - dy * (half + 10))
+			label.Position = UDim2.fromOffset(clampRange(back.X, 120, size.X - 120), clampRange(back.Y, 10, size.Y - 10))
 			label.TextColor3 = color
 			label.Visible = ESP.GlobalConfig.Billboards == true
 		end
 		return component
 	end
+
 
 	-- The 2D box. Full is a box with a black outline under the coloured line. Corner draws eight
 	-- short lines, a quarter of the shorter side long, on the four corners. Filled tints the inside. The colour follows
@@ -1976,6 +2063,14 @@ do
 		P.Bind("ESP_ArrowSize", function() return settings.Arrow.Size or 12 end)
 		P.Bind("ESP_Arrow", function() return settings.Arrow.Enabled end)
 		P.Bind("ESP_ArrowOffset", function() return settings.Arrow.CenterOffset end)
+		P.Bind("ESP_ArrowShape", function() return settings.Arrow.Shape end)
+		P.Bind("ESP_ArrowPlacement", function() return settings.Arrow.Placement end)
+		P.Bind("ESP_ArrowMargin", function() return settings.Arrow.Margin end)
+		P.Bind("ESP_ArrowMaxDistance", function() return settings.Arrow.MaxDistance end)
+		P.Bind("ESP_ArrowOutline", function() return settings.Arrow.Outline end)
+		P.Bind("ESP_ArrowScale", function() return settings.Arrow.ScaleByDistance end)
+		P.Bind("ESP_ArrowFade", function() return settings.Arrow.FadeByDistance end)
+		P.Bind("ESP_ArrowPulse", function() return settings.Arrow.Pulse end)
 		P.Bind("ESP_VisibleCheck", function() return ESP.GlobalConfig.VisibleCheck == true end)
 		P.Bind("ESP_VisibleOnly", function() return ESP.GlobalConfig.VisibleOnly == true end)
 		P.Bind("ESP_Fade", function() return ESP.GlobalConfig.Fade == true end)
@@ -2155,20 +2250,58 @@ do
 			ESP.GlobalConfig.HeadDots = value == true
 		end })
 
-		local pageArrows = pageTracers
-		local gArrows = pageArrows:AddRightGroupbox({ Name = "Arrows", Icon = "navigation" })
-		gArrows:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
-			settings.Arrow.Size = value
-			ESP:ApplyTemplate()
-		end })
-		gArrows:CreateToggle({ Name = "Enable arrows", Desc = "Points at targets off the screen or behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
-			settings.Arrow.Enabled = value == true
-			ESP:ApplyTemplate()
-		end })
-		gArrows:CreateSlider({ Name = "Arrow distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
-			settings.Arrow.CenterOffset = value
-			ESP:ApplyTemplate()
-		end })
+        local pageArrows = pageTracers
+        local gArrows = pageArrows:AddRightGroupbox({ Name = "Arrows", Icon = "navigation" })
+        gArrows:CreateToggle({ Name = "Enable arrows", Desc = "Points at targets off the screen or behind you", CurrentValue = settings.Arrow.Enabled, Flag = "ESP_Arrow", Callback = function(value)
+            settings.Arrow.Enabled = value == true
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateDropdown({ Name = "Shape", Options = { "Triangle", "Chevron", "Arrow" }, CurrentOption = settings.Arrow.Shape or "Triangle", Flag = "ESP_ArrowShape", Callback = function(value)
+            if type(value) == "table" then
+                value = value[1]
+            end
+            settings.Arrow.Shape = tostring(value)
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateDropdown({ Name = "Placement", Options = { "Edge", "Ring" }, CurrentOption = settings.Arrow.Placement or "Edge", Flag = "ESP_ArrowPlacement", Callback = function(value)
+            if type(value) == "table" then
+                value = value[1]
+            end
+            settings.Arrow.Placement = tostring(value)
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateSlider({ Name = "Arrow size", Range = { 6, 24 }, Increment = 1, CurrentValue = settings.Arrow.Size or 12, Flag = "ESP_ArrowSize", Callback = function(value)
+            settings.Arrow.Size = value
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateSlider({ Name = "Edge margin", Range = { 20, 160 }, Increment = 5, CurrentValue = settings.Arrow.Margin or 60, Flag = "ESP_ArrowMargin", Callback = function(value)
+            settings.Arrow.Margin = value
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateSlider({ Name = "Ring distance", Range = { 100, 800 }, Increment = 10, CurrentValue = settings.Arrow.CenterOffset, Flag = "ESP_ArrowOffset", Callback = function(value)
+            settings.Arrow.CenterOffset = value
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateSlider({ Name = "Max distance (0 = off)", Range = { 0, 1000 }, Increment = 25, CurrentValue = settings.Arrow.MaxDistance or 0, Flag = "ESP_ArrowMaxDistance", Callback = function(value)
+            settings.Arrow.MaxDistance = value
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateToggle({ Name = "Outline", Desc = "A black line under the coloured one", CurrentValue = settings.Arrow.Outline ~= false, Flag = "ESP_ArrowOutline", Callback = function(value)
+            settings.Arrow.Outline = value == true
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateToggle({ Name = "Scale with distance", Desc = "Closer targets draw bigger", CurrentValue = settings.Arrow.ScaleByDistance == true, Flag = "ESP_ArrowScale", Callback = function(value)
+            settings.Arrow.ScaleByDistance = value == true
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateToggle({ Name = "Fade with distance", Desc = "Far targets draw dimmer", CurrentValue = settings.Arrow.FadeByDistance == true, Flag = "ESP_ArrowFade", Callback = function(value)
+            settings.Arrow.FadeByDistance = value == true
+            ESP:ApplyTemplate()
+        end })
+        gArrows:CreateToggle({ Name = "Pulse when close", Desc = "Breathes while a target is near", CurrentValue = settings.Arrow.Pulse == true, Flag = "ESP_ArrowPulse", Callback = function(value)
+            settings.Arrow.Pulse = value == true
+            ESP:ApplyTemplate()
+        end })
 
 		local pageVisibility = pagePlayers
 		local gVisibility = pageVisibility:AddRightGroupbox({ Name = "Visibility", Icon = "eye" })
