@@ -6,13 +6,27 @@ local repo = 'https://raw.githubusercontent.com/longhazem/ERISKOI_TK/main/'
 -- calls with HawkTokaiLib's own windows, tabs, groupboxes and controls, so the script's logic runs as it was written.
 local HawkCompat = {}
 do
-    local HAWK_SOURCE_URL = "https://raw.githubusercontent.com/longtokaikari-source/HawkTokaiLib/refs/heads/main/Source.luau"
-    local HAWK_CONFIG_URL = "https://raw.githubusercontent.com/longtokaikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"
+    local HAWK_SOURCE_URL = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/Source.luau"
+    local HAWK_CONFIG_URL = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/addons/Config.luau"
     local UserInputService = game:GetService("UserInputService")
 
-    local Hawk = assert(loadstring(game:HttpGet(HAWK_SOURCE_URL), "HawkTokaiLib.luau"))()
+    -- downloads a file of the library; if the address fails, the other spelling of the account is tried
+    local function hawkDownload(url)
+        local ok, body = pcall(function() return game:HttpGet(url) end)
+        if ok and type(body) == "string" and #body > 0 then
+            return body
+        end
+        local alternate = (url:gsub("longtokaiikari%-source", "longtokaikari-source"))
+        local ok2, body2 = pcall(function() return game:HttpGet(alternate) end)
+        if ok2 and type(body2) == "string" and #body2 > 0 then
+            return body2
+        end
+        error("HawkTokaiLib: could not download " .. url .. " (" .. tostring(body) .. ")")
+    end
+
+    local Hawk = assert(loadstring(hawkDownload(HAWK_SOURCE_URL), "HawkTokaiLib.luau"))()
     local okConfig, configAddon = pcall(function()
-        return loadstring(game:HttpGet(HAWK_CONFIG_URL), "Config.luau")()
+        return loadstring(hawkDownload(HAWK_CONFIG_URL), "Config.luau")()
     end)
     if okConfig and type(configAddon) == "function" then
         pcall(configAddon, Hawk)
@@ -1395,8 +1409,8 @@ local Sense = (function()
             cfg.skeleton = false
         end
     end
-    local hawkEspUrl = "https://raw.githubusercontent.com/longtokaikari-source/HawkTokaiLib/refs/heads/main/ESP.luau"
-    local hawkEsp = loadstring(game:HttpGet(hawkEspUrl), "ESP.luau")()(HawkCompat.Hawk)
+    local hawkEspUrl = "https://raw.githubusercontent.com/longtokaiikari-source/HawkTokaiLib/refs/heads/main/ESP.luau"
+    local hawkEsp = loadstring(hawkDownload(hawkEspUrl), "ESP.luau")()(HawkCompat.Hawk)
     hawkEsp.Players.Enabled = true
     hawkEsp.GlobalConfig.DisplayNames = true
     hawkEsp.GlobalConfig.Distance = true
