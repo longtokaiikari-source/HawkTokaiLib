@@ -74,6 +74,8 @@ Every constructor also works without the `Create` prefix. `Tab:Toggle` is the sa
 
 ## Window
 
+Running the library again unloads the copy already on screen first, so only one interface is alive at a time. `Library:Destroy()` (also `Library:Unload()`) removes it on demand. Every change is listed in [CHANGELOG.md](CHANGELOG.md).
+
 > The root container. Sidebar with tabs and your profile, a content area with search, the close button and the notification stack.
 
 ```lua

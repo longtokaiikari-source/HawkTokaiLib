@@ -1021,6 +1021,51 @@ do
 	end
 
 	-- The skeleton follows its part sequence. A part that is missing or behind the camera breaks the line.
+	-- Bones drawn from the Motor6D joints of a model: each joint joins its two parts. This covers any rig that joins its
+	-- parts with Motor6D (custom rigs, many NPCs), where the R15 and R6 part names do not apply.
+	function P.JointSkeleton(object, scene)
+		local pool = P.LinePool(scene.Container)
+		local component = P.NewComponent({}, { pool })
+		local joints = {}
+		local joinedModel = nil
+		local function gather(model)
+			joints = {}
+			joinedModel = model
+			for _, item in model:GetDescendants() do
+				if item:IsA("Motor6D") and item.Part0 and item.Part1 then
+					table.insert(joints, { item.Part0, item.Part1 })
+					if #joints >= 300 then
+						break
+					end
+				end
+			end
+		end
+		function component.Update()
+			local settings = object.CurrentSettings
+			local screen = object._LastScreenPos
+			local shown = component.Visible and screen ~= nil and screen[2] == true and ESP.GlobalConfig.Skeleton == true and settings.Skeleton.Enabled == true
+			pool.Begin()
+			if shown and settings.Model then
+				if joinedModel ~= settings.Model then
+					gather(settings.Model)
+				end
+				local color = P.Tint(object, P.ColorOf(settings.Skeleton.Color))
+				for _, joint in joints do
+					local a, b = joint[1], joint[2]
+					if a.Parent and b.Parent then
+						local pointA, frontA = P.Project(scene, a.Position)
+						local pointB, frontB = P.Project(scene, b.Position)
+						if frontA and frontB then
+							pool.Line(Vector2.new(pointA.X, pointA.Y), Vector2.new(pointB.X, pointB.Y), color, settings.Skeleton.Thickness, settings.Skeleton.Transparency)
+						end
+					end
+				end
+			end
+			pool.End()
+		end
+		return component
+	end
+
 	function P.Skeleton(object, scene)
 		local model = object.CurrentSettings.Model
 		local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -1032,8 +1077,21 @@ do
 				sequence = P.R6
 			end
 		end
+		-- A rig whose parts none of the named sequences match (a custom rig, other part names) is drawn from its joints.
+		if sequence then
+			local named = false
+			for _, partName in sequence do
+				if model:FindFirstChild(partName) then
+					named = true
+					break
+				end
+			end
+			if not named then
+				sequence = nil
+			end
+		end
 		if not sequence then
-			return nil
+			return P.JointSkeleton(object, scene)
 		end
 		local pool = P.LinePool(scene.Container)
 		local component = P.NewComponent({}, { pool })
@@ -2499,5 +2557,14 @@ do
 
 	end
 end
+	-- Only one ESP is alive: an older copy from an earlier run of the script is destroyed first.
+	do
+		local env = (getgenv and getgenv()) or _G
+		local previous = env.HawkESPInstance
+		if type(previous) == "table" and previous ~= Library.ESP and type(previous.Destroy) == "function" then
+			pcall(previous.Destroy, previous)
+		end
+		env.HawkESPInstance = Library.ESP
+	end
 	return Library.ESP
 end

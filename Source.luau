@@ -13757,9 +13757,17 @@ function Tab:Viewport(opts)
         if typeof(value) == "Instance" and value:IsA("Player") then
             local character = value.Character
             if not character then
-                character = value.CharacterAdded:Wait()
-                -- Let the body parts and accessories load in.
-                task.wait(0.5)
+                -- wait a few seconds for a character; a game that never spawns one gets the built-in figure instead
+                local waited = 0
+                while not value.Character and waited < 5 do
+                    task.wait(0.25)
+                    waited += 0.25
+                end
+                character = value.Character
+                if character then
+                    -- Let the body parts and accessories load in.
+                    task.wait(0.5)
+                end
             end
             value = character
         end
@@ -13767,6 +13775,51 @@ function Tab:Viewport(opts)
     end
 
     -- Yields while waiting for a character to spawn.
+    -- A plain figure built from parts, shown when the game gives no model to preview.
+    local function dummyRig()
+        local model = Instance.new("Model")
+        model.Name = "PreviewFigure"
+        local function piece(name, size, offset, color)
+            local part = Instance.new("Part")
+            part.Name = name
+            part.Size = size
+            part.CFrame = CFrame.new(offset)
+            part.Anchored = true
+            part.CanCollide = false
+            part.Color = color
+            part.Material = Enum.Material.SmoothPlastic
+            part.Parent = model
+            return part
+        end
+        local body = Color3.fromRGB(70, 90, 140)
+        local skin = Color3.fromRGB(230, 200, 170)
+        local root = piece("HumanoidRootPart", Vector3.new(2, 2, 1), Vector3.new(0, 0, 0), body)
+        local head = piece("Head", Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 1.6, 0), skin)
+        local upper = piece("UpperTorso", Vector3.new(2, 1.2, 1), Vector3.new(0, 0.6, 0), body)
+        local lower = piece("LowerTorso", Vector3.new(2, 0.8, 1), Vector3.new(0, -0.2, 0), body)
+        local leftArm = piece("LeftUpperArm", Vector3.new(0.8, 1.6, 0.8), Vector3.new(-1.4, 0.6, 0), skin)
+        local rightArm = piece("RightUpperArm", Vector3.new(0.8, 1.6, 0.8), Vector3.new(1.4, 0.6, 0), skin)
+        local leftLeg = piece("LeftUpperLeg", Vector3.new(0.9, 1.6, 0.9), Vector3.new(-0.5, -1.8, 0), body)
+        local rightLeg = piece("RightUpperLeg", Vector3.new(0.9, 1.6, 0.9), Vector3.new(0.5, -1.8, 0), body)
+        -- joints join the parts, so the preview's skeleton is drawn from them like any other rig
+        local function joint(a, b)
+            local motor = Instance.new("Motor6D")
+            motor.Name = b.Name
+            motor.Part0 = a
+            motor.Part1 = b
+            motor.Parent = a
+        end
+        joint(root, upper)
+        joint(upper, lower)
+        joint(upper, head)
+        joint(upper, leftArm)
+        joint(upper, rightArm)
+        joint(root, leftLeg)
+        joint(root, rightLeg)
+        model.PrimaryPart = root
+        return model
+    end
+
     function handle:SetModel(value)
         generation += 1
         local current = generation
@@ -13790,7 +13843,8 @@ function Tab:Viewport(opts)
             return false, "replaced by a newer model"
         end
         if not instance then
-            return false, "no model to show"
+            -- nothing to show from the game: the built-in figure stands in, so the preview is never empty
+            instance = dummyRig()
         end
         local copy = prepare(instance)
         if not copy then
@@ -22818,6 +22872,15 @@ Window.Unload = Window.Destroy
 
 -- Unloads every window the library created.
 function Library:Destroy()
+    if Library.Unloaded then
+        return
+    end
+    Library.Unloaded = true
+    -- the ESP that belongs to this copy goes with it
+    local esp = Library.ESP
+    if type(esp) == "table" and type(esp.Destroy) == "function" then
+        pcall(esp.Destroy, esp)
+    end
     for index = #Library.Windows, 1, -1 do
         local window = Library.Windows[index]
         if window then
@@ -22995,5 +23058,16 @@ Library._homeCards = {}
 
 return Library
 end)()
+
+-- Only one copy of the library is alive. Running the script again unloads the copy that is already on screen first,
+-- so the new copy replaces it instead of a second interface appearing beside it.
+do
+    local env = (getgenv and getgenv()) or _G
+    local previous = env.HawkTokaiLibInstance
+    if type(previous) == "table" and previous ~= Library and type(previous.Destroy) == "function" then
+        pcall(previous.Destroy, previous)
+    end
+    env.HawkTokaiLibInstance = Library
+end
 
 return Library
